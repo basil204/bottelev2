@@ -6659,3 +6659,60 @@ AggregateError: Error
 [USER] 1645636506 | nlmsp2025 | {"action":"admin_gmail_menu"}
 [USER] 1645636506 | nlmsp2025 | {"action":"admin_gmail_check_delete"}
 [USER] 1645636506 | nlmsp2025 | {"action":"admin_gmail_pricing"}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] bot_started | {}
+[EVENT] webapp_started | {"port":3000}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] bot_started | {}
+[EVENT] webapp_started | {"port":3000}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] bot_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] webapp_started | {"port":3000}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] bot_started | {}
+[EVENT] webapp_started | {"port":3000}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] webapp_started | {"port":3000}
+[EVENT] bot_started | {}
+[USER] 1645636506 | nlmsp2025 | /start
+[USER] 1645636506 | nlmsp2025 | /start
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] bot_started | {}
+[EVENT] gmail_login_checker_started | {}
+[ERROR] Request failed with status code 500 | {"context":"auto_deposit_timo_tick","message":"Request failed with status code 500","stack":"AxiosError: Request failed with status code 500\n    at settle (file:///D:/work/BotBanHangTele/node_modules/axios/lib/core/settle.js:19:12)\n    at IncomingMessage.handleStreamEnd (file:///D:/work/BotBanHangTele/node_modules/axios/lib/adapters/http.js:793:11)\n    at IncomingMessage.emit (node:events:531:35)\n    at endReadableNT (node:internal/streams/readable:1696:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n    at Axios.request (file:///D:/work/BotBanHangTele/node_modules/axios/lib/core/Axios.js:45:41)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async tick (file:///D:/work/BotBanHangTele/includes/services/autoDeposit.js:285:28)","responseStatus":500,"responseData":{"success":false,"error":"Unexpected end of JSON input"}}
+[EVENT] db_connected | {}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] bot_started | {}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_login_checker_started | {}

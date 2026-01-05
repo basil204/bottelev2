@@ -1,0 +1,102 @@
+import { query } from '../database/index.js';
+
+export const addAccounts = async (productId, accounts = []) => {
+  if (!accounts.length) return;
+  const values = accounts.map(() => '(?, ?, ?, "available")').join(',');
+  const params = [];
+  accounts.forEach(({ username, password }) => {
+    params.push(productId, username, password);
+  });
+  await query(`INSERT INTO accounts (product_id, username, password, status) VALUES ${values}`, params);
+  await syncStock(productId);
+};
+
+export const takeOneAvailable = async (productId) => {
+  const connRows = await query(
+    'SELECT * FROM accounts WHERE product_id = ? AND status = "available" LIMIT 1',
+    [productId]
+  );
+  return connRows[0];
+};
+
+export const markSold = async (accountId) => {
+  await query('UPDATE accounts SET status = "sold" WHERE id = ?', [accountId]);
+};
+
+export const listAccounts = async (productId, offset, limit, status = null) => {
+  let sql = 'SELECT * FROM accounts WHERE product_id = ?';
+  let countSql = 'SELECT COUNT(*) as total FROM accounts WHERE product_id = ?';
+  const params = [productId];
+  const countParams = [productId];
+  
+  if (status) {
+    sql += ' AND status = ?';
+    countSql += ' AND status = ?';
+    params.push(status);
+    countParams.push(status);
+  }
+  
+  sql += ' ORDER BY id DESC LIMIT ? OFFSET ?';
+  // Đảm bảo limit và offset là số nguyên
+  params.push(parseInt(limit), parseInt(offset));
+  
+  const rows = await query(sql, params);
+  const [{ total }] = await query(countSql, countParams);
+  return { rows, total };
+};
+
+export const listAvailableAccounts = async (productId, offset, limit) => {
+  const rows = await query(
+    'SELECT * FROM accounts WHERE product_id = ? AND status = "available" ORDER BY id DESC LIMIT ? OFFSET ?',
+    [productId, limit, offset]
+  );
+  const [{ total }] = await query('SELECT COUNT(*) as total FROM accounts WHERE product_id = ? AND status = "available"', [productId]);
+  return { rows, total };
+};
+
+export const syncStock = async (productId) => {
+  await query(
+    'UPDATE products SET stock = (SELECT COUNT(*) FROM accounts WHERE product_id = ? AND status="available") WHERE id = ?',
+    [productId, productId]
+  );
+};
+
+export const deleteAccount = async (accountId) => {
+  // Lấy thông tin account để sync stock sau khi xóa
+  const accountRows = await query('SELECT product_id FROM accounts WHERE id = ?', [accountId]);
+  if (accountRows.length === 0) {
+    return { success: false, error: 'Account not found' };
+  }
+  
+  const productId = accountRows[0].product_id;
+  
+  // Xóa account
+  await query('DELETE FROM accounts WHERE id = ?', [accountId]);
+  
+  // Sync stock
+  await syncStock(productId);
+  
+  return { success: true, productId };
+};
+
+// Xóa hàng loạt accounts theo status
+export const deleteAccountsByStatus = async (productId, status) => {
+  // Đếm số account sẽ bị xóa
+  const [{ count }] = await query(
+    'SELECT COUNT(*) as count FROM accounts WHERE product_id = ? AND status = ?',
+    [productId, status]
+  );
+  
+  if (count === 0) {
+    return { success: false, error: 'Không có tài khoản nào để xóa', deletedCount: 0 };
+  }
+  
+  // Xóa accounts
+  await query('DELETE FROM accounts WHERE product_id = ? AND status = ?', [productId, status]);
+  
+  // Sync stock
+  await syncStock(productId);
+  
+  return { success: true, deletedCount: count, productId };
+};
+

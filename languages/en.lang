@@ -1,0 +1,10 @@
+# English language file
+welcome=Welcome to the shop bot.
+menu_title=Main menu
+btn_deposit=➕ Deposit
+btn_buy=🛒 Buy product
+btn_history=🧾 Orders
+admin_only=This command is admin only.
+insufficient=❌ Balance is not enough.
+deposit_note=Transfer note: NAP_%TELEGRAM_ID%
+

@@ -6716,3 +6716,14 @@ AggregateError: Error
 [EVENT] bot_started | {}
 [EVENT] gmail_auto_delete_checker_started | {}
 [EVENT] gmail_login_checker_started | {}
+[EVENT] db_connected | {}
+[EVENT] auto_deposit_started | {"intervalMs":20000,"hasMB":true,"hasTimo":true}
+[EVENT] qr_expiration_checker_started | {}
+[EVENT] gmail_auto_delete_checker_started | {}
+[EVENT] gmail_edu_daily_cleanup_started | {}
+[EVENT] gmail_login_checker_started | {}
+[EVENT] bot_started | {}
+[USER] 1645636506 | nlmsp2025 | ➕ Nạp tiền
+[USER] 1645636506 | nlmsp2025 | {"action":"select_bank","bank":"mbbank"}
+[USER] 1645636506 | nlmsp2025 | 100000
+[EVENT] deposit_created | {"userId":1,"amount":100000,"bank":"mbbank","promotionId":null}

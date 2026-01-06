@@ -11,7 +11,10 @@ export const ensureUser = async (bot, msg) => {
 };
 
 export const sendMenu = async (bot, chatId, user) => {
-  const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}`;
+  const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}
+
+📢 Group thông báo và chat: https://t.me/+SFp6Gttq18VmYThl
+👨‍💼 Admin: @nlmsp2025`;
   const opts = {
     reply_markup: {
       keyboard: [

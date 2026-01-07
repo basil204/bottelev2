@@ -4,7 +4,7 @@ import { addAccounts, listAccounts, deleteAccount, deleteAccountsByStatus } from
 import { listUsers, updateBalance as changeBalance, getUserById } from '../controllers/userController.js';
 import { listOrdersByUser, listPendingManualOrders, getOrderById, completeOrder } from '../controllers/orderController.js';
 import { listBalanceLogs } from '../controllers/balanceLogController.js';
-import { createDepositPromotion, getAllPromotions } from '../controllers/depositPromotionController.js';
+import { createDepositPromotion, getAllPromotions, deletePromotion } from '../controllers/depositPromotionController.js';
 import { notifyUsersAboutProductStock } from './handleNotify.js';
 
 export const requireAdmin = (adminIds, telegramId) => isAdmin(telegramId, adminIds);
@@ -648,13 +648,37 @@ export const adminListPromotions = async (bot, chatId) => {
              `📊 Trạng thái: ${statusText}\n`;
     });
     
+    // Tạo inline keyboard với nút xóa cho mỗi promotion
+    const inline_keyboard = promotions.map((promo) => [
+      { 
+        text: `❌ Xóa #${promo.id}`, 
+        callback_data: createCallbackData({ action: 'admin_delete_promotion', id: promo.id }) 
+      }
+    ]);
+    
     await bot.sendMessage(chatId, `📋 **Danh sách khuyến mại nạp tiền:**\n\n${lines.join('\n')}`, {
-      parse_mode: 'Markdown'
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard
+      }
     });
     
   } catch (error) {
     console.error('[ADMIN_LIST_PROMOTIONS] Lỗi:', error);
     await bot.sendMessage(chatId, `❌ Lỗi khi lấy danh sách khuyến mại: ${error.message}`);
+  }
+};
+
+// Xóa khuyến mại
+export const adminDeletePromotion = async (bot, chatId, promotionId) => {
+  try {
+    await deletePromotion(promotionId);
+    await bot.sendMessage(chatId, `✅ Đã xóa khuyến mại #${promotionId}`);
+    // Refresh danh sách
+    await adminListPromotions(bot, chatId);
+  } catch (error) {
+    console.error('[ADMIN_DELETE_PROMOTION] Lỗi:', error);
+    await bot.sendMessage(chatId, `❌ Lỗi khi xóa khuyến mại: ${error.message}`);
   }
 };
 

@@ -328,14 +328,41 @@ export const adminParseUpdateGmailPrice = async (bot, msg) => {
     
     await updateGmailPrice(type, duration, quantity, price);
     
-    await bot.sendMessage(
-      msg.chat.id,
-      `✅ Đã cập nhật giá:\n\n` +
+    const successMessage = `✅ Đã cập nhật giá:\n\n` +
       `Type: ${type === 'edu' ? '📧 Gmail Edu' : '🌐 Google Non'}\n` +
       `Duration: ${duration === 'single' ? 'Single' : 'Daily'}\n` +
       `Quantity: ${quantity} account(s)\n` +
-      `Price: ${formatCurrency(price)}`
-    );
+      `Price: ${formatCurrency(price)}`;
+    
+    await bot.sendMessage(msg.chat.id, successMessage);
+    
+    // Gửi thông báo vào group chat (nếu có cấu hình)
+    // Lấy chat ID từ config hoặc environment variable
+    const notificationChatId = process.env.NOTIFICATION_CHAT_ID || -1003580438934;
+    
+    if (notificationChatId) {
+      try {
+        const notificationMessage = `📢 **Cập nhật giá Gmail**\n\n` +
+          `${type === 'edu' ? '📧 Gmail Edu' : '🌐 Google Non'}\n` +
+          `⏱️ ${duration === 'single' ? 'Single' : 'Daily'}\n` +
+          `📦 ${quantity} account(s)\n` +
+          `💰 Giá mới: ${formatCurrency(price)}\n\n` +
+          `👤 Admin: ${msg.from.first_name || 'N/A'} (${msg.from.id})`;
+        
+        await bot.sendMessage(notificationChatId, notificationMessage, { parse_mode: 'Markdown' });
+        console.log(`[ADMIN_UPDATE_PRICE] ✅ Đã gửi thông báo vào group ${notificationChatId}`);
+      } catch (error) {
+        // Xử lý lỗi một cách im lặng - có thể bot chưa được thêm vào group hoặc chat ID sai
+        const errorDescription = error.response?.body?.description || error.message || 'Unknown error';
+        
+        if (errorDescription.includes('chat not found') || errorDescription.includes('Bad Request')) {
+          console.log(`[ADMIN_UPDATE_PRICE] ⚠️ Bot chưa được thêm vào group ${notificationChatId} hoặc chat ID không hợp lệ`);
+          console.log(`[ADMIN_UPDATE_PRICE] 💡 Hãy đảm bảo bot đã được thêm vào group và có quyền gửi tin nhắn`);
+        } else {
+          console.error(`[ADMIN_UPDATE_PRICE] ❌ Lỗi khi gửi thông báo vào group: ${errorDescription}`);
+        }
+      }
+    }
     
   } catch (error) {
     bot.sendMessage(msg.chat.id, `❌ Lỗi: ${error.message}`);

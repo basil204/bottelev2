@@ -9,7 +9,8 @@ export const ensureUser = async (bot, msg) => {
 };
 
 export const sendMenu = async (bot, chatId, user) => {
-  const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}
+  const credit = user.credit || 0;
+  const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}\n🎁 Credit: ${credit}
 
 📢 Group thông báo và chat: https://t.me/+SFp6Gttq18VmYThl
 👨‍💼 Admin: @nlmsp2025`;
@@ -18,7 +19,8 @@ export const sendMenu = async (bot, chatId, user) => {
       keyboard: [
         [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
         [{ text: '📧 Mua Gmail' }, { text: '📧 Mua Mail' }],
-        [{ text: '⭐ Gói VIP' }, { text: '🧾 Lịch sử mua' }]
+        [{ text: '⭐ Gói VIP' }, { text: '🧾 Lịch sử mua' }],
+        [{ text: '🎁 Check-in' }, { text: '💎 Đổi Credit' }]
       ],
       resize_keyboard: true
     }
@@ -82,6 +84,25 @@ export const sendUserInfo = async (bot, chatId, user) => {
       : 'N/A';
 
     const username = user.username ? `@${user.username}` : 'Chưa có';
+    const credit = user.credit || 0;
+
+    // Lấy thống kê check-in
+    const checkinStats = await query(
+      `SELECT COUNT(*) as total_checkins FROM checkins WHERE user_id = ?`,
+      [user.id]
+    );
+    const total_checkins = checkinStats[0]?.total_checkins || 0;
+
+    // Lấy thống kê referral
+    const referralStats = await query(
+      `SELECT 
+        COUNT(*) as total_referrals,
+        SUM(credit_rewarded) as total_credits_earned
+       FROM referrals 
+       WHERE referrer_id = ?`,
+      [user.id]
+    );
+    const { total_referrals, total_credits_earned } = referralStats[0] || { total_referrals: 0, total_credits_earned: 0 };
 
     const infoText = `📊 **THÔNG TIN TÀI KHOẢN**
 
@@ -92,6 +113,12 @@ export const sendUserInfo = async (bot, chatId, user) => {
 
 💰 **Số dư:**
 • Số dư hiện tại: ${formatCurrency(user.balance)}
+• Credit: ${credit}
+
+🎁 **Thống kê Credit:**
+• Tổng lần check-in: ${total_checkins}
+• Tổng người giới thiệu: ${total_referrals}
+• Credit từ giới thiệu: ${total_credits_earned || 0}
 
 📦 **Thống kê đơn hàng:**
 • Tổng đơn hàng: ${total_orders}

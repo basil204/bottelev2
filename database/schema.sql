@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS users (
   telegram_id BIGINT UNIQUE NOT NULL,
   username VARCHAR(255),
   balance DECIMAL(18,2) DEFAULT 0,
+  credit INT DEFAULT 0,
+  referral_code VARCHAR(50) UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -117,5 +119,26 @@ CREATE TABLE IF NOT EXISTS deposit_promotions (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_status (status),
   INDEX idx_time_range (start_time, end_time)
+);
+
+CREATE TABLE IF NOT EXISTS checkins (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_checked (user_id, checked_at)
+);
+
+CREATE TABLE IF NOT EXISTS referrals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  referrer_id INT NOT NULL,
+  referred_id INT NOT NULL,
+  credit_rewarded INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (referred_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_referral (referrer_id, referred_id),
+  INDEX idx_referrer (referrer_id),
+  INDEX idx_referred (referred_id)
 );
 

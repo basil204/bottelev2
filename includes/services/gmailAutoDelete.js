@@ -43,48 +43,32 @@ export const checkAccountLoginStatus = async (email, type) => {
   }
 };
 
-// Schedule xóa account: edu sau 1 giờ, non sau 24 giờ kể từ lastLoginTime
-export const scheduleAccountDeletion = async (email, type, lastLoginTimeISO) => {
+// Schedule xóa account: edu sau 1 giờ, non sau 24 giờ kể từ thời điểm hiện tại
+export const scheduleAccountDeletion = async (email, type) => {
   // Edu: 1 giờ, Non: 24 giờ
   const deleteDelayMs = type === 'edu' 
     ? DELETE_DELAY_EDU_MS
     : DELETE_DELAY_NON_MS;
   
-  // Tính thời gian xóa = lastLoginTime + delay (thay vì Date.now() + delay)
-  const lastLoginTimeMs = new Date(lastLoginTimeISO).getTime();
-  
-  // Validate lastLoginTime
-  if (isNaN(lastLoginTimeMs)) {
-    console.error(`[GMAIL_AUTO_DELETE] ❌ Invalid lastLoginTime format: ${lastLoginTimeISO}`);
-    throw new Error(`Invalid lastLoginTime format: ${lastLoginTimeISO}`);
-  }
-  
-  // Check nếu lastLoginTime là epoch time (chưa login) - không schedule
-  const neverLoggedInTime = '1970-01-01T00:00:00.000Z';
-  const neverLoggedInTimeMs = new Date(neverLoggedInTime).getTime();
-  if (lastLoginTimeMs === neverLoggedInTimeMs) {
-    console.log(`[GMAIL_AUTO_DELETE] ⏭️ Account ${email} chưa login (lastLoginTime = epoch time) - không schedule xóa`);
-    return;
-  }
-  
-  const deleteTime = lastLoginTimeMs + deleteDelayMs;
   const now = Date.now();
-  const timeUntilDelete = deleteTime - now;
+  // Tính thời gian xóa = thời gian hiện tại + delay
+  const deleteTime = now + deleteDelayMs;
+  const timeUntilDelete = deleteDelayMs;
   const minutesUntilDelete = Math.floor(timeUntilDelete / (60 * 1000));
   
   const key = deleteKey(email);
   
-  // Cache time: thời gian xóa + thêm 10% buffer
-  const cacheTime = deleteDelayMs * 1.1;
+  // Cache time: thời gian xóa + thêm 20% buffer để đảm bảo không mất cache trước khi xóa
+  const cacheTime = deleteDelayMs * 1.2;
   
-  setCache(key, { email, type, scheduledDeleteTime: deleteTime, lastLoginTime: lastLoginTimeISO }, cacheTime);
+  // Lưu vào cache với scheduledDeleteTime
+  setCache(key, { email, type, scheduledDeleteTime: deleteTime, scheduledAt: now }, cacheTime);
   
   const delayText = type === 'edu' ? '1 giờ' : '24 giờ';
-  console.log(`[GMAIL_AUTO_DELETE] Scheduled deletion for ${email} (${type}) sau ${delayText} kể từ lastLoginTime`);
-  console.log(`[GMAIL_AUTO_DELETE]   - LastLoginTime: ${lastLoginTimeISO} (${new Date(lastLoginTimeMs).toISOString()})`);
+  console.log(`[GMAIL_AUTO_DELETE] Scheduled deletion for ${email} (${type}) sau ${delayText} kể từ bây giờ`);
+  console.log(`[GMAIL_AUTO_DELETE]   - ScheduledAt: ${new Date(now).toISOString()}`);
   console.log(`[GMAIL_AUTO_DELETE]   - DeleteDelayMs: ${deleteDelayMs}ms (${type === 'edu' ? '1 giờ' : '24 giờ'})`);
   console.log(`[GMAIL_AUTO_DELETE]   - DeleteTime: ${new Date(deleteTime).toISOString()}`);
-  console.log(`[GMAIL_AUTO_DELETE]   - CurrentTime: ${new Date(now).toISOString()}`);
   console.log(`[GMAIL_AUTO_DELETE]   - TimeUntilDelete: ${minutesUntilDelete} phút (${Math.floor(timeUntilDelete / 1000)} giây)`);
   
   // Update status trong database thành "sold" (đã login, đợi xóa)
@@ -96,7 +80,7 @@ export const scheduleAccountDeletion = async (email, type, lastLoginTimeISO) => 
   }
 };
 
-// Xóa account đã đến thời gian từ cache (đã chia ra edu và non với thời gian khác nhau)
+// Xóa account đã đến thời gian từ cache (dựa trên scheduledDeleteTime)
 export const processScheduledDeletions = async () => {
   try {
     const keys = getAllKeys('gmail_delete_');
@@ -112,67 +96,75 @@ export const processScheduledDeletions = async () => {
       const cache = getCache(key);
       if (!cache) continue;
       
-      const { email, type, scheduledDeleteTime } = cache;
+      const { email, type, scheduledDeleteTime, scheduledAt } = cache;
       
-      if (scheduledDeleteTime <= now) {
-        // Check lastLoginTime từ cache - nếu là epoch time thì không xóa
-        const cachedLastLoginTime = cache.lastLoginTime;
-        const neverLoggedInTime = '1970-01-01T00:00:00.000Z';
-        const neverLoggedInTimeMs = new Date(neverLoggedInTime).getTime();
-        
-        if (cachedLastLoginTime) {
-          const cachedLastLoginTimeMs = new Date(cachedLastLoginTime).getTime();
-          if (cachedLastLoginTimeMs === neverLoggedInTimeMs) {
-            console.log(`[GMAIL_AUTO_DELETE] ⏭️ Account ${email} chưa login (lastLoginTime = epoch time) - bỏ qua, xóa khỏi cache`);
-            delCache(key);
-            continue;
-          }
-        }
-        
+      // Kiểm tra account còn tồn tại trong database không
+      const dbAccount = await query('SELECT * FROM gmail_accounts WHERE email = ? AND status = "sold"', [email]);
+      
+      if (dbAccount.length === 0) {
+        // Account không còn trong DB, xóa khỏi cache
+        delCache(key);
+        continue;
+      }
+      
+      // Kiểm tra xem đã đến thời gian xóa chưa (thêm buffer 1 phút để đảm bảo không xóa sớm)
+      const bufferMs = 1 * 60 * 1000; // 1 phút buffer
+      const actualDeleteTime = scheduledDeleteTime + bufferMs;
+      
+      if (now >= actualDeleteTime) {
+        // Đã đến thời gian xóa
+        const timeElapsed = now - (scheduledAt || scheduledDeleteTime - (type === 'edu' ? DELETE_DELAY_EDU_MS : DELETE_DELAY_NON_MS));
+        const hoursElapsed = Math.floor(timeElapsed / (60 * 60 * 1000));
+        const minutesElapsed = Math.floor((timeElapsed % (60 * 60 * 1000)) / (60 * 1000));
         const delayText = type === 'edu' ? '1 giờ' : '24 giờ';
-        console.log(`[GMAIL_AUTO_DELETE] ⏰ Đến thời gian xóa account ${email} (${type}) - đã qua ${delayText} kể từ khi login`);
-        console.log(`[GMAIL_AUTO_DELETE] Scheduled time: ${new Date(scheduledDeleteTime).toISOString()}, Current time: ${new Date(now).toISOString()}`);
+        
+        console.log(`[GMAIL_AUTO_DELETE] ⏰ Đến thời gian xóa account ${email} (${type}) - đã qua ${delayText} kể từ khi schedule`);
+        console.log(`[GMAIL_AUTO_DELETE]   - ScheduledAt: ${scheduledAt ? new Date(scheduledAt).toISOString() : 'N/A'}`);
+        console.log(`[GMAIL_AUTO_DELETE]   - ScheduledDeleteTime: ${new Date(scheduledDeleteTime).toISOString()}`);
+        console.log(`[GMAIL_AUTO_DELETE]   - Time elapsed: ${hoursElapsed}h ${minutesElapsed}m`);
+        console.log(`[GMAIL_AUTO_DELETE]   - Current time: ${new Date(now).toISOString()}`);
         
         try {
           const result = await deleteAccount(email, type);
           if (result.success) {
             console.log(`[GMAIL_AUTO_DELETE] ✅ Successfully deleted ${type} account from Google: ${email}`);
             
-            // Xóa luôn record khỏi database để không làm nặng database
+            // Xóa luôn record khỏi database
             try {
               await query('DELETE FROM gmail_accounts WHERE email = ?', [email]);
               console.log(`[GMAIL_AUTO_DELETE] ✅ Deleted record from database: ${email}`);
             } catch (dbError) {
               console.error(`[GMAIL_AUTO_DELETE] ❌ Error deleting record from database for ${email}:`, dbError);
-              
             }
-            
-            
           } else {
             console.error(`[GMAIL_AUTO_DELETE] ❌ Failed to delete ${type} account from Google ${email}: ${result.error}`);
-            
           }
         } catch (error) {
           console.error(`[GMAIL_AUTO_DELETE] ❌ Exception deleting ${type} account ${email}:`, error);
-          
         }
         
-        // Xóa khỏi cache sau khi đã xử lý (dù thành công hay thất bại)
+        // Xóa khỏi cache sau khi đã xử lý
         delCache(key);
+      } else {
+        // Chưa đến thời gian xóa
+        const timeRemaining = actualDeleteTime - now;
+        const hoursRemaining = Math.floor(timeRemaining / (60 * 60 * 1000));
+        const minutesRemaining = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+        
+        console.log(`[GMAIL_AUTO_DELETE] ⏳ Account ${email} (${type}) chưa đến thời gian xóa - còn ${hoursRemaining}h ${minutesRemaining}m`);
       }
     }
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE] ❌ Error in processScheduledDeletions:`, error);
-    
   }
 };
 
 // Xóa account đã đến thời gian từ database (backup check nếu cache bị mất)
 export const processScheduledDeletionsFromDatabase = async () => {
   try {
-    // Lấy tất cả accounts có status = "sold" và có lastLoginTime
+    // Lấy tất cả accounts có status = "sold" (đã được schedule xóa)
     const accountsToCheck = await query(
-      'SELECT * FROM gmail_accounts WHERE status = "sold" AND lastLoginTime IS NOT NULL ORDER BY id',
+      'SELECT * FROM gmail_accounts WHERE status = "sold" ORDER BY id',
       []
     );
     
@@ -181,8 +173,6 @@ export const processScheduledDeletionsFromDatabase = async () => {
     }
     
     const now = Date.now();
-    const neverLoggedInTime = '1970-01-01T00:00:00.000Z';
-    const neverLoggedInTimeMs = new Date(neverLoggedInTime).getTime();
     let deletedCount = 0;
     let errorCount = 0;
     
@@ -190,71 +180,51 @@ export const processScheduledDeletionsFromDatabase = async () => {
     
     for (const account of accountsToCheck) {
       try {
-        // Check lastLoginTime trong database - nếu khác epoch time thì đã login
-        const dbLastLoginTime = account.lastLoginTime;
-        const dbLastLoginTimeMs = new Date(dbLastLoginTime).getTime();
-        const isEverLoggedIn = dbLastLoginTime && 
-                               dbLastLoginTimeMs !== neverLoggedInTimeMs;
+        // Kiểm tra cache xem có schedule không
+        const deleteKeyCache = deleteKey(account.email);
+        const cache = getCache(deleteKeyCache);
         
-        if (!isEverLoggedIn) {
-          // Chưa login (lastLoginTime = epoch time) - bỏ qua, không xóa
-          console.log(`[GMAIL_AUTO_DELETE_DB] ⏭️ Account ${account.email} chưa login (lastLoginTime = epoch time) - bỏ qua`);
-          continue;
-        }
-        
-        // Đã login: tính thời gian xóa = lastLoginTime từ DB + delay
-        // Edu: 1 giờ, Non: 24 giờ
-        const deleteDelayMs = account.type === 'edu' 
-          ? DELETE_DELAY_EDU_MS
-          : DELETE_DELAY_NON_MS;
-        
-        const deleteTime = dbLastLoginTimeMs + deleteDelayMs;
-        const delayText = account.type === 'edu' ? '1 giờ' : '24 giờ';
-        
-        if (deleteTime <= now) {
-          // Đã đến thời gian xóa
-          const timeSinceLogin = now - dbLastLoginTimeMs;
-          const hoursSinceLogin = Math.floor(timeSinceLogin / (60 * 60 * 1000));
-          const minutesSinceLogin = Math.floor((timeSinceLogin % (60 * 60 * 1000)) / (60 * 1000));
+        if (cache && cache.scheduledDeleteTime) {
+          // Có cache, kiểm tra từ cache
+          const bufferMs = 1 * 60 * 1000; // 1 phút buffer
+          const actualDeleteTime = cache.scheduledDeleteTime + bufferMs;
           
-          console.log(`[GMAIL_AUTO_DELETE_DB] ⏰ Đến thời gian xóa: ${account.email} (${account.type}) - đã qua ${delayText} kể từ khi login`);
-          console.log(`[GMAIL_AUTO_DELETE_DB]   - LastLoginTime (DB): ${dbLastLoginTime}`);
-          console.log(`[GMAIL_AUTO_DELETE_DB]   - Time since login: ${hoursSinceLogin}h ${minutesSinceLogin}m`);
-          console.log(`[GMAIL_AUTO_DELETE_DB]   - DeleteTime: ${new Date(deleteTime).toISOString()}`);
-          console.log(`[GMAIL_AUTO_DELETE_DB]   - CurrentTime: ${new Date(now).toISOString()}`);
-          
-          try {
-            // Xóa từ Google Admin API
-            const result = await deleteAccount(account.email, account.type);
-            if (result.success) {
-              console.log(`[GMAIL_AUTO_DELETE_DB] ✅ Successfully deleted ${account.type} account from Google: ${account.email}`);
-              
-              // Xóa từ database
-              await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
-              console.log(`[GMAIL_AUTO_DELETE_DB] ✅ Deleted record from database: ${account.email}`);
-              
-              // Xóa khỏi cache nếu có
-              const deleteKeyCache = deleteKey(account.email);
-              delCache(deleteKeyCache);
-              
-              deletedCount++;
-              
-            } else {
-              console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Failed to delete ${account.type} account from Google ${account.email}: ${result.error}`);
-              
+          if (now >= actualDeleteTime) {
+            // Đã đến thời gian xóa từ cache
+            const delayText = account.type === 'edu' ? '1 giờ' : '24 giờ';
+            console.log(`[GMAIL_AUTO_DELETE_DB] ⏰ Đến thời gian xóa: ${account.email} (${account.type}) - đã qua ${delayText} kể từ khi schedule`);
+            console.log(`[GMAIL_AUTO_DELETE_DB]   - ScheduledDeleteTime: ${new Date(cache.scheduledDeleteTime).toISOString()}`);
+            console.log(`[GMAIL_AUTO_DELETE_DB]   - CurrentTime: ${new Date(now).toISOString()}`);
+            
+            try {
+              const result = await deleteAccount(account.email, account.type);
+              if (result.success) {
+                console.log(`[GMAIL_AUTO_DELETE_DB] ✅ Successfully deleted ${account.type} account from Google: ${account.email}`);
+                
+                await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
+                console.log(`[GMAIL_AUTO_DELETE_DB] ✅ Deleted record from database: ${account.email}`);
+                
+                delCache(deleteKeyCache);
+                deletedCount++;
+              } else {
+                console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Failed to delete ${account.type} account from Google ${account.email}: ${result.error}`);
+                errorCount++;
+              }
+            } catch (error) {
+              console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Exception deleting ${account.type} account ${account.email}:`, error);
               errorCount++;
             }
-          } catch (error) {
-            console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Exception deleting ${account.type} account ${account.email}:`, error);
-            
-            errorCount++;
+          } else {
+            // Chưa đến thời gian xóa
+            const timeRemaining = actualDeleteTime - now;
+            const hoursRemaining = Math.floor(timeRemaining / (60 * 60 * 1000));
+            const minutesRemaining = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+            console.log(`[GMAIL_AUTO_DELETE_DB] ⏳ Account ${account.email} (${account.type}) chưa đến thời gian xóa - còn ${hoursRemaining}h ${minutesRemaining}m`);
           }
         } else {
-          // Chưa đến thời gian xóa
-          const timeUntilDelete = deleteTime - now;
-          const hoursUntilDelete = Math.floor(timeUntilDelete / (60 * 60 * 1000));
-          const minutesUntilDelete = Math.floor((timeUntilDelete % (60 * 60 * 1000)) / (60 * 1000));
-          console.log(`[GMAIL_AUTO_DELETE_DB] ⏳ Account ${account.email} (${account.type}) chưa đến thời gian xóa - còn ${hoursUntilDelete}h ${minutesUntilDelete}m`);
+          // Không có cache, có thể cache bị mất - schedule lại
+          console.log(`[GMAIL_AUTO_DELETE_DB] ⚠️ Account ${account.email} có status = "sold" nhưng không có cache - schedule lại`);
+          await scheduleAccountDeletion(account.email, account.type);
         }
         
         // Delay nhỏ giữa mỗi account để tránh rate limit
@@ -262,7 +232,6 @@ export const processScheduledDeletionsFromDatabase = async () => {
         
       } catch (error) {
         console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Error processing ${account.email}:`, error.message);
-        
         errorCount++;
       }
     }
@@ -273,7 +242,6 @@ export const processScheduledDeletionsFromDatabase = async () => {
     
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Error in processScheduledDeletionsFromDatabase:`, error);
-    
   }
 };
 
@@ -287,16 +255,16 @@ export const checkAccountsByType = async (type) => {
     const accounts = await query('SELECT * FROM gmail_accounts WHERE type = ? AND status = "available" ORDER BY id', [type]);
     
     if (!accounts || accounts.length === 0) {
-      console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] Không có ${type} account nào để check`);
-      return { loggedIn: 0, notLoggedIn: 0, errors: 0, total: 0 };
+      console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] Không có account nào cần check.`);
+      return { loggedIn: 0, notLoggedIn: 0, deleted: 0, errors: 0, total: 0 };
     }
     
-    console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] Tìm thấy ${accounts.length} ${type} account(s) để check`);
+    console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] Tìm thấy ${accounts.length} account(s) cần check...`);
     
     let loggedInCount = 0;
     let notLoggedInCount = 0;
-    let errorCount = 0;
     let deletedCount = 0;
+    let errorCount = 0;
     
     // Loop qua từng account, delay 3s giữa mỗi account
     for (let i = 0; i < accounts.length; i++) {
@@ -384,45 +352,21 @@ export const checkAccountsByType = async (type) => {
             console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ ${account.email} đã login (lastLoginTime: ${lastLoginTime}, khác ${neverLoggedInTime})`);
             loggedInCount++;
             
-            // Update lastLoginTime trong database (chỉ khi có giá trị hợp lệ, không phải epoch time)
-            // Chuyển đổi ISO 8601 format sang MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
-            try {
-              let loginTimeToSave = null;
-              if (lastLoginTime && lastLoginTime !== neverLoggedInTime) {
-                // Chuyển đổi từ ISO 8601 (2025-12-24T16:27:44.000Z) sang MySQL format (2025-12-24 16:27:44)
-                const date = new Date(lastLoginTime);
-                if (!isNaN(date.getTime())) {
-                  const year = date.getUTCFullYear();
-                  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                  const day = String(date.getUTCDate()).padStart(2, '0');
-                  const hours = String(date.getUTCHours()).padStart(2, '0');
-                  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-                  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-                  loginTimeToSave = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-                }
-              }
-              await query('UPDATE gmail_accounts SET lastLoginTime = ? WHERE email = ?', [loginTimeToSave, account.email]);
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Updated lastLoginTime for ${account.email} in database: ${loginTimeToSave || 'NULL (epoch time ignored)'}`);
-            } catch (error) {
-              console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Error updating lastLoginTime:`, error);
-            }
-            
             // Check xem đã được schedule chưa (kiểm tra cache và status trong database)
             const deleteKeyCache = deleteKey(account.email);
             const existingSchedule = getCache(deleteKeyCache);
             const currentStatus = account.status;
             
             if (!existingSchedule && currentStatus !== 'sold') {
-              // Chưa được schedule - thực hiện schedule deletion và đổi status thành "sold"
+              // Chưa được schedule - thực hiện schedule deletion ngay (dựa trên thời gian hiện tại)
               console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] 📅 Lần đầu phát hiện login - Scheduling deletion for ${account.email} (${account.type})...`);
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}]   - LastLoginTime: ${lastLoginTime}`);
               
-              // Schedule xóa dựa trên lastLoginTime + delay (thay vì Date.now() + delay)
-              await scheduleAccountDeletion(account.email, account.type, lastLoginTime);
+              // Schedule xóa dựa trên thời gian hiện tại + delay (không cần lastLoginTime)
+              await scheduleAccountDeletion(account.email, account.type);
               
               console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã schedule xóa ${account.email} (${account.type}) và đổi status thành "sold"`);
             } else if (existingSchedule) {
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⏭️ ${account.email} đã được schedule xóa rồi (scheduled time: ${new Date(existingSchedule.scheduledDeleteTime).toISOString()}, lastLoginTime: ${existingSchedule.lastLoginTime || 'N/A'})`);
+              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⏭️ ${account.email} đã được schedule xóa rồi (scheduled time: ${new Date(existingSchedule.scheduledDeleteTime).toISOString()})`);
               
               // Đảm bảo status là "sold" nếu chưa được update
               if (currentStatus !== 'sold') {
@@ -437,7 +381,7 @@ export const checkAccountsByType = async (type) => {
               console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⏭️ ${account.email} đã có status = "sold" nhưng chưa có schedule - sẽ schedule lại`);
               
               // Có status = "sold" nhưng chưa có schedule (có thể cache bị mất) - schedule lại
-              await scheduleAccountDeletion(account.email, account.type, lastLoginTime);
+              await scheduleAccountDeletion(account.email, account.type);
               console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã schedule lại xóa ${account.email} (${account.type})`);
             }
           } else {
@@ -450,34 +394,33 @@ export const checkAccountsByType = async (type) => {
             const createdTime = new Date(account.created_at);
             const timeSinceCreation = now.getTime() - createdTime.getTime();
             
-            const NOT_LOGIN_DELETE_MS = type === 'edu' 
+            // Edu: 24h, Non: 72h
+            const requiredHours = type === 'edu' 
               ? DELETE_EDU_NOT_LOGIN_AFTER_MS 
               : DELETE_NON_NOT_LOGIN_AFTER_MS;
             
             const hoursSinceCreation = Math.floor(timeSinceCreation / (60 * 60 * 1000));
-            const requiredHours = type === 'edu' ? 24 : 72;
             
-            if (timeSinceCreation >= NOT_LOGIN_DELETE_MS) {
-              // Đã qua thời gian quy định - xóa account chưa login
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⚠️ Account ${account.email} chưa login sau ${hoursSinceCreation}h (yêu cầu: ${requiredHours}h) - tự động xóa`);
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}]   - CreatedAt: ${account.created_at}`);
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}]   - LastLoginTime: ${lastLoginTime || 'N/A'} (epoch time = chưa login)`);
+            if (timeSinceCreation >= requiredHours) {
+              // Đã qua thời gian quy định, xóa account chưa login
+              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⚠️ Account ${account.email} chưa login và đã qua thời gian quy định (${hoursSinceCreation}h) - tự động xóa`);
               
               try {
                 // Xóa từ Google Admin API
-                const deleteResult = await deleteAccount(account.email, account.type);
-                if (deleteResult.success) {
-                  console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã xóa ${account.email} từ Google Admin API`);
+                const result = await deleteAccount(account.email, account.type);
+                if (result.success) {
+                  console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Successfully deleted ${account.type} account from Google: ${account.email}`);
+                  
+                  // Xóa từ database
+                  await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
+                  console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Deleted record from database: ${account.email}`);
+                  
+                  deletedCount++;
                 } else {
-                  console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⚠️ Không thể xóa từ Google Admin API: ${deleteResult.error} - vẫn xóa khỏi database`);
+                  console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Failed to delete ${account.type} account from Google ${account.email}: ${result.error}`);
+                  
+                  errorCount++;
                 }
-                
-                // Xóa khỏi database
-                await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
-                console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã xóa ${account.email} khỏi database`);
-                
-                deletedCount++;
-                
               } catch (deleteError) {
                 console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Lỗi khi xóa ${account.email}:`, deleteError);
                 
@@ -485,7 +428,7 @@ export const checkAccountsByType = async (type) => {
               }
             } else {
               // Chưa đến thời gian xóa
-              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⏳ Account ${account.email} chưa login nhưng mới tạo ${hoursSinceCreation}h trước - bỏ qua (cần ${requiredHours}h để xóa)`);
+              console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ⏳ Account ${account.email} chưa login nhưng mới tạo ${hoursSinceCreation}h trước - bỏ qua (cần ${Math.floor(requiredHours / (60 * 60 * 1000))}h để xóa)`);
             }
           }
         }
@@ -520,186 +463,47 @@ export const checkAllAccountsLoginStatusLoop = async () => {
   try {
     console.log('[GMAIL_LOGIN_CHECK] Bắt đầu check login status cho tất cả accounts (edu và non riêng biệt)...');
     
-    // Check edu accounts
+    // Check Edu accounts
     const eduResult = await checkAccountsByType('edu');
     
-    // Check non accounts
+    // Delay 5 phút giữa edu và non để tránh rate limit
+    await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000));
+    
+    // Check Non accounts
     const nonResult = await checkAccountsByType('non');
     
+    // Tổng hợp kết quả
     const totalLoggedIn = eduResult.loggedIn + nonResult.loggedIn;
     const totalNotLoggedIn = eduResult.notLoggedIn + nonResult.notLoggedIn;
+    const totalDeleted = eduResult.deleted + nonResult.deleted;
     const totalErrors = eduResult.errors + nonResult.errors;
     const totalAccounts = eduResult.total + nonResult.total;
     
-    console.log(`[GMAIL_LOGIN_CHECK] ✅ Hoàn thành check tất cả: Tổng ${totalAccounts} accounts (${totalLoggedIn} đã login, ${totalNotLoggedIn} chưa login, ${totalErrors} lỗi)`);
-    console.log(`[GMAIL_LOGIN_CHECK]   - Edu: ${eduResult.total} accounts (${eduResult.loggedIn} login, ${eduResult.notLoggedIn} chưa login, ${eduResult.errors} lỗi)`);
-    console.log(`[GMAIL_LOGIN_CHECK]   - Non: ${nonResult.total} accounts (${nonResult.loggedIn} login, ${nonResult.notLoggedIn} chưa login, ${nonResult.errors} lỗi)`);
+    console.log(`[GMAIL_LOGIN_CHECK] ✅ Hoàn thành check tất cả accounts:`);
+    console.log(`[GMAIL_LOGIN_CHECK]   - Edu: ${eduResult.loggedIn} đã login, ${eduResult.notLoggedIn} chưa login, ${eduResult.deleted} đã xóa, ${eduResult.errors} lỗi`);
+    console.log(`[GMAIL_LOGIN_CHECK]   - Non: ${nonResult.loggedIn} đã login, ${nonResult.notLoggedIn} chưa login, ${nonResult.deleted} đã xóa, ${nonResult.errors} lỗi`);
+    console.log(`[GMAIL_LOGIN_CHECK]   - Tổng: ${totalLoggedIn} đã login, ${totalNotLoggedIn} chưa login, ${totalDeleted} đã xóa, ${totalErrors} lỗi`);
     
+    return {
+      edu: eduResult,
+      non: nonResult,
+      total: {
+        loggedIn: totalLoggedIn,
+        notLoggedIn: totalNotLoggedIn,
+        deleted: totalDeleted,
+        errors: totalErrors,
+        total: totalAccounts
+      }
+    };
   } catch (error) {
     console.error('[GMAIL_LOGIN_CHECK] ❌ Lỗi trong checkAllAccountsLoginStatusLoop:', error);
     
+    return {
+      edu: { loggedIn: 0, notLoggedIn: 0, deleted: 0, errors: 0, total: 0 },
+      non: { loggedIn: 0, notLoggedIn: 0, deleted: 0, errors: 0, total: 0 },
+      total: { loggedIn: 0, notLoggedIn: 0, deleted: 0, errors: 0, total: 0 }
+    };
   }
-};
-
-// Start auto login checker - chạy liên tục
-export const startGmailLoginChecker = () => {
-  const runCheck = async () => {
-    await checkAllAccountsLoginStatusLoop();
-    
-    // Sau khi check hết, nghỉ 1 phút rồi check tiếp
-    console.log('[GMAIL_LOGIN_CHECK] Nghỉ 1 phút trước khi check tiếp...');
-    await new Promise(resolve => setTimeout(resolve, 60 * 1000));
-    
-    // Chạy lại
-    runCheck();
-  };
-  
-  // Bắt đầu check ngay
-  runCheck();
-  console.log('[GMAIL_LOGIN_CHECK] Auto login checker started');
-  
-};
-
-// Xóa Edu accounts chưa login sau 24h kể từ khi tạo (check vào 00:00 giờ Việt Nam)
-export const deleteEduAccountsNotLoggedInAfter24h = async () => {
-  try {
-    console.log('[GMAIL_EDU_CLEANUP] Bắt đầu check và xóa Edu accounts chưa login sau 24h...');
-    
-    // Lấy giờ Việt Nam hiện tại
-    const now = new Date();
-    const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    
-    // Tính thời gian 24h trước (giờ VN)
-    const cutoffTimeVN = new Date(vnNow.getTime() - DELETE_EDU_NOT_LOGIN_AFTER_MS);
-    
-    // Chuyển về UTC để query database
-    // created_at trong database là UTC, cần convert cutoffTimeVN về UTC
-    const localOffset = now.getTimezoneOffset() * 60 * 1000;
-    const vnOffset = 7 * 60 * 60 * 1000;
-    const cutoffTimeUTC = new Date(cutoffTimeVN.getTime() - localOffset - vnOffset);
-    
-    console.log(`[GMAIL_EDU_CLEANUP] Giờ Việt Nam hiện tại: ${vnNow.toISOString()}`);
-    console.log(`[GMAIL_EDU_CLEANUP] Cutoff time (24h trước, giờ VN): ${cutoffTimeVN.toISOString()}`);
-    console.log(`[GMAIL_EDU_CLEANUP] Cutoff time (UTC cho query): ${cutoffTimeUTC.toISOString()}`);
-    
-    // Format cho MySQL DATETIME (YYYY-MM-DD HH:MM:SS)
-    const cutoffMySQL = cutoffTimeUTC.toISOString().slice(0, 19).replace('T', ' ');
-    
-    // Lấy tất cả Edu accounts có status = "available" (chưa login) và created_at < cutoffTime
-    const accountsToDelete = await query(
-      `SELECT * FROM gmail_accounts 
-       WHERE type = 'edu' 
-       AND status = 'available' 
-       AND lastLoginTime IS NULL
-       AND created_at < ?
-       ORDER BY id`,
-      [cutoffMySQL]
-    );
-    
-    if (!accountsToDelete || accountsToDelete.length === 0) {
-      console.log('[GMAIL_EDU_CLEANUP] Không có Edu account nào cần xóa');
-      return { deleted: 0, errors: 0 };
-    }
-    
-    console.log(`[GMAIL_EDU_CLEANUP] Tìm thấy ${accountsToDelete.length} Edu account(s) cần xóa (chưa login sau 24h)`);
-    
-    let deletedCount = 0;
-    let errorCount = 0;
-    
-    for (const account of accountsToDelete) {
-      try {
-        const createdTime = new Date(account.created_at);
-        const createdTimeVN = new Date(createdTime.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-        const hoursSinceCreation = Math.floor((vnNow.getTime() - createdTimeVN.getTime()) / (60 * 60 * 1000));
-        
-        console.log(`[GMAIL_EDU_CLEANUP] Xóa account: ${account.email} (tạo ${hoursSinceCreation}h trước, created_at: ${account.created_at})`);
-        
-        // Xóa từ Google Admin API
-        const result = await deleteAccount(account.email, account.type);
-        if (result.success) {
-          console.log(`[GMAIL_EDU_CLEANUP] ✅ Đã xóa ${account.email} từ Google Admin API`);
-          
-          // Xóa từ database
-          await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
-          console.log(`[GMAIL_EDU_CLEANUP] ✅ Đã xóa ${account.email} khỏi database`);
-          
-          deletedCount++;
-          
-        } else {
-          console.error(`[GMAIL_EDU_CLEANUP] ❌ Không thể xóa ${account.email} từ Google: ${result.error}`);
-          errorCount++;
-          
-        }
-        
-        // Delay nhỏ giữa mỗi account để tránh rate limit
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`[GMAIL_EDU_CLEANUP] ❌ Lỗi khi xóa ${account.email}:`, error);
-        errorCount++;
-        
-      }
-    }
-    
-    console.log(`[GMAIL_EDU_CLEANUP] ✅ Hoàn thành: ${deletedCount} đã xóa, ${errorCount} lỗi`);
-    
-    
-    return { deleted: deletedCount, errors: errorCount, total: accountsToDelete.length };
-  } catch (error) {
-    console.error('[GMAIL_EDU_CLEANUP] ❌ Lỗi trong deleteEduAccountsNotLoggedInAfter24h:', error);
-    
-    return { deleted: 0, errors: 0, total: 0 };
-  }
-};
-
-// Tính toán thời gian đến 00:00 giờ Việt Nam tiếp theo (milliseconds)
-const getNextMidnightVN = () => {
-  const now = new Date();
-  
-  // Lấy giờ Việt Nam hiện tại
-  const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-  
-  // Tạo 00:00 hôm nay (giờ VN)
-  const midnightVN = new Date(vnNow);
-  midnightVN.setHours(0, 0, 0, 0);
-  
-  // Nếu đã qua 00:00 hôm nay, lấy 00:00 ngày mai
-  if (vnNow >= midnightVN) {
-    midnightVN.setDate(midnightVN.getDate() + 1);
-  }
-  
-  // Chuyển về UTC timestamp để tính delay
-  // Lấy UTC offset của máy hiện tại
-  const localOffset = now.getTimezoneOffset() * 60 * 1000;
-  // UTC+7 offset
-  const vnOffset = 7 * 60 * 60 * 1000;
-  // Tính timestamp UTC của 00:00 VN
-  const midnightVNUTC = midnightVN.getTime() - localOffset - vnOffset;
-  
-  return midnightVNUTC - now.getTime();
-};
-
-// Start daily cleanup cho Edu accounts chưa login (chạy vào 00:00 giờ Việt Nam)
-export const startEduAccountsDailyCleanup = () => {
-  const scheduleNext = () => {
-    const delayMs = getNextMidnightVN();
-    const nextRun = new Date(Date.now() + delayMs);
-    
-    console.log(`[GMAIL_EDU_CLEANUP] Sẽ chạy cleanup lúc 00:00 giờ Việt Nam (${nextRun.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`);
-    
-    setTimeout(async () => {
-      console.log('[GMAIL_EDU_CLEANUP] ⏰ Đến giờ cleanup (00:00 giờ Việt Nam)');
-      await deleteEduAccountsNotLoggedInAfter24h();
-      
-      // Schedule cho ngày tiếp theo
-      scheduleNext();
-    }, delayMs);
-  };
-  
-  // Chạy ngay lần đầu (nếu đã qua 00:00) hoặc schedule cho 00:00 tiếp theo
-  scheduleNext();
-  
-  console.log('[GMAIL_EDU_CLEANUP] Daily cleanup scheduler started (runs at 00:00 Vietnam time)');
-  
 };
 
 // Start auto deletion checker
@@ -716,6 +520,45 @@ export const startGmailAutoDeleteChecker = () => {
   processScheduledDeletionsFromDatabase(); // Initial check
   
   console.log('[GMAIL_AUTO_DELETE] Auto deletion checker started (cache + database)');
-  
 };
 
+// Start login checker (chạy mỗi 30 phút)
+export const startGmailLoginChecker = () => {
+  const checkInterval = 30 * 60 * 1000; // Check every 30 minutes
+  
+  setInterval(() => checkAllAccountsLoginStatusLoop(), checkInterval);
+  checkAllAccountsLoginStatusLoop(); // Initial check
+  
+  console.log('[GMAIL_LOGIN_CHECK] Login checker started (check every 30 minutes)');
+};
+
+// Start daily cleanup cho Edu accounts chưa login (chạy lúc 00:00 VN time mỗi ngày)
+export const startEduAccountsDailyCleanup = () => {
+  const getNextMidnightVN = () => {
+    const now = new Date();
+    // VN time = UTC + 7
+    const vnTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+    const vnMidnight = new Date(vnTime);
+    vnMidnight.setUTCHours(0, 0, 0, 0);
+    // Convert về UTC
+    const utcMidnight = new Date(vnMidnight.getTime() - (7 * 60 * 60 * 1000));
+    // Nếu đã qua 00:00 hôm nay, schedule cho 00:00 ngày mai
+    if (utcMidnight.getTime() <= now.getTime()) {
+      utcMidnight.setUTCDate(utcMidnight.getUTCDate() + 1);
+    }
+    return utcMidnight.getTime() - now.getTime();
+  };
+  
+  const scheduleNext = () => {
+    const delay = getNextMidnightVN();
+    setTimeout(() => {
+      console.log('[GMAIL_AUTO_DELETE] 🧹 Bắt đầu daily cleanup cho Edu accounts chưa login...');
+      checkAccountsByType('edu').then(() => {
+        scheduleNext(); // Schedule cho ngày tiếp theo
+      });
+    }, delay);
+  };
+  
+  scheduleNext();
+  console.log('[GMAIL_AUTO_DELETE] Daily cleanup scheduler started (runs at 00:00 VN time)');
+};

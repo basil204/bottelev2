@@ -4,6 +4,8 @@ import { sendProductList, handlePurchase, handleManualOrderInput } from './handl
 import { showGmailMenu, showGmailQuantityMenu, buyGmailAccount, buyGmailAccountDaily, handleBuyGmailCommand, handleGmailTypeSelection, handleGmailQuantityInput } from './handle/handleGmail.js';
 import { showMailMenu, handleMailTypeSelection, handleMailQuantityInput } from './handle/handleMail.js';
 import { showVipMenu, buyVipPackage, showVipHistory } from './handle/handleVip.js';
+import { doCheckIn, processReferral } from './controllers/checkinController.js';
+import { showCreditExchangeMenu, exchangeCreditForGmail } from './handle/handleCredit.js';
 import { 
   adminShowGmailMenu,
   adminCheckAndDeleteNotLoggedIn,
@@ -43,7 +45,34 @@ import { addBalanceLog } from './controllers/balanceLogController.js';
 import { createCallbackData } from '../utils/index.js';
 
 export const registerListeners = (bot, config) => {
-  bot.onText(/^\/start|\/menu/i, async (msg) => {
+  bot.onText(/^\/start(.*)/i, async (msg, match) => {
+    const user = await ensureUser(bot, msg);
+    
+    // Xử lý referral code nếu có
+    const referralCode = match[1] ? match[1].trim() : null;
+    if (referralCode && referralCode.length > 0) {
+      try {
+        const referralResult = await processReferral(user.id, referralCode);
+        if (referralResult.success) {
+          await bot.sendMessage(
+            msg.chat.id,
+            `🎉 Chào mừng bạn đến với bot!\n\n` +
+            `✅ Bạn đã sử dụng mã giới thiệu thành công!\n` +
+            `💎 Người giới thiệu đã nhận được 3 credit.\n\n` +
+            `💡 Sử dụng /checkin để nhận credit miễn phí mỗi ngày!`
+          );
+        }
+        // Không hiển thị thông báo nếu đã sử dụng mã rồi (để tránh spam)
+      } catch (error) {
+        // Xử lý lỗi một cách im lặng để không làm gián đoạn flow
+        console.error('[REFERRAL] Error processing referral:', error.message);
+      }
+    }
+    
+    await sendMenu(bot, msg.chat.id, user);
+  });
+
+  bot.onText(/^\/menu/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     await sendMenu(bot, msg.chat.id, user);
   });
@@ -67,8 +96,18 @@ export const registerListeners = (bot, config) => {
 
   bot.onText(/^\/kmnap/i, async (msg) => {
     if (!requireAdmin(config.ADMIN_IDS, msg.from.id)) return bot.sendMessage(msg.chat.id, 'Không có quyền.');
-    const { adminParseKmnap, adminListPromotions } = await import('./handle/handleAdmin.js');
+    const { adminParseKmnap, adminListPromotions, adminDeletePromotion } = await import('./handle/handleAdmin.js');
     const text = msg.text.trim();
+    const parts = text.split(/\s+/);
+    
+    // Nếu là lệnh xóa: /kmnap delete <id>
+    if (parts.length === 3 && parts[1].toLowerCase() === 'delete') {
+      const promotionId = parseInt(parts[2]);
+      if (isNaN(promotionId)) {
+        return bot.sendMessage(msg.chat.id, '❌ ID khuyến mại không hợp lệ.');
+      }
+      return adminDeletePromotion(bot, msg.chat.id, promotionId);
+    }
     
     // Nếu có tham số thì parse, không thì hiển thị danh sách
     if (text === '/kmnap' || text === '/kmnap list') {
@@ -76,6 +115,71 @@ export const registerListeners = (bot, config) => {
     } else {
       await adminParseKmnap(bot, msg);
     }
+  });
+
+  bot.onText(/^\/get/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    const { getUserCredit } = await import('./controllers/creditController.js');
+    const { generateReferralCode, getReferralStats, createReferralLink } = await import('./controllers/checkinController.js');
+    
+    const currentCredit = await getUserCredit(user.id);
+    const referralCode = await generateReferralCode(user.id);
+    const referralStats = await getReferralStats(user.id);
+    const referralLink = createReferralLink(config.BOT_USERNAME, referralCode);
+
+    let referralText = `🔗 Mã giới thiệu của bạn:\n\`${referralCode}\``;
+    if (referralLink) {
+      referralText += `\n\n🔗 Link mời:\n${referralLink}`;
+    }
+
+    const message = `📋 Thông tin giới thiệu\n\n` +
+                   `💰 Credit hiện tại: ${currentCredit}\n\n` +
+                   `📊 Thống kê:\n` +
+                   `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+                   `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+                   `${referralText}\n\n` +
+                   `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!\n` +
+                   `🎁 Mỗi người join qua link của bạn = +3 credit cho bạn!`;
+
+    await bot.sendMessage(msg.chat.id, message);
+  });
+
+  bot.onText(/^\/checkin/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    const result = await doCheckIn(user.id);
+
+    if (!result.success) {
+      const hours = result.hoursRemaining || 0;
+      const minutes = Math.ceil((hours - Math.floor(hours)) * 60);
+      return bot.sendMessage(
+        msg.chat.id,
+        `⏰ Bạn đã check-in rồi!\n\n⏳ Thời gian còn lại: ${Math.floor(hours)} giờ ${minutes} phút\n\n💡 Hãy quay lại sau 24 giờ để check-in tiếp.`
+      );
+    }
+
+    const { getUserCredit } = await import('./controllers/creditController.js');
+    const { generateReferralCode, getReferralStats, createReferralLink } = await import('./controllers/checkinController.js');
+    
+    const currentCredit = await getUserCredit(user.id);
+    const referralCode = await generateReferralCode(user.id);
+    const referralStats = await getReferralStats(user.id);
+    const referralLink = createReferralLink(config.BOT_USERNAME, referralCode);
+
+    let referralText = `🔗 Mã giới thiệu của bạn:\n\`${referralCode}\``;
+    if (referralLink) {
+      referralText += `\n\n🔗 Link mời:\n${referralLink}`;
+    }
+
+    const message = `✅ Check-in thành công!\n\n` +
+                   `🎁 Nhận được: 1 Credit\n` +
+                   `💰 Credit hiện tại: ${currentCredit}\n\n` +
+                   `📊 Thống kê:\n` +
+                   `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+                   `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+                   `${referralText}\n\n` +
+                   `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
+
+    await bot.sendMessage(msg.chat.id, message);
   });
 
   bot.onText(/^\/buygmail/i, async (msg) => {
@@ -103,6 +207,39 @@ export const registerListeners = (bot, config) => {
     if (text === '📧 Mua Mail') return showMailMenu(bot, msg.chat.id);
     if (text === '⭐ Gói VIP') return showVipMenu(bot, msg.chat.id, user);
     if (text === '🧾 Lịch sử mua') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+    if (text === '🎁 Check-in') {
+      const result = await doCheckIn(user.id);
+      if (!result.success) {
+        const hours = result.hoursRemaining || 0;
+        const minutes = Math.ceil((hours - Math.floor(hours)) * 60);
+        return bot.sendMessage(
+          msg.chat.id,
+          `⏰ Bạn đã check-in rồi!\n\n⏳ Thời gian còn lại: ${Math.floor(hours)} giờ ${minutes} phút\n\n💡 Hãy quay lại sau 24 giờ để check-in tiếp.`
+        );
+      }
+      const { getUserCredit } = await import('./controllers/creditController.js');
+      const { generateReferralCode, getReferralStats, createReferralLink } = await import('./controllers/checkinController.js');
+      const currentCredit = await getUserCredit(user.id);
+      const referralCode = await generateReferralCode(user.id);
+      const referralStats = await getReferralStats(user.id);
+      const referralLink = createReferralLink(config.BOT_USERNAME, referralCode);
+      
+      let referralText = `🔗 Mã giới thiệu của bạn:\n\`${referralCode}\``;
+      if (referralLink) {
+        referralText += `\n\n🔗 Link mời:\n${referralLink}`;
+      }
+      
+      const message = `✅ Check-in thành công!\n\n` +
+                     `🎁 Nhận được: 1 Credit\n` +
+                     `💰 Credit hiện tại: ${currentCredit}\n\n` +
+                     `📊 Thống kê:\n` +
+                     `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+                     `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+                     `${referralText}\n\n` +
+                     `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
+      return bot.sendMessage(msg.chat.id, message);
+    }
+    if (text === '💎 Đổi Credit') return showCreditExchangeMenu(bot, msg.chat.id, user);
 
     // Kiểm tra manual order input trước (email/note)
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
@@ -349,6 +486,31 @@ export const registerListeners = (bot, config) => {
           await bot.sendMessage(chatId, 'Nhập để sửa giá theo format: type|duration|quantity|price\nVí dụ: edu|single|1|700');
           bot.once('message', (m) => adminParseUpdateGmailPrice(bot, m));
           return adminGmailPricingMenu(bot, chatId);
+        case 'admin_delete_promotion':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminDeletePromotion } = await import('./handle/handleAdmin.js');
+          return adminDeletePromotion(bot, chatId, data.id);
+        case 'exchange_credit':
+        case 'ex_cr': // Format ngắn
+          // Hỗ trợ cả format đầy đủ và format ngắn
+          const exchangeType = data.type || data.t;
+          const exchangeDuration = data.duration || data.d;
+          const exchangeCost = data.cost || data.c;
+          
+          // Map duration ngắn về đầy đủ
+          let mappedDuration = exchangeDuration;
+          if (exchangeDuration === 's') mappedDuration = 'single';
+          if (exchangeDuration === 'd') mappedDuration = 'daily';
+          
+          if (exchangeType && mappedDuration && exchangeCost) {
+            const msgObj = {
+              ...query.message,
+              from: query.from,
+              chat: query.message.chat
+            };
+            return exchangeCreditForGmail(bot, msgObj, user, exchangeType, mappedDuration, exchangeCost);
+          }
+          return;
         default:
           return;
       }

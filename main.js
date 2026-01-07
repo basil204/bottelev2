@@ -40,6 +40,16 @@ const bootstrap = async () => {
   await initDb(config);
 
   const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
+  
+  // Lấy bot info để có username
+  try {
+    const botInfo = await bot.getMe();
+    config.BOT_USERNAME = botInfo.username;
+    console.log(`✅ Bot started: @${botInfo.username}`);
+  } catch (error) {
+    console.error('⚠️  Could not get bot info:', error.message);
+  }
+  
   registerListeners(bot, config);
   startQrExpirationChecker(bot); // Always start QR expiration checker
   startAutoDepositWatcher(bot, config);

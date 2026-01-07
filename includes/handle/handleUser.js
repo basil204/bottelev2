@@ -1,12 +1,10 @@
 import { findOrCreateUser, getUserByTelegram } from '../controllers/userController.js';
 import { listOrdersByUser } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard } from '../../utils/index.js';
-import { logUser } from '../../utils/log.js';
 import { query } from '../database/index.js';
 
 export const ensureUser = async (bot, msg) => {
   const user = await findOrCreateUser(msg.from.id, msg.from.username);
-  logUser(msg.from, msg.text || msg.data || '');
   return user;
 };
 

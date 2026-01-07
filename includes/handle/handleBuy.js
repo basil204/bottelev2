@@ -3,7 +3,6 @@ import { takeOneAvailable, markSold, syncStock } from '../controllers/accountCon
 import { updateBalance, getUserByTelegram } from '../controllers/userController.js';
 import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
-import { logEvent } from '../../utils/log.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { notifyAdminAboutNewManualOrder } from './handleNotify.js';
 
@@ -81,7 +80,6 @@ export const handlePurchase = async (bot, msg, productId, fromUser) => {
   await markSold(account.id);
   await syncStock(product.id);
   await createOrder({ userId: user.id, productId: product.id, price: product.price, status: 'completed' });
-  logEvent('order_created', { user: user.telegram_id, product: product.id });
 
   // Lấy lại user để có số dư chính xác
   const updatedUser = await getUserByTelegram(fromUser.id);
@@ -145,12 +143,6 @@ export const handleManualOrderInput = async (bot, msg, userId, adminIds = []) =>
       email: state.email,
       note: text,
       status: 'pending'
-    });
-    
-    logEvent('manual_order_created', { 
-      user: user.telegram_id, 
-      product: state.productId,
-      email: state.email
     });
     
     // Lấy order vừa tạo để gửi thông báo cho admin

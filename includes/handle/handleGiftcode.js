@@ -2,7 +2,6 @@ import { getGiftcodeByCode, hasUserRedeemed, redeemGiftcode } from '../controlle
 import { updateBalance } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency } from '../../utils/index.js';
-import { logEvent } from '../../utils/log.js';
 import { query } from '../database/index.js';
 
 // User nhập giftcode
@@ -62,13 +61,6 @@ export const handleRedeemGiftcode = async (bot, msg, user, code) => {
     
     await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
 
-    logEvent('giftcode_redeemed', { 
-      userId: user.id, 
-      telegramId: user.telegram_id, 
-      giftcodeId: giftcode.id, 
-      code: giftcodeStr,
-      amount: giftcode.amount
-    });
   } catch (error) {
     console.error('[REDEEM_GIFTCODE] Lỗi:', error);
     

@@ -1,6 +1,5 @@
 import { query } from '../database/index.js';
 import { createEduAccount, createNonAccount, deleteAccount, getUserInfo, getDomains, generateRandomUsername } from '../services/googleAdminService.js';
-import { logEvent, logError } from '../../utils/log.js';
 
 // Tạo Gmail account và lưu vào database
 export const createGmailAccount = async (type, domain, password = 'Vietcombank9338739954') => {
@@ -28,8 +27,6 @@ export const createGmailAccount = async (type, domain, password = 'Vietcombank93
       'INSERT INTO gmail_accounts (email, password, type, domain, status) VALUES (?, ?, ?, ?, "available")',
       [email, password, type, domain]
     );
-
-    logEvent('gmail_account_created', { email, type, domain });
     
     return {
       success: true,
@@ -39,7 +36,6 @@ export const createGmailAccount = async (type, domain, password = 'Vietcombank93
       domain
     };
   } catch (error) {
-    logError({ context: 'createGmailAccount', error: error.message });
     return {
       success: false,
       error: error.message
@@ -82,7 +78,6 @@ export const createGmailAccountForSale = async (type, domain, password = 'Vietco
     );
     
     console.log(`[CREATE_GMAIL] ✅ Đã lưu account vào database với status "available" (chưa login)`);
-    logEvent('gmail_account_created_for_sale', { email, type, domain });
     
     return {
       success: true,
@@ -93,7 +88,6 @@ export const createGmailAccountForSale = async (type, domain, password = 'Vietco
     };
   } catch (error) {
     console.error(`[CREATE_GMAIL] Exception:`, error);
-    logError({ context: 'createGmailAccountForSale', error: error.message });
     return {
       success: false,
       error: error.message
@@ -135,12 +129,9 @@ export const deleteGmailAccount = async (accountId) => {
       'UPDATE gmail_accounts SET status = "deleted" WHERE id = ?',
       [accountId]
     );
-
-    logEvent('gmail_account_deleted', { email: account.email, accountId });
     
     return { success: true };
   } catch (error) {
-    logError({ context: 'deleteGmailAccount', error: error.message });
     return {
       success: false,
       error: error.message
@@ -178,7 +169,6 @@ export const checkLoginStatus = async (accountId) => {
       userInfo: userInfo.success ? userInfo.data : null
     };
   } catch (error) {
-    logError({ context: 'checkLoginStatus', error: error.message });
     return {
       success: false,
       error: error.message
@@ -201,7 +191,6 @@ export const checkAllAccountsLoginStatus = async () => {
     
     return results;
   } catch (error) {
-    logError({ context: 'checkAllAccountsLoginStatus', error: error.message });
     return [];
   }
 };
@@ -215,7 +204,6 @@ export const getAvailableAccount = async (type) => {
     );
     return account || null;
   } catch (error) {
-    logError({ context: 'getAvailableAccount', error: error.message });
     return null;
   }
 };
@@ -229,7 +217,6 @@ export const markAccountSold = async (accountId) => {
     );
     return { success: true };
   } catch (error) {
-    logError({ context: 'markAccountSold', error: error.message });
     return { success: false, error: error.message };
   }
 };
@@ -261,7 +248,6 @@ export const listGmailAccounts = async (type, status, offset, limit) => {
     
     return { rows, total };
   } catch (error) {
-    logError({ context: 'listGmailAccounts', error: error.message });
     return { rows: [], total: 0 };
   }
 };
@@ -281,7 +267,6 @@ export const getAvailableDomains = async (type) => {
     return domains;
   } catch (error) {
     console.error(`[GET_DOMAINS] Lỗi:`, error.message);
-    logError({ context: 'getAvailableDomains', error: error.message });
     return [];
   }
 };
@@ -295,7 +280,6 @@ export const countAvailableAccounts = async (type) => {
     );
     return count || 0;
   } catch (error) {
-    logError({ context: 'countAvailableAccounts', error: error.message });
     return 0;
   }
 };

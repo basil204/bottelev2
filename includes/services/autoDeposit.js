@@ -10,7 +10,6 @@ import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { getActivePromotion, calculatePromotedAmount } from '../controllers/depositPromotionController.js';
 import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 import { deleteQrMessage } from '../handle/handleDeposit.js';
 
 const processedKey = (ref) => `tx_${ref}`;
@@ -35,11 +34,10 @@ export const checkExpiredQrs = async (bot) => {
         await deleteQrMessage(bot, cache);
         delCache(key);
         if (cache.token) delCache(contentKey(cache.token));
-        logEvent('qr_expired_cleaned', { key });
       }
     }
   } catch (err) {
-    logError({ context: 'check_expired_qrs', message: err.message });
+    // Error handling without logging
   }
 };
 
@@ -48,7 +46,6 @@ export const startQrExpirationChecker = (bot) => {
   const checkInterval = 30 * 1000; // Check every 30 seconds
   setInterval(() => checkExpiredQrs(bot), checkInterval);
   checkExpiredQrs(bot); // Initial check
-  logEvent('qr_expiration_checker_started');
 };
 
 // Xử lý giao dịch từ MBBank
@@ -65,13 +62,11 @@ const processMBTransaction = async (bot, tx, cached, user, promotion) => {
 
   if (!cached) {
     setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    logEvent('auto_deposit_token_not_found', { ref, token, bank: 'mbbank' });
     return false;
   }
 
   if (!user) {
     setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    logEvent('auto_deposit_user_not_found', { ref, token, bank: 'mbbank' });
     return false;
   }
 
@@ -128,17 +123,8 @@ const processMBTransaction = async (bot, tx, cached, user, promotion) => {
                `\n📝 Ref: ${ref}`;
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
   } catch (err) {
-    logError(err);
+    // Error handling without logging
   }
-  logEvent('auto_deposit_approved', { 
-    ref, 
-    token, 
-    bank: 'mbbank',
-    originalAmount: promotionResult.originalAmount,
-    bonusAmount: promotionResult.bonusAmount,
-    finalAmount: promotionResult.finalAmount,
-    promotionId: promotion?.id || null
-  });
   return true;
 };
 
@@ -159,13 +145,11 @@ const processTimoTransaction = async (bot, item, cached, user, promotion) => {
 
   if (!cached) {
     setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    logEvent('auto_deposit_token_not_found', { ref, token, bank: 'timo' });
     return false;
   }
 
   if (!user) {
     setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    logEvent('auto_deposit_user_not_found', { ref, token, bank: 'timo' });
     return false;
   }
 
@@ -222,17 +206,8 @@ const processTimoTransaction = async (bot, item, cached, user, promotion) => {
                `\n📝 Ref: ${ref}`;
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
   } catch (err) {
-    logError(err);
+    // Error handling without logging
   }
-  logEvent('auto_deposit_approved', { 
-    ref, 
-    token, 
-    bank: 'timo',
-    originalAmount: promotionResult.originalAmount,
-    bonusAmount: promotionResult.bonusAmount,
-    finalAmount: promotionResult.finalAmount,
-    promotionId: promotion?.id || null
-  });
   return true;
 };
 
@@ -242,7 +217,6 @@ export const startAutoDepositWatcher = (bot, config) => {
   const hasTimo = !!config.TIMO_API_URL;
 
   if (!hasMB && !hasTimo) {
-    logEvent('auto_deposit_disabled');
     return;
   }
 
@@ -269,13 +243,7 @@ export const startAutoDepositWatcher = (bot, config) => {
             await processMBTransaction(bot, tx, cached, user, promotion);
           }
         } catch (err) {
-          logError({
-            context: 'auto_deposit_mb_tick',
-            message: err.message,
-            stack: err.stack,
-            responseStatus: err.response?.status,
-            responseData: err.response?.data
-          });
+          // Error handling without logging
         }
       }
 
@@ -304,27 +272,16 @@ export const startAutoDepositWatcher = (bot, config) => {
             await processTimoTransaction(bot, item, cached, user, promotion);
           }
         } catch (err) {
-          logError({
-            context: 'auto_deposit_timo_tick',
-            message: err.message,
-            stack: err.stack,
-            responseStatus: err.response?.status,
-            responseData: err.response?.data
-          });
+          // Error handling without logging
         }
-      }
-    } catch (err) {
-      logError({
-        context: 'auto_deposit_tick',
-        message: err.message,
-        stack: err.stack
-      });
     }
+  } catch (err) {
+    // Error handling without logging
+  }
   };
 
   tick(); // initial
   setInterval(tick, intervalMs);
-  logEvent('auto_deposit_started', { intervalMs, hasMB, hasTimo });
 };
 
 

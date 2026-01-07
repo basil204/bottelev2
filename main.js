@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
 import { initDb } from './includes/database/index.js';
 import { registerListeners } from './includes/listen.js';
-import { logEvent, logError } from './utils/log.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
 import { startGmailAutoDeleteChecker, startGmailLoginChecker, startEduAccountsDailyCleanup } from './includes/services/gmailAutoDelete.js';
 
@@ -39,7 +38,6 @@ if (!config.TELEGRAM_BOT_TOKEN) {
 
 const bootstrap = async () => {
   await initDb(config);
-  logEvent('db_connected');
 
   const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
   registerListeners(bot, config);
@@ -48,11 +46,10 @@ const bootstrap = async () => {
   startGmailAutoDeleteChecker(); // Start Gmail auto delete checker
   startGmailLoginChecker(); // Start Gmail login checker (check tất cả accounts)
   startEduAccountsDailyCleanup(); // Start daily cleanup cho Edu accounts chưa login (00:00 VN time)
-  logEvent('bot_started');
 };
 
 bootstrap().catch((err) => {
-  logError(err);
+  console.error(err);
   process.exit(1);
 });
 

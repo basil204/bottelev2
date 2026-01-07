@@ -2,7 +2,6 @@ import { getUserByTelegram, updateBalance } from '../controllers/userController.
 import { createVipPackage, getActiveVipPackage, getUserVipPackages } from '../controllers/vipPackageController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 
 const VIP_PACKAGE_PRICE = 200000; // 200k
 const VIP_PACKAGE_GMAIL_COUNT = 400;
@@ -118,14 +117,7 @@ export const buyVipPackage = async (bot, msg, user) => {
 
     await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
 
-    logEvent('vip_package_purchased', {
-      userId: user.id,
-      telegramId: user.telegram_id,
-      packageId: vipPackage.id,
-      price: VIP_PACKAGE_PRICE
-    });
   } catch (error) {
-    logError({ context: 'buyVipPackage', error: error.message });
     await bot.sendMessage(msg.chat.id, `❌ Lỗi khi mua gói VIP: ${error.message}`);
   }
 };

@@ -7,7 +7,6 @@ import { getActiveVipPackage, incrementVipUsage } from '../controllers/vipPackag
 import { createOrder } from '../controllers/orderController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency, createCallbackData } from '../../utils/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 import { checkAccountLoginStatus, scheduleAccountDeletion } from '../services/gmailAutoDelete.js';
 import fs from 'fs';
 import path from 'path';
@@ -251,18 +250,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1) => {
       }
     }
 
-    logEvent('gmail_account_sold', { 
-      userId: user.id, 
-      type, 
-      quantity, 
-      price: paymentMethod === 'vip' ? 0 : price,
-      paymentMethod,
-      vipPackageId: paymentMethod === 'vip' ? vipPackage.id : null,
-      accounts: accounts.map(a => a.email)
-    });
-
   } catch (error) {
-    logError({ context: 'buyGmailAccount', error: error.message });
     bot.sendMessage(msg.chat.id, 'Có lỗi xảy ra khi mua tài khoản.');
   }
 };
@@ -392,16 +380,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
       }
     }
 
-    logEvent('gmail_account_sold_daily', { 
-      userId: user.id, 
-      type, 
-      quantity, 
-      price,
-      accounts: accounts.map(a => a.email)
-    });
-
   } catch (error) {
-    logError({ context: 'buyGmailAccountDaily', error: error.message });
     bot.sendMessage(msg.chat.id, 'Có lỗi xảy ra khi mua tài khoản.');
   }
 };
@@ -548,7 +527,6 @@ export const handleBuyGmailCommand = async (bot, msg, typeStr, quantityStr) => {
     return await buyGmailAccount(bot, msg, type, quantity);
 
   } catch (error) {
-    logError({ context: 'handleBuyGmailCommand', error: error.message });
     return bot.sendMessage(msg.chat.id, 'Có lỗi xảy ra khi xử lý lệnh.');
   }
 };

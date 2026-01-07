@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { getUserByTelegram, updateBalance } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency, createCallbackData } from '../../utils/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +28,6 @@ export const getMailTypes = async () => {
     }
     return [];
   } catch (error) {
-    logError({ context: 'getMailTypes', error: error.message });
     return [];
   }
 };
@@ -202,20 +200,11 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
       }
     }
     
-    logEvent('mail_purchased', {
-      userId: user.id,
-      accountType,
-      quantity,
-      totalPrice,
-      orderCode: result.data.order_code
-    });
-    
     return true; // Đã xử lý thành công
     
   } catch (error) {
     console.error('[HANDLE_MAIL_QUANTITY_INPUT] Lỗi:', error);
     await bot.sendMessage(msg.chat.id, '❌ Có lỗi xảy ra khi mua mail. Vui lòng thử lại sau.');
-    logError({ context: 'handleMailQuantityInput', error: error.message });
     return false;
   }
 };
@@ -243,7 +232,6 @@ const buyMailFromAPI = async (accountType, quantity) => {
     };
   } catch (error) {
     console.error('[BUY_MAIL_FROM_API] Lỗi:', error);
-    logError({ context: 'buyMailFromAPI', error: error.message, accountType, quantity });
     return {
       success: false,
       message: error.response?.data?.message || 'Lỗi khi gọi API'

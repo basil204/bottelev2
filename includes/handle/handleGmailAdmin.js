@@ -10,7 +10,6 @@ import {
 } from '../controllers/gmailAccountController.js';
 import { getAllGmailPricing, updateGmailPrice } from '../controllers/gmailPricingController.js';
 import { formatCurrency, createCallbackData } from '../../utils/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 
 // Admin: Tạo Gmail account
 export const adminCreateGmailAccount = async (bot, chatId, type, domain, quantity = 1) => {
@@ -37,10 +36,7 @@ export const adminCreateGmailAccount = async (bot, chatId, type, domain, quantit
 
     await bot.sendMessage(chatId, message);
 
-    logEvent('admin_gmail_accounts_created', { type, domain, quantity, successCount, failCount });
-
   } catch (error) {
-    logError({ context: 'adminCreateGmailAccount', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -55,7 +51,6 @@ export const adminDeleteGmailAccount = async (bot, chatId, accountId) => {
       await bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
     }
   } catch (error) {
-    logError({ context: 'adminDeleteGmailAccount', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -87,7 +82,6 @@ export const adminListGmailAccounts = async (bot, chatId, type, status, page = 1
     await bot.sendMessage(chatId, message, { reply_markup: keyboard });
 
   } catch (error) {
-    logError({ context: 'adminListGmailAccounts', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -115,7 +109,6 @@ export const adminCheckAccountStatus = async (bot, chatId, accountId) => {
     await bot.sendMessage(chatId, message);
 
   } catch (error) {
-    logError({ context: 'adminCheckAccountStatus', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -137,10 +130,7 @@ export const adminCheckAllAccountsStatus = async (bot, chatId) => {
 
     await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 
-    logEvent('admin_check_all_accounts_status', { total: results.length, loggedIn: loggedInCount, notLoggedIn: notLoggedInCount });
-
   } catch (error) {
-    logError({ context: 'adminCheckAllAccountsStatus', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -304,7 +294,6 @@ export const adminGmailPricingMenu = async (bot, chatId) => {
       }
     });
   } catch (error) {
-    logError({ context: 'adminGmailPricingMenu', error: error.message });
     bot.sendMessage(chatId, `Lỗi: ${error.message}`);
   }
 };
@@ -339,8 +328,6 @@ export const adminParseUpdateGmailPrice = async (bot, msg) => {
     
     await updateGmailPrice(type, duration, quantity, price);
     
-    logEvent('admin_gmail_price_updated', { type, duration, quantity, price });
-    
     await bot.sendMessage(
       msg.chat.id,
       `✅ Đã cập nhật giá:\n\n` +
@@ -351,7 +338,6 @@ export const adminParseUpdateGmailPrice = async (bot, msg) => {
     );
     
   } catch (error) {
-    logError({ context: 'adminParseUpdateGmailPrice', error: error.message });
     bot.sendMessage(msg.chat.id, `❌ Lỗi: ${error.message}`);
   }
 };

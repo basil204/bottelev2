@@ -36,12 +36,10 @@ import {
   adminListManualOrders,
   adminCompleteManualOrder,
   adminDeleteAccount,
-  adminDeleteAccountsByStatus,
-  logAdminCommand
+  adminDeleteAccountsByStatus
 } from './handle/handleAdmin.js';
 import { listPendingDeposits, approveDeposit, rejectDeposit } from './handle/handleDeposit.js';
 import { addBalanceLog } from './controllers/balanceLogController.js';
-import { logUser } from '../utils/log.js';
 import { createCallbackData } from '../utils/index.js';
 
 export const registerListeners = (bot, config) => {
@@ -57,7 +55,6 @@ export const registerListeners = (bot, config) => {
 
   bot.onText(/^\/admin/i, async (msg) => {
     if (!requireAdmin(config.ADMIN_IDS, msg.from.id)) return bot.sendMessage(msg.chat.id, 'Không có quyền.');
-    logAdminCommand(msg.from.id, '/admin');
     await adminMenu(bot, msg.chat.id);
   });
 
@@ -65,7 +62,6 @@ export const registerListeners = (bot, config) => {
     if (!requireAdmin(config.ADMIN_IDS, msg.from.id)) return bot.sendMessage(msg.chat.id, 'Không có quyền.');
     const { handleUserCommand } = await import('./handle/handleAdmin.js');
     const args = match[1].trim().split(/\s+/);
-    logAdminCommand(msg.from.id, `/user ${args.join(' ')}`);
     await handleUserCommand(bot, msg, args);
   });
 
@@ -76,10 +72,8 @@ export const registerListeners = (bot, config) => {
     
     // Nếu có tham số thì parse, không thì hiển thị danh sách
     if (text === '/kmnap' || text === '/kmnap list') {
-      logAdminCommand(msg.from.id, '/kmnap list');
       await adminListPromotions(bot, msg.chat.id);
     } else {
-      logAdminCommand(msg.from.id, text);
       await adminParseKmnap(bot, msg);
     }
   });
@@ -359,7 +353,7 @@ export const registerListeners = (bot, config) => {
           return;
       }
     } catch (err) {
-      logUser(query.from, 'callback_error ' + err.message);
+      // Error handling without logging
     }
   });
 };

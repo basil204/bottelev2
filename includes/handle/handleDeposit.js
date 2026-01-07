@@ -8,7 +8,6 @@ import { updateBalance, getUserById } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { getActivePromotion, calculatePromotedAmount } from '../controllers/depositPromotionController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
-import { logEvent } from '../../utils/log.js';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 
 const qrKey = (telegramId) => `qr_${telegramId}`;
@@ -100,7 +99,6 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
   const expiresAt = Date.now() + 5 * 60 * 1000;
   const depositId = await createDeposit(user.id, amount);
-  logEvent('deposit_created', { userId: user.id, amount, bank: selectedBank, promotionId: promotion?.id || null });
 
   const bankName = selectedBank === 'mbbank' ? 'MBBank' : 'Timo Bank';
   let caption = `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n🏦 Ngân hàng: ${bankName}\nNội dung: ${content}\nQR hết hạn sau 5 phút.`;
@@ -160,14 +158,6 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
     reason: promotionResult.bonusAmount > 0 ? `deposit+promo_${promotion.id}` : 'deposit', 
     adminId: admin.id 
   });
-  logEvent('deposit_approved', { 
-    depositId, 
-    admin: admin.id, 
-    originalAmount: promotionResult.originalAmount,
-    bonusAmount: promotionResult.bonusAmount,
-    finalAmount: promotionResult.finalAmount,
-    promotionId: promotion?.id || null
-  });
   
   // Lấy thông tin user để có số dư mới và telegram_id
   const user = await getUserById(deposit.user_id);
@@ -201,7 +191,6 @@ export const rejectDeposit = async (bot, chatId, depositId, admin) => {
   const deposit = await getDeposit(depositId);
   if (!deposit || deposit.status !== 'pending') return bot.sendMessage(chatId, 'Không hợp lệ.');
   await updateDepositStatus(depositId, 'rejected');
-  logEvent('deposit_rejected', { depositId, admin: admin.id });
   await bot.sendMessage(chatId, `Đã từ chối nạp #${depositId}.`);
 };
 

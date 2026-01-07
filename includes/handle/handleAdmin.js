@@ -5,7 +5,6 @@ import { listUsers, updateBalance as changeBalance, getUserById } from '../contr
 import { listOrdersByUser, listPendingManualOrders, getOrderById, completeOrder } from '../controllers/orderController.js';
 import { listBalanceLogs } from '../controllers/balanceLogController.js';
 import { createDepositPromotion, getAllPromotions } from '../controllers/depositPromotionController.js';
-import { logAdmin, logEvent } from '../../utils/log.js';
 import { notifyUsersAboutProductStock } from './handleNotify.js';
 
 export const requireAdmin = (adminIds, telegramId) => isAdmin(telegramId, adminIds);
@@ -53,7 +52,6 @@ export const adminParseAddProduct = async (bot, msg) => {
   if (!name || !price) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
   
   await createProduct({ name, price, description: description || '' });
-  logEvent('product_created', { name });
   
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n💡 Lưu ý: Sản phẩm sẽ tự động là "order" (yêu cầu nhập email/note) nếu không có tài khoản trong kho. Nếu có tài khoản trong kho, sẽ tự động giao khi mua.`);
 };
@@ -64,7 +62,6 @@ export const adminUpdateProduct = async (bot, msg, productId) => {
   if (!name || !price) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
   
   await updateProduct(productId, { name, price, description: description || '' });
-  logEvent('product_updated', { productId });
   await bot.sendMessage(msg.chat.id, `✅ Đã cập nhật sản phẩm.`);
 };
 
@@ -80,7 +77,6 @@ export const adminEditProductPrompt = async (bot, chatId, productId) => {
 
 export const adminDeleteProduct = async (bot, chatId, productId) => {
   await deleteProduct(productId);
-  logEvent('product_deleted', { productId });
   await bot.sendMessage(chatId, 'Đã xoá.');
 };
 
@@ -199,7 +195,6 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
   const [username, password] = msg.text.split('|').map((x) => x.trim());
   if (!username || !password) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
   await addAccounts(productId, [{ username, password }]);
-  logEvent('account_added', { productId });
   await bot.sendMessage(msg.chat.id, 'Đã thêm 1 account.');
   
   // Thông báo cho users về tài khoản mới
@@ -233,7 +228,6 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
   }
   
   await addAccounts(productId, accounts);
-  logEvent('account_uploaded', { productId, count: accounts.length });
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm ${accounts.length} account.`);
   
   // Thông báo cho users về tài khoản mới
@@ -267,7 +261,6 @@ export const adminParseAdjustBalance = async (bot, msg, addBalanceLogFn) => {
   if (amount < 0 && user.balance + amount < 0) return bot.sendMessage(msg.chat.id, 'Không được âm.');
   await changeBalance(user.id, amount);
   await addBalanceLogFn({ userId: user.id, amount, reason, adminId: msg.from.id });
-  logEvent('balance_changed', { user: telegramId, amount });
   await bot.sendMessage(msg.chat.id, 'Đã cập nhật số dư.');
 };
 
@@ -325,8 +318,6 @@ export const handleUserCommand = async (bot, msg, args) => {
   const isSubtract = amount < 0;
   const reason = isSubtract ? `Admin trừ tiền (${msg.from.id})` : `Admin cộng tiền (${msg.from.id})`;
   await addBalanceLog({ userId: user.id, amount, reason, adminId: msg.from.id });
-  
-  logEvent('balance_changed_cmd', { admin: msg.from.id, user: telegramId, amount, finalBalance });
   
   const action = isSubtract ? 'Trừ' : 'Cộng';
   
@@ -424,13 +415,6 @@ export const adminCompleteManualOrder = async (bot, chatId, orderId, admin) => {
     // Cập nhật status thành completed
     await completeOrder(orderId);
     
-    logEvent('manual_order_completed', { 
-      orderId, 
-      admin: admin.id,
-      product: order.product_name,
-      email: order.email
-    });
-    
     // Thông báo cho admin
     await bot.sendMessage(chatId, `✅ Đã hoàn thành đơn hàng #${orderId}.\n📧 Email: ${order.email || 'N/A'}\n📝 Note: ${order.note || 'Không có'}`);
     
@@ -464,8 +448,6 @@ export const adminDeleteAccount = async (bot, chatId, accountId, productId, page
       return bot.sendMessage(chatId, `❌ ${result.error || 'Không thể xóa tài khoản'}`);
     }
     
-    logEvent('account_deleted', { accountId, productId });
-    
     // Refresh danh sách accounts
     await adminListAccounts(bot, chatId, productId, page, 10, status);
     
@@ -484,8 +466,6 @@ export const adminDeleteAccountsByStatus = async (bot, chatId, productId, status
       return bot.sendMessage(chatId, `❌ ${result.error || 'Không thể xóa tài khoản'}`);
     }
     
-    logEvent('accounts_deleted_by_status', { productId, status, deletedCount: result.deletedCount });
-    
     await bot.sendMessage(chatId, `✅ Đã xóa ${result.deletedCount} tài khoản (status: ${status}).`);
     
     // Refresh danh sách accounts
@@ -498,7 +478,7 @@ export const adminDeleteAccountsByStatus = async (bot, chatId, productId, status
 };
 
 export const logAdminCommand = (adminId, command) => {
-  logAdmin(adminId, command);
+  // Log removed
 };
 
 // Xử lý lệnh /kmnap để tạo khuyến mại nạp tiền
@@ -568,15 +548,6 @@ export const adminParseKmnap = async (bot, msg) => {
       bonusPercentage,
       minAmount
     );
-    
-    logEvent('deposit_promotion_created', {
-      promotionId,
-      startTime: startDateStr,
-      endTime: endDateStr,
-      bonusPercentage,
-      minAmount,
-      adminId: msg.from.id
-    });
     
     await bot.sendMessage(
       msg.chat.id,

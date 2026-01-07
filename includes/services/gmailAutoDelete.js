@@ -1,6 +1,5 @@
 import { getUserInfo, deleteAccount } from './googleAdminService.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
-import { logEvent, logError } from '../../utils/log.js';
 import { query } from '../database/index.js';
 
 // Cache key prefix cho scheduled deletions
@@ -39,7 +38,7 @@ export const checkAccountLoginStatus = async (email, type) => {
     return { isLoggedIn, creationTime, lastLoginTime, userInfo: userInfo.data };
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE] Error checking login status:`, error);
-    logError({ context: 'checkAccountLoginStatus', email, error: error.message });
+    
     return { isLoggedIn: false, error: error.message };
   }
 };
@@ -87,15 +86,6 @@ export const scheduleAccountDeletion = async (email, type, lastLoginTimeISO) => 
   console.log(`[GMAIL_AUTO_DELETE]   - DeleteTime: ${new Date(deleteTime).toISOString()}`);
   console.log(`[GMAIL_AUTO_DELETE]   - CurrentTime: ${new Date(now).toISOString()}`);
   console.log(`[GMAIL_AUTO_DELETE]   - TimeUntilDelete: ${minutesUntilDelete} phút (${Math.floor(timeUntilDelete / 1000)} giây)`);
-  
-  logEvent('gmail_account_scheduled_deletion', { 
-    email, 
-    type, 
-    lastLoginTime: lastLoginTimeISO,
-    deleteTime: new Date(deleteTime).toISOString(), 
-    delay: delayText,
-    minutesUntilDelete: minutesUntilDelete
-  });
   
   // Update status trong database thành "sold" (đã login, đợi xóa)
   try {
@@ -154,17 +144,17 @@ export const processScheduledDeletions = async () => {
               console.log(`[GMAIL_AUTO_DELETE] ✅ Deleted record from database: ${email}`);
             } catch (dbError) {
               console.error(`[GMAIL_AUTO_DELETE] ❌ Error deleting record from database for ${email}:`, dbError);
-              logError({ context: 'processScheduledDeletions', email, type, error: dbError.message, action: 'delete_from_database' });
+              
             }
             
-            logEvent('gmail_account_auto_deleted', { email, type, delay: delayText });
+            
           } else {
             console.error(`[GMAIL_AUTO_DELETE] ❌ Failed to delete ${type} account from Google ${email}: ${result.error}`);
-            logError({ context: 'processScheduledDeletions', email, type, error: result.error });
+            
           }
         } catch (error) {
           console.error(`[GMAIL_AUTO_DELETE] ❌ Exception deleting ${type} account ${email}:`, error);
-          logError({ context: 'processScheduledDeletions', email, type, error: error.message });
+          
         }
         
         // Xóa khỏi cache sau khi đã xử lý (dù thành công hay thất bại)
@@ -173,7 +163,7 @@ export const processScheduledDeletions = async () => {
     }
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE] ❌ Error in processScheduledDeletions:`, error);
-    logError({ context: 'processScheduledDeletions', error: error.message });
+    
   }
 };
 
@@ -248,15 +238,15 @@ export const processScheduledDeletionsFromDatabase = async () => {
               delCache(deleteKeyCache);
               
               deletedCount++;
-              logEvent('gmail_account_auto_deleted_from_db', { email: account.email, type: account.type, delay: delayText });
+              
             } else {
               console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Failed to delete ${account.type} account from Google ${account.email}: ${result.error}`);
-              logError({ context: 'processScheduledDeletionsFromDatabase', email: account.email, type: account.type, error: result.error });
+              
               errorCount++;
             }
           } catch (error) {
             console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Exception deleting ${account.type} account ${account.email}:`, error);
-            logError({ context: 'processScheduledDeletionsFromDatabase', email: account.email, type: account.type, error: error.message });
+            
             errorCount++;
           }
         } else {
@@ -272,7 +262,7 @@ export const processScheduledDeletionsFromDatabase = async () => {
         
       } catch (error) {
         console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Error processing ${account.email}:`, error.message);
-        logError({ context: 'processScheduledDeletionsFromDatabase', email: account.email, type: account.type, error: error.message });
+        
         errorCount++;
       }
     }
@@ -283,7 +273,7 @@ export const processScheduledDeletionsFromDatabase = async () => {
     
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE_DB] ❌ Error in processScheduledDeletionsFromDatabase:`, error);
-    logError({ context: 'processScheduledDeletionsFromDatabase', error: error.message });
+    
   }
 };
 
@@ -355,16 +345,10 @@ export const checkAccountsByType = async (type) => {
                   await query('DELETE FROM gmail_accounts WHERE email = ?', [account.email]);
                   console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã xóa ${account.email} khỏi database`);
                   deletedCount++;
-                  logEvent('gmail_account_deleted_not_found', { 
-                    email: account.email, 
-                    type: account.type, 
-                    minutesSinceCreation,
-                    hoursSinceCreation,
-                    timeText 
-                  });
+                  
                 } catch (deleteError) {
                   console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Lỗi khi xóa ${account.email} khỏi database:`, deleteError);
-                  logError({ context: 'checkAccountsByType', email: account.email, type, error: deleteError.message, action: 'delete_from_database' });
+                  
                   errorCount++;
                 }
               } else {
@@ -493,16 +477,10 @@ export const checkAccountsByType = async (type) => {
                 console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Đã xóa ${account.email} khỏi database`);
                 
                 deletedCount++;
-                logEvent('gmail_account_deleted_not_login', { 
-                  email: account.email, 
-                  type: account.type, 
-                  hoursSinceCreation,
-                  requiredHours,
-                  created_at: account.created_at
-                });
+                
               } catch (deleteError) {
                 console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Lỗi khi xóa ${account.email}:`, deleteError);
-                logError({ context: 'checkAccountsByType', email: account.email, type, error: deleteError.message, action: 'delete_not_login' });
+                
                 errorCount++;
               }
             } else {
@@ -521,25 +499,18 @@ export const checkAccountsByType = async (type) => {
         console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Lỗi khi check ${account.email}:`, error.message);
         console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] Email lỗi: ${account.email}`);
         errorCount++;
-        logError({ context: 'checkAccountsByType', email: account.email, type, error: error.message });
+        
       }
     }
     
     console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Hoàn thành check ${type}: ${loggedInCount} đã login, ${notLoggedInCount} chưa login, ${deletedCount} đã xóa (không tồn tại), ${errorCount} lỗi`);
-    logEvent('gmail_login_check_completed', { 
-      type,
-      total: accounts.length, 
-      loggedIn: loggedInCount, 
-      notLoggedIn: notLoggedInCount, 
-      deleted: deletedCount,
-      errors: errorCount 
-    });
+    
     
     return { loggedIn: loggedInCount, notLoggedIn: notLoggedInCount, deleted: deletedCount, errors: errorCount, total: accounts.length };
     
   } catch (error) {
     console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Lỗi trong checkAccountsByType:`, error);
-    logError({ context: 'checkAccountsByType', type, error: error.message });
+    
     return { loggedIn: 0, notLoggedIn: 0, errors: 0, total: 0 };
   }
 };
@@ -566,7 +537,7 @@ export const checkAllAccountsLoginStatusLoop = async () => {
     
   } catch (error) {
     console.error('[GMAIL_LOGIN_CHECK] ❌ Lỗi trong checkAllAccountsLoginStatusLoop:', error);
-    logError({ context: 'checkAllAccountsLoginStatusLoop', error: error.message });
+    
   }
 };
 
@@ -586,7 +557,7 @@ export const startGmailLoginChecker = () => {
   // Bắt đầu check ngay
   runCheck();
   console.log('[GMAIL_LOGIN_CHECK] Auto login checker started');
-  logEvent('gmail_login_checker_started');
+  
 };
 
 // Xóa Edu accounts chưa login sau 24h kể từ khi tạo (check vào 00:00 giờ Việt Nam)
@@ -653,15 +624,11 @@ export const deleteEduAccountsNotLoggedInAfter24h = async () => {
           console.log(`[GMAIL_EDU_CLEANUP] ✅ Đã xóa ${account.email} khỏi database`);
           
           deletedCount++;
-          logEvent('gmail_edu_not_login_24h_deleted', { 
-            email: account.email, 
-            created_at: account.created_at,
-            hoursSinceCreation 
-          });
+          
         } else {
           console.error(`[GMAIL_EDU_CLEANUP] ❌ Không thể xóa ${account.email} từ Google: ${result.error}`);
           errorCount++;
-          logError({ context: 'deleteEduAccountsNotLoggedInAfter24h', email: account.email, error: result.error });
+          
         }
         
         // Delay nhỏ giữa mỗi account để tránh rate limit
@@ -669,17 +636,17 @@ export const deleteEduAccountsNotLoggedInAfter24h = async () => {
       } catch (error) {
         console.error(`[GMAIL_EDU_CLEANUP] ❌ Lỗi khi xóa ${account.email}:`, error);
         errorCount++;
-        logError({ context: 'deleteEduAccountsNotLoggedInAfter24h', email: account.email, error: error.message });
+        
       }
     }
     
     console.log(`[GMAIL_EDU_CLEANUP] ✅ Hoàn thành: ${deletedCount} đã xóa, ${errorCount} lỗi`);
-    logEvent('gmail_edu_cleanup_completed', { deleted: deletedCount, errors: errorCount, total: accountsToDelete.length });
+    
     
     return { deleted: deletedCount, errors: errorCount, total: accountsToDelete.length };
   } catch (error) {
     console.error('[GMAIL_EDU_CLEANUP] ❌ Lỗi trong deleteEduAccountsNotLoggedInAfter24h:', error);
-    logError({ context: 'deleteEduAccountsNotLoggedInAfter24h', error: error.message });
+    
     return { deleted: 0, errors: 0, total: 0 };
   }
 };
@@ -732,7 +699,7 @@ export const startEduAccountsDailyCleanup = () => {
   scheduleNext();
   
   console.log('[GMAIL_EDU_CLEANUP] Daily cleanup scheduler started (runs at 00:00 Vietnam time)');
-  logEvent('gmail_edu_daily_cleanup_started');
+  
 };
 
 // Start auto deletion checker
@@ -749,6 +716,6 @@ export const startGmailAutoDeleteChecker = () => {
   processScheduledDeletionsFromDatabase(); // Initial check
   
   console.log('[GMAIL_AUTO_DELETE] Auto deletion checker started (cache + database)');
-  logEvent('gmail_auto_delete_checker_started');
+  
 };
 

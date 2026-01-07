@@ -1,7 +1,6 @@
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
-import { logError } from '../../utils/log.js';
 
 let pool;
 
@@ -79,7 +78,7 @@ export const initDb = async (config) => {
       // ignore if already exists
     }
   } catch (err) {
-    logError(err);
+    // Error handling without logging
   }
 };
 
@@ -94,17 +93,7 @@ export const query = async (sql, params = []) => {
     const [rows] = await pool.execute(sql, params);
     return rows;
   } catch (error) {
-    // Log full error details for debugging
-    logError({ 
-      context: 'database_query', 
-      sql, 
-      params, 
-      error: error.message, 
-      code: error.code,
-      errno: error.errno,
-      sqlState: error.sqlState,
-      sqlMessage: error.sqlMessage
-    });
+    // Error handling without logging
     throw error;
   }
 };

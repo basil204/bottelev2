@@ -74,15 +74,33 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const amount = Number(msg.text.replace(/\D/g, ''));
   if (!amount || amount <= 0) return bot.sendMessage(msg.chat.id, 'Số tiền không hợp lệ.');
   
-  // Kiểm tra số tiền nạp tối thiểu 50,000 VNĐ
+  // Kiểm tra xem có pending purchase không (đang mua sản phẩm)
+  const purchaseKey = `purchase_${msg.from.id}`;
+  const pendingPurchase = getCache(purchaseKey);
+  
+  // Nếu không có pending purchase, yêu cầu nạp tối thiểu 50k
   const MIN_DEPOSIT_AMOUNT = 50000;
-  if (amount < MIN_DEPOSIT_AMOUNT) {
+  if (!pendingPurchase && amount < MIN_DEPOSIT_AMOUNT) {
     return bot.sendMessage(
       msg.chat.id,
       `❌ Số tiền nạp tối thiểu là ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.\n\n` +
       `💰 Bạn đã nhập: ${formatCurrency(amount)}\n` +
       `💡 Vui lòng nhập số tiền từ ${formatCurrency(MIN_DEPOSIT_AMOUNT)} trở lên.`
     );
+  }
+  
+  // Nếu có pending purchase, kiểm tra số tiền có đủ để mua sản phẩm không
+  if (pendingPurchase) {
+    const missingAmount = pendingPurchase.totalPrice - (Number(user.balance) || 0);
+    if (amount < missingAmount) {
+      return bot.sendMessage(
+        msg.chat.id,
+        `❌ Số tiền nạp không đủ để mua sản phẩm.\n\n` +
+        `💰 Cần nạp: ${formatCurrency(missingAmount)}\n` +
+        `💰 Bạn đã nhập: ${formatCurrency(amount)}\n` +
+        `💡 Vui lòng nạp ít nhất ${formatCurrency(missingAmount)} để hoàn tất mua hàng.`
+      );
+    }
   }
   
   // Kiểm tra khuyến mại đang active

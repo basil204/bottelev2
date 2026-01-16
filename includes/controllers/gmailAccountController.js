@@ -1,5 +1,6 @@
 import { query } from '../database/index.js';
 import { createEduAccount, createNonAccount, deleteAccount, getUserInfo, getDomains, generateRandomUsername, sendSignInInstructions } from '../services/googleAdminService.js';
+import { getSettingBoolean } from './settingsController.js';
 
 // Tạo Gmail account và lưu vào database
 export const createGmailAccount = async (type, domain, password = 'Vietcombank9338739954') => {
@@ -81,15 +82,21 @@ export const createGmailAccountForSale = async (type, domain, password = 'Vietco
 
     console.log(`[CREATE_GMAIL] ✅ Tạo thành công account: ${result.email}, ID: ${result.id}`);
 
-    // Nếu là email non và có email phụ, gửi sign-in instructions
+    // Nếu là email non và có email phụ, gửi sign-in instructions (nếu chức năng được bật)
     if (type === 'non' && backupEmail) {
-      console.log(`[CREATE_GMAIL] Đang gửi sign-in instructions đến email phụ: ${backupEmail}`);
-      const signInResult = await sendSignInInstructions(result.email, backupEmail, type);
-      if (signInResult.success) {
-        console.log(`[CREATE_GMAIL] ✅ Đã gửi sign-in instructions đến ${backupEmail}`);
+      // Kiểm tra setting để xem có bật chức năng gửi sign-in instructions không
+      const sendSignInEnabled = await getSettingBoolean('gmail_non_send_signin_instructions', true);
+      if (sendSignInEnabled) {
+        console.log(`[CREATE_GMAIL] Đang gửi sign-in instructions đến email phụ: ${backupEmail}`);
+        const signInResult = await sendSignInInstructions(result.email, backupEmail, type);
+        if (signInResult.success) {
+          console.log(`[CREATE_GMAIL] ✅ Đã gửi sign-in instructions đến ${backupEmail}`);
+        } else {
+          console.error(`[CREATE_GMAIL] ⚠️ Không thể gửi sign-in instructions: ${signInResult.error}`);
+          // Không fail việc tạo account nếu không gửi được sign-in instructions
+        }
       } else {
-        console.error(`[CREATE_GMAIL] ⚠️ Không thể gửi sign-in instructions: ${signInResult.error}`);
-        // Không fail việc tạo account nếu không gửi được sign-in instructions
+        console.log(`[CREATE_GMAIL] ⚠️ Chức năng gửi sign-in instructions đã bị tắt, bỏ qua`);
       }
     }
 

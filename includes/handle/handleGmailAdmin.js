@@ -251,8 +251,10 @@ export const adminShowGmailMenu = async (bot, chatId) => {
   const nonCount = await countAvailableAccounts('non');
   
   // Lấy trạng thái bật/tắt
+  const gmailBuyEnabled = await getSettingBoolean('gmail_buy_enabled', true);
   const gmailEduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
   const gmailNonEnabled = await getSettingBoolean('gmail_non_enabled', true);
+  const sendSignInEnabled = await getSettingBoolean('gmail_non_send_signin_instructions', true);
 
   const menuText = `🔧 **Quản lý Gmail Accounts**
 
@@ -261,8 +263,12 @@ export const adminShowGmailMenu = async (bot, chatId) => {
 • Google Non: ${nonCount} account(s) ${gmailNonEnabled ? '✅' : '❌'}
 
 **Trạng thái bán:**
+• Mua Gmail (tổng thể): ${gmailBuyEnabled ? '🟢 Đang bật' : '🔴 Đã tắt'}
 • Gmail Edu: ${gmailEduEnabled ? '🟢 Đang bán' : '🔴 Đã tắt'}
 • Google Non: ${gmailNonEnabled ? '🟢 Đang bán' : '🔴 Đã tắt'}
+
+**Chức năng:**
+• Gửi sign-in instructions (Non): ${sendSignInEnabled ? '🟢 Đang bật' : '🔴 Đã tắt'}
 
 Chọn chức năng:`;
 
@@ -285,6 +291,12 @@ Chọn chức năng:`;
       [
         { text: `${gmailEduEnabled ? '🔴' : '🟢'} ${gmailEduEnabled ? 'Tắt' : 'Bật'} bán Gmail Edu`, callback_data: createCallbackData({ action: 'admin_gmail_toggle_edu' }) },
         { text: `${gmailNonEnabled ? '🔴' : '🟢'} ${gmailNonEnabled ? 'Tắt' : 'Bật'} bán Gmail Non`, callback_data: createCallbackData({ action: 'admin_gmail_toggle_non' }) }
+      ],
+      [
+        { text: `${gmailBuyEnabled ? '🔴' : '🟢'} ${gmailBuyEnabled ? 'Tắt' : 'Bật'} mua Gmail`, callback_data: createCallbackData({ action: 'admin_gmail_toggle_buy' }) }
+      ],
+      [
+        { text: `${sendSignInEnabled ? '🔴' : '🟢'} ${sendSignInEnabled ? 'Tắt' : 'Bật'} gửi sign-in instructions`, callback_data: createCallbackData({ action: 'admin_gmail_toggle_signin' }) }
       ],
       [
         { text: '📧 Thêm Gmail Edu Permanent', callback_data: createCallbackData({ action: 'admin_gmail_edu_permanent' }) }
@@ -1240,3 +1252,46 @@ export const adminToggleGmailNon = async (bot, chatId) => {
   }
 };
 
+// Admin: Toggle bật/tắt mua Gmail (tổng thể)
+export const adminToggleGmailBuy = async (bot, chatId) => {
+  try {
+    const result = await toggleSetting('gmail_buy_enabled', true);
+    if (result.success) {
+      const statusText = result.value ? '🟢 Đã bật' : '🔴 Đã tắt';
+      await bot.sendMessage(
+        chatId,
+        `${statusText} chức năng mua Gmail\n\nTrạng thái: ${result.value ? 'Đang bật' : 'Đã tắt'}\n\n💡 Khi tắt, tất cả user sẽ không thể mua Gmail (cả Edu và Non).`,
+        { parse_mode: 'Markdown' }
+      );
+      // Refresh menu
+      await adminShowGmailMenu(bot, chatId);
+    } else {
+      await bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('[ADMIN_TOGGLE_GMAIL_BUY] Error:', error);
+    await bot.sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  }
+};
+
+// Admin: Toggle bật/tắt gửi sign-in instructions cho Gmail Non
+export const adminToggleGmailSignIn = async (bot, chatId) => {
+  try {
+    const result = await toggleSetting('gmail_non_send_signin_instructions', true);
+    if (result.success) {
+      const statusText = result.value ? '🟢 Đã bật' : '🔴 Đã tắt';
+      await bot.sendMessage(
+        chatId,
+        `${statusText} gửi sign-in instructions cho Gmail Non\n\nTrạng thái: ${result.value ? 'Đang bật' : 'Đã tắt'}\n\n💡 Khi bật, hệ thống sẽ tự động gửi sign-in instructions đến email phụ khi tạo email non.`,
+        { parse_mode: 'Markdown' }
+      );
+      // Refresh menu
+      await adminShowGmailMenu(bot, chatId);
+    } else {
+      await bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('[ADMIN_TOGGLE_GMAIL_SIGNIN] Error:', error);
+    await bot.sendMessage(chatId, `❌ Lỗi: ${error.message}`);
+  }
+};

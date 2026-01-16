@@ -585,6 +585,14 @@ export const registerListeners = (bot, config) => {
         case 'admin_gmail_toggle_non':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return adminToggleGmailNon(bot, chatId);
+        case 'admin_gmail_toggle_buy':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminToggleGmailBuy } = await import('./handle/handleGmailAdmin.js');
+          return adminToggleGmailBuy(bot, chatId);
+        case 'admin_gmail_toggle_signin':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminToggleGmailSignIn } = await import('./handle/handleGmailAdmin.js');
+          return adminToggleGmailSignIn(bot, chatId);
         case 'admin_gmail_edu_permanent':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           const { adminAddGmailEduPermanent, adminParseAddGmailEduPermanent } = await import('./handle/handleGmailAdmin.js');

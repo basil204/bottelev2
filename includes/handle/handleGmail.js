@@ -47,6 +47,12 @@ const createAccountFile = (accounts) => {
 // Mua Gmail account (single) - Tạo mới qua API
 export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail = null) => {
   try {
+    // Kiểm tra chức năng mua Gmail có được bật không
+    const gmailBuyEnabled = await getSettingBoolean('gmail_buy_enabled', true);
+    if (!gmailBuyEnabled) {
+      return bot.sendMessage(msg.chat.id, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
+    }
+    
     // Kiểm tra trạng thái bật/tắt
     if (type === 'edu') {
       const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
@@ -320,6 +326,12 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
 // Mua Gmail account (daily - 1 ngày) - Tạo mới qua API
 export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
   try {
+    // Kiểm tra chức năng mua Gmail có được bật không
+    const gmailBuyEnabled = await getSettingBoolean('gmail_buy_enabled', true);
+    if (!gmailBuyEnabled) {
+      return bot.sendMessage(msg.chat.id, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
+    }
+    
     // Kiểm tra trạng thái bật/tắt
     if (type === 'edu') {
       const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
@@ -482,6 +494,12 @@ const waitingForNonEmail = new Map();
 
 // Hiển thị menu mua Gmail - chỉ chọn Edu hoặc Non
 export const showGmailMenu = async (bot, chatId) => {
+  // Kiểm tra chức năng mua Gmail có được bật không
+  const gmailBuyEnabled = await getSettingBoolean('gmail_buy_enabled', true);
+  if (!gmailBuyEnabled) {
+    return bot.sendMessage(chatId, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
+  }
+  
   // Không cần kiểm tra tồn kho vì sẽ tạo mới qua API
   const eduCount = 'Unlimited';
   const nonCount = 'Unlimited';
@@ -535,6 +553,12 @@ Chọn loại tài khoản bạn muốn mua:`;
 
 // Xử lý khi chọn type (Edu hoặc Non) - yêu cầu nhập số lượng
 export const handleGmailTypeSelection = async (bot, chatId, userId, type) => {
+  // Kiểm tra chức năng mua Gmail có được bật không
+  const gmailBuyEnabled = await getSettingBoolean('gmail_buy_enabled', true);
+  if (!gmailBuyEnabled) {
+    return bot.sendMessage(chatId, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
+  }
+  
   // Kiểm tra trạng thái bật/tắt
   if (type === 'edu') {
     const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);

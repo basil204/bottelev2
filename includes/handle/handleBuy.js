@@ -198,7 +198,7 @@ export const handlePurchase = async (bot, msg, productId, fromUser) => {
                  `🎁 Sản phẩm: ${product.name}\n` +
                  `💰 Giá: ${formatCurrency(productPrice)}\n` +
                  `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
-                 `📧 Tài khoản: \`${account.username}\` | \`${account.password}\``;
+                 `📧 Tài khoản: \`${account.username}\` | \`${account.password}\`${account.twofa ? ` | 2FA: \`${account.twofa}\`` : ''}`;
   await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
 };
 
@@ -603,8 +603,13 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     const updatedUser = await getUserByTelegram(msg.from.id);
     const finalBalance = Number(updatedUser.balance);
 
-    // Tạo file txt với tài khoản và mật khẩu
-    const fileContent = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+    // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
+    const fileContent = purchasedAccounts.map(acc => {
+      if (acc.twofa) {
+        return `${acc.username}|${acc.password}|${acc.twofa}`;
+      }
+      return `${acc.username}|${acc.password}`;
+    }).join('\n');
     const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
 
@@ -749,7 +754,13 @@ export const handleBuyGmailEduPTTT = async (bot, msg, quantity = 1) => {
     const updatedUser = await getUserByTelegram(msg.from.id);
     const finalBalance = Number(updatedUser.balance);
 
-    const accountListText = purchasedAccounts.map(acc => `Email: \`${acc.username}\`\nPassword: \`${acc.password}\``).join('\n\n');
+    const accountListText = purchasedAccounts.map(acc => {
+      let text = `Email: \`${acc.username}\`\nPassword: \`${acc.password}\``;
+      if (acc.twofa) {
+        text += `\n2FA: \`${acc.twofa}\``;
+      }
+      return text;
+    }).join('\n\n');
 
     const content = `✅ **Mua ${quantity} Gmail sẵn thanh toán thành công!**\n\n` +
                     `🎁 Sản phẩm: Gmail sẵn thanh toán\n` +
@@ -874,8 +885,13 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     const updatedUser = await getUserByTelegram(telegramId);
     const finalBalance = Number(updatedUser.balance);
     
-    // Tạo file txt với tài khoản và mật khẩu
-    const fileContent = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+    // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
+    const fileContent = purchasedAccounts.map(acc => {
+      if (acc.twofa) {
+        return `${acc.username}|${acc.password}|${acc.twofa}`;
+      }
+      return `${acc.username}|${acc.password}`;
+    }).join('\n');
     const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
     
@@ -904,7 +920,12 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     } catch (sendError) {
       console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
       // Nếu không gửi được file, gửi thông tin account qua text
-      const accountText = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+      const accountText = purchasedAccounts.map(acc => {
+        if (acc.twofa) {
+          return `${acc.username}|${acc.password}|${acc.twofa}`;
+        }
+        return `${acc.username}|${acc.password}`;
+      }).join('\n');
       let messageText = `✅ Mua thành công!\n\n`;
       messageText += `🎁 Sản phẩm: ${product.name}\n`;
       messageText += `📦 Số lượng: ${quantity}\n`;

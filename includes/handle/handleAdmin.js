@@ -220,14 +220,15 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
 };
 
 export const adminAddAccount = async (bot, chatId, productId) => {
-  await bot.sendMessage(chatId, `Nhập tài khoản cho sản phẩm #${productId} theo dạng username|password`);
+  await bot.sendMessage(chatId, `Nhập tài khoản cho sản phẩm #${productId} theo dạng:\n- username|password\n- username|password|2fa`);
 };
 
 export const adminParseAddAccount = async (bot, msg, productId) => {
-  const [username, password] = msg.text.split('|').map((x) => x.trim());
-  if (!username || !password) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
-  await addAccounts(productId, [{ username, password }]);
-  await bot.sendMessage(msg.chat.id, 'Đã thêm 1 account.');
+  const parts = msg.text.split('|').map((x) => x.trim());
+  const [username, password, twofa] = parts;
+  if (!username || !password) return bot.sendMessage(msg.chat.id, 'Sai định dạng. Định dạng: username|password hoặc username|password|2fa');
+  await addAccounts(productId, [{ username, password, twofa: twofa || null }]);
+  await bot.sendMessage(msg.chat.id, `Đã thêm 1 account.${twofa ? ' (có 2FA)' : ''}`);
   
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, 1);
@@ -259,12 +260,12 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
   }
   
   if (!textContent || !textContent.trim()) {
-    return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy nội dung. Vui lòng gửi file .txt hoặc dán nội dung username|password mỗi dòng.');
+    return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy nội dung. Vui lòng gửi file .txt hoặc dán nội dung username|password hoặc username|password|2fa mỗi dòng.');
   }
   
   const accounts = parseUploadText(textContent);
   if (!accounts.length) {
-    return bot.sendMessage(msg.chat.id, '❌ File rỗng hoặc sai định dạng. Định dạng: username|password (mỗi dòng một account).');
+    return bot.sendMessage(msg.chat.id, '❌ File rỗng hoặc sai định dạng. Định dạng: username|password hoặc username|password|2fa (mỗi dòng một account).');
   }
   
   await addAccounts(productId, accounts);

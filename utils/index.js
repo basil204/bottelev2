@@ -39,8 +39,9 @@ export const parseUploadText = (text) => {
   }
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   return lines.map((line) => {
-    const [username, password] = line.split('|').map((x) => x.trim());
-    return { username, password };
+    const parts = line.split('|').map((x) => x.trim());
+    const [username, password, twofa] = parts;
+    return { username, password, twofa: twofa || null };
   }).filter((x) => x.username && x.password);
 };
 

@@ -2,12 +2,25 @@ import { query } from '../database/index.js';
 
 export const addAccounts = async (productId, accounts = []) => {
   if (!accounts.length) return;
-  const values = accounts.map(() => '(?, ?, ?, "available")').join(',');
-  const params = [];
-  accounts.forEach(({ username, password }) => {
-    params.push(productId, username, password);
-  });
-  await query(`INSERT INTO accounts (product_id, username, password, status) VALUES ${values}`, params);
+  // Kiểm tra xem có cột twofa không
+  const [columns] = await query("SHOW COLUMNS FROM accounts WHERE Field = 'twofa'");
+  const hasTwofa = columns && columns.length > 0;
+  
+  if (hasTwofa) {
+    const values = accounts.map(() => '(?, ?, ?, ?, "available")').join(',');
+    const params = [];
+    accounts.forEach(({ username, password, twofa }) => {
+      params.push(productId, username, password, twofa || null);
+    });
+    await query(`INSERT INTO accounts (product_id, username, password, twofa, status) VALUES ${values}`, params);
+  } else {
+    const values = accounts.map(() => '(?, ?, ?, "available")').join(',');
+    const params = [];
+    accounts.forEach(({ username, password }) => {
+      params.push(productId, username, password);
+    });
+    await query(`INSERT INTO accounts (product_id, username, password, status) VALUES ${values}`, params);
+  }
   await syncStock(productId);
 };
 

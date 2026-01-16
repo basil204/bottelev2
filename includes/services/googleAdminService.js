@@ -254,3 +254,40 @@ export const generateRandomUsername = () => {
   return username;
 };
 
+// Gửi sign-in instructions đến email phụ (recovery email)
+// Bằng cách cập nhật recovery email cho tài khoản Google
+export const sendSignInInstructions = async (email, recoveryEmail, type) => {
+  try {
+    console.log(`[GOOGLE_API] Gửi sign-in instructions cho ${email} đến recovery email: ${recoveryEmail}`);
+    const { auth } = await getAuthenticatedClient(type);
+    const admin = google.admin({ version: 'directory_v1', auth });
+
+    // Cập nhật recovery email cho user
+    // Google sẽ tự động gửi email xác minh và sign-in instructions đến recovery email
+    const user = {
+      recoveryEmail: recoveryEmail
+    };
+
+    console.log(`[GOOGLE_API] Cập nhật recovery email cho ${email}...`);
+    const response = await admin.users.update({
+      userKey: email,
+      requestBody: user
+    });
+
+    console.log(`[GOOGLE_API] ✅ Đã cập nhật recovery email cho ${email}. Google sẽ gửi sign-in instructions đến ${recoveryEmail}`);
+    
+    return {
+      success: true,
+      message: `Sign-in instructions đã được gửi đến ${recoveryEmail}`
+    };
+  } catch (error) {
+    console.error(`[GOOGLE_API] ❌ Lỗi khi gửi sign-in instructions cho ${email}:`, error.message);
+    if (error.response) {
+      console.error(`[GOOGLE_API] Response data:`, error.response.data);
+    }
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};

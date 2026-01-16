@@ -129,7 +129,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
         domain = domains[randomIndex];
         console.log(`[BUY_GMAIL] Đang tạo account ${i + 1}/${quantity} (${type}, domain: ${domain} - random index: ${randomIndex}/${domains.length})`);
       }
-      const result = await createGmailAccountForSale(type, domain, password);
+      const result = await createGmailAccountForSale(type, domain, password, backupEmail);
       if (!result.success) {
         console.error(`[BUY_GMAIL] Lỗi khi tạo account ${i + 1}: ${result.error}`);
         // Nếu có lỗi, rollback: hoàn tiền cho những account đã tạo thành công (chỉ nếu thanh toán bằng balance)

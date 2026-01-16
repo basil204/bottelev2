@@ -1,5 +1,5 @@
 import { query } from '../database/index.js';
-import { createEduAccount, createNonAccount, deleteAccount, getUserInfo, getDomains, generateRandomUsername } from '../services/googleAdminService.js';
+import { createEduAccount, createNonAccount, deleteAccount, getUserInfo, getDomains, generateRandomUsername, sendSignInInstructions } from '../services/googleAdminService.js';
 
 // Tạo Gmail account và lưu vào database
 export const createGmailAccount = async (type, domain, password = 'Vietcombank9338739954') => {
@@ -49,7 +49,7 @@ export const createGmailAccount = async (type, domain, password = 'Vietcombank93
 };
 
 // Tạo Gmail account cho user mua và lưu vào database với status "available" (chưa login)
-export const createGmailAccountForSale = async (type, domain, password = 'Vietcombank9338739954') => {
+export const createGmailAccountForSale = async (type, domain, password = 'Vietcombank9338739954', backupEmail = null) => {
   try {
     // Với type 'non', chỉ sử dụng domain krishokerbondhu.org
     if (type === 'non') {
@@ -80,6 +80,18 @@ export const createGmailAccountForSale = async (type, domain, password = 'Vietco
     }
 
     console.log(`[CREATE_GMAIL] ✅ Tạo thành công account: ${result.email}, ID: ${result.id}`);
+
+    // Nếu là email non và có email phụ, gửi sign-in instructions
+    if (type === 'non' && backupEmail) {
+      console.log(`[CREATE_GMAIL] Đang gửi sign-in instructions đến email phụ: ${backupEmail}`);
+      const signInResult = await sendSignInInstructions(result.email, backupEmail, type);
+      if (signInResult.success) {
+        console.log(`[CREATE_GMAIL] ✅ Đã gửi sign-in instructions đến ${backupEmail}`);
+      } else {
+        console.error(`[CREATE_GMAIL] ⚠️ Không thể gửi sign-in instructions: ${signInResult.error}`);
+        // Không fail việc tạo account nếu không gửi được sign-in instructions
+      }
+    }
 
     // Lưu vào database với status "available" (chưa login)
     await query(

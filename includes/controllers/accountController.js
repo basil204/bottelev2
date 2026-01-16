@@ -19,12 +19,31 @@ export const takeOneAvailable = async (productId) => {
   return connRows[0];
 };
 
+// Lấy và đánh dấu account ngay lập tức để tránh lấy trùng
+export const takeAndMarkSoldOneAvailable = async (productId) => {
+  // Lấy account và đánh dấu "sold" ngay trong một query để tránh race condition
+  const account = await takeOneAvailable(productId);
+  if (account) {
+    // Đánh dấu ngay để không bị lấy lại trong lần tiếp theo
+    await query('UPDATE accounts SET status = "sold" WHERE id = ?', [account.id]);
+  }
+  return account;
+};
+
 export const markSold = async (accountId, deleteAt = null) => {
   if (deleteAt) {
     await query('UPDATE accounts SET status = "sold", delete_at = ? WHERE id = ?', [deleteAt, accountId]);
   } else {
     await query('UPDATE accounts SET status = "sold" WHERE id = ?', [accountId]);
   }
+};
+
+// Xóa account sau khi mua (mua đến đâu xóa đến đó)
+export const deleteAccountAfterPurchase = async (accountId, productId) => {
+  // Xóa account khỏi database
+  await query('DELETE FROM accounts WHERE id = ?', [accountId]);
+  // Sync stock
+  await syncStock(productId);
 };
 
 export const listAccounts = async (productId, offset, limit, status = null) => {

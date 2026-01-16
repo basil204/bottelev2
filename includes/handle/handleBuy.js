@@ -1,5 +1,5 @@
 import { listProducts, getProduct } from '../controllers/productController.js';
-import { takeOneAvailable, markSold, syncStock } from '../controllers/accountController.js';
+import { takeOneAvailable, markSold, syncStock, deleteAccountAfterPurchase, takeAndMarkSoldOneAvailable } from '../controllers/accountController.js';
 import { updateBalance, getUserByTelegram } from '../controllers/userController.js';
 import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
@@ -186,8 +186,8 @@ export const handlePurchase = async (bot, msg, productId, fromUser) => {
     console.log(`[BUY_PRODUCT] Đã lưu delete_at cho Gmail Edu 7 ngày: ${deleteAt.toISOString()}`);
   }
   
-  await markSold(account.id, deleteAt);
-  await syncStock(product.id);
+  // Xóa account sau khi mua (mua đến đâu xóa đến đó)
+  await deleteAccountAfterPurchase(account.id, product.id);
   await createOrder({ userId: user.id, productId: product.id, price: productPrice, status: 'completed' });
 
   // Lấy lại user để có số dư chính xác
@@ -560,11 +560,11 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       return;
     }
     
-    // Sản phẩm stock: lấy accounts từ kho
+    // Sản phẩm stock: lấy accounts từ kho (đánh dấu ngay để tránh lấy trùng)
     for (let i = 0; i < quantity; i++) {
-      const account = await takeOneAvailable(product.id);
+      const account = await takeAndMarkSoldOneAvailable(product.id);
       if (!account) {
-        // Rollback nếu không đủ accounts
+        // Rollback nếu không đủ accounts - khôi phục lại status "available" cho các account đã lấy
         if (purchasedAccounts.length > 0) {
           for (const acc of purchasedAccounts) {
             await query('UPDATE accounts SET status = "available" WHERE id = ?', [acc.id]);
@@ -587,11 +587,10 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       adminId: null
     });
 
-    // Đánh dấu accounts đã bán
+    // Xóa accounts sau khi mua (mua đến đâu xóa đến đó)
     for (const account of purchasedAccounts) {
-      await markSold(account.id, null);
+      await deleteAccountAfterPurchase(account.id, product.id);
     }
-    await syncStock(product.id);
 
     // Tạo order
     const orderResult = await createOrder({
@@ -706,11 +705,11 @@ export const handleBuyGmailEduPTTT = async (bot, msg, quantity = 1) => {
 
     const purchasedAccounts = [];
 
-    // Lấy accounts
+    // Lấy accounts (đánh dấu ngay để tránh lấy trùng)
     for (let i = 0; i < quantity; i++) {
-      const account = await takeOneAvailable(product.id);
+      const account = await takeAndMarkSoldOneAvailable(product.id);
       if (!account) {
-        // Rollback nếu không đủ accounts
+        // Rollback nếu không đủ accounts - khôi phục lại status "available" cho các account đã lấy
         if (purchasedAccounts.length > 0) {
           // Refund accounts đã lấy (mark lại là available)
           for (const acc of purchasedAccounts) {
@@ -734,15 +733,10 @@ export const handleBuyGmailEduPTTT = async (bot, msg, quantity = 1) => {
       adminId: null
     });
 
-    // Tính delete_at = 7 ngày sau khi mua (Gmail sẵn thanh toán: tính từ khi mua)
-    const deleteAt = new Date();
-    deleteAt.setDate(deleteAt.getDate() + DURATION_DAYS);
-
-    // Đánh dấu accounts đã bán và lưu delete_at
+    // Xóa accounts sau khi mua (mua đến đâu xóa đến đó)
     for (const account of purchasedAccounts) {
-      await markSold(account.id, deleteAt);
+      await deleteAccountAfterPurchase(account.id, product.id);
     }
-    await syncStock(product.id);
 
     // Tạo order
     await createOrder({
@@ -842,9 +836,9 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     
     const purchasedAccounts = [];
     for (let i = 0; i < quantity; i++) {
-      const account = await takeOneAvailable(product.id);
+      const account = await takeAndMarkSoldOneAvailable(product.id);
       if (!account) {
-        // Rollback nếu không đủ accounts
+        // Rollback nếu không đủ accounts - khôi phục lại status "available" cho các account đã lấy
         if (purchasedAccounts.length > 0) {
           for (const acc of purchasedAccounts) {
             await query('UPDATE accounts SET status = "available" WHERE id = ?', [acc.id]);
@@ -864,11 +858,10 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
       adminId: null
     });
     
-    // Đánh dấu accounts đã bán
+    // Xóa accounts sau khi mua (mua đến đâu xóa đến đó)
     for (const account of purchasedAccounts) {
-      await markSold(account.id, null);
+      await deleteAccountAfterPurchase(account.id, product.id);
     }
-    await syncStock(product.id);
     
     // Tạo order
     await createOrder({

@@ -9,6 +9,7 @@ import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { getActivePromotion, calculatePromotedAmount } from '../controllers/depositPromotionController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
+import { globalConfig } from '../listen.js';
 
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const qrCancelKey = (telegramId) => `qr_cancel_${telegramId}`;
@@ -163,13 +164,29 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
   const user = await getUserById(deposit.user_id);
   const finalBalance = Number(user.balance);
   
-  // Thông báo cho admin
+  // Thông báo cho admin (gửi vào chat hiện tại và thông báo riêng cho tất cả admin)
   let adminMessage = `✅ Đã duyệt nạp #${depositId}.\n💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
   if (promotionResult.bonusAmount > 0) {
     adminMessage += `\n🎁 Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)`;
   }
   adminMessage += `\n💵 Tổng nhận: ${formatCurrency(promotionResult.finalAmount)}\n💵 Số dư mới của user: ${formatCurrency(finalBalance)}`;
   await bot.sendMessage(chatId, adminMessage);
+
+  // Thông báo cho tất cả admin
+  const { notifyAdminAboutDeposit } = await import('./handleNotify.js');
+  const adminIds = globalConfig?.ADMIN_IDS || [];
+  if (adminIds.length > 0) {
+    await notifyAdminAboutDeposit(bot, adminIds, {
+      depositId: depositId,
+      username: user.username,
+      telegramId: user.telegram_id,
+      originalAmount: promotionResult.originalAmount,
+      bonusAmount: promotionResult.bonusAmount,
+      bonusPercentage: promotion?.bonus_percentage || 0,
+      finalAmount: promotionResult.finalAmount,
+      finalBalance: finalBalance
+    });
+  }
   
   // Thông báo cho user
   try {

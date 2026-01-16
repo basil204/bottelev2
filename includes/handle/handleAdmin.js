@@ -224,6 +224,14 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
   
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, 1);
+  
+  // Thông báo vào nhóm
+  const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
+  const { globalConfig } = await import('../listen.js');
+  const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
+  if (notificationChatId) {
+    await notifyGroupAboutNewStock(bot, notificationChatId, productId, 1);
+  }
 };
 
 export const adminParseUploadAccounts = async (bot, msg, productId) => {
@@ -257,6 +265,14 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
   
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, accounts.length);
+  
+  // Thông báo vào nhóm
+  const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
+  const { globalConfig } = await import('../listen.js');
+  const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
+  if (notificationChatId) {
+    await notifyGroupAboutNewStock(bot, notificationChatId, productId, accounts.length);
+  }
 };
 
 export const adminListUsers = async (bot, chatId, page, pageSize) => {

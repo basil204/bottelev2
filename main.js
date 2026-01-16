@@ -31,7 +31,8 @@ const config = {
   TIMO_ACCOUNT_NAME: process.env.TIMO_ACCOUNT_NAME || fileConfig.TIMO_ACCOUNT_NAME,
   TELEGRAM_GROUP_LINKS: fileConfig.TELEGRAM_GROUP_LINKS || [
     { name: 'Group thông báo và chat', url: 'https://t.me/+SFp6Gttq18VmYThl' }
-  ]
+  ],
+  NOTIFICATION_CHAT_ID: process.env.NOTIFICATION_CHAT_ID || fileConfig.NOTIFICATION_CHAT_ID || null
 };
 
 if (!config.TELEGRAM_BOT_TOKEN) {

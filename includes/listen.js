@@ -49,7 +49,7 @@ import { addBalanceLog } from './controllers/balanceLogController.js';
 import { createCallbackData, formatCurrency } from '../utils/index.js';
 
 // Lưu config ở module level để có thể truy cập từ các callback
-let globalConfig = {};
+export let globalConfig = {};
 
 export const registerListeners = (bot, config) => {
   globalConfig = config;

@@ -122,3 +122,123 @@ export const notifyAdminAboutNewManualOrder = async (bot, adminIds, order) => {
   }
 };
 
+// Thông báo cho admin khi mua hàng thành công
+export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
+  try {
+    if (!adminIds || !Array.isArray(adminIds) || adminIds.length === 0) {
+      console.log('[NOTIFY_ADMIN] Không có admin IDs');
+      return;
+    }
+    
+    const message = `🛒 **MUA HÀNG THÀNH CÔNG**\n\n` +
+                   `🆔 Mã đơn: #${purchaseInfo.orderId || 'N/A'}\n` +
+                   `🎁 Sản phẩm: ${purchaseInfo.productName}\n` +
+                   `👤 User: ${purchaseInfo.username || purchaseInfo.telegramId}\n` +
+                   `📧 ID: ${purchaseInfo.telegramId}\n` +
+                   `📦 Số lượng: ${purchaseInfo.quantity}\n` +
+                   `💰 Giá: ${formatCurrency(purchaseInfo.price)}\n` +
+                   `💵 Số dư sau mua: ${formatCurrency(purchaseInfo.finalBalance)}`;
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Gửi thông báo cho từng admin
+    for (const adminId of adminIds) {
+      try {
+        await bot.sendMessage(adminId, message, { parse_mode: 'Markdown' });
+        successCount++;
+        
+        // Delay nhỏ để tránh rate limit
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`[NOTIFY_ADMIN] Lỗi khi gửi thông báo cho admin ${adminId}:`, error.message);
+        failCount++;
+      }
+    }
+    
+    console.log(`[NOTIFY_ADMIN_PURCHASE] ✅ Hoàn thành: ${successCount} thành công, ${failCount} thất bại`);
+    
+  } catch (error) {
+    console.error('[NOTIFY_ADMIN_PURCHASE] ❌ Lỗi khi thông báo cho admin:', error);
+  }
+};
+
+// Thông báo cho admin khi nạp tiền thành công
+export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
+  try {
+    if (!adminIds || !Array.isArray(adminIds) || adminIds.length === 0) {
+      console.log('[NOTIFY_ADMIN] Không có admin IDs');
+      return;
+    }
+    
+    let message = `💰 **NẠP TIỀN THÀNH CÔNG**\n\n` +
+                  `🆔 Mã giao dịch: #${depositInfo.depositId}\n` +
+                  `👤 User: ${depositInfo.username || depositInfo.telegramId}\n` +
+                  `📧 ID: ${depositInfo.telegramId}\n` +
+                  `💵 Số tiền gốc: ${formatCurrency(depositInfo.originalAmount)}`;
+    
+    if (depositInfo.bonusAmount > 0) {
+      message += `\n🎁 Khuyến mại: +${formatCurrency(depositInfo.bonusAmount)} (${depositInfo.bonusPercentage}%)`;
+    }
+    
+    message += `\n💵 Tổng nhận: ${formatCurrency(depositInfo.finalAmount)}` +
+               `\n💵 Số dư mới: ${formatCurrency(depositInfo.finalBalance)}`;
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Gửi thông báo cho từng admin
+    for (const adminId of adminIds) {
+      try {
+        await bot.sendMessage(adminId, message, { parse_mode: 'Markdown' });
+        successCount++;
+        
+        // Delay nhỏ để tránh rate limit
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`[NOTIFY_ADMIN] Lỗi khi gửi thông báo cho admin ${adminId}:`, error.message);
+        failCount++;
+      }
+    }
+    
+    console.log(`[NOTIFY_ADMIN_DEPOSIT] ✅ Hoàn thành: ${successCount} thành công, ${failCount} thất bại`);
+    
+  } catch (error) {
+    console.error('[NOTIFY_ADMIN_DEPOSIT] ❌ Lỗi khi thông báo cho admin:', error);
+  }
+};
+
+// Thông báo vào nhóm khi có sản phẩm mới được thêm vào kho
+export const notifyGroupAboutNewStock = async (bot, notificationChatId, productId, accountCount) => {
+  try {
+    if (!notificationChatId) {
+      console.log('[NOTIFY_GROUP] Không có notification chat ID');
+      return;
+    }
+
+    // Lấy thông tin sản phẩm
+    const productRows = await query('SELECT * FROM products WHERE id = ?', [productId]);
+    if (!productRows || productRows.length === 0) {
+      console.log(`[NOTIFY_GROUP] Không tìm thấy sản phẩm #${productId}`);
+      return;
+    }
+    const product = productRows[0];
+    
+    const message = `📦 **HÀNG VỀ KHO**\n\n` +
+                   `🎁 Sản phẩm: ${product.name}\n` +
+                   `💰 Giá: ${formatCurrency(product.price)}\n` +
+                   `➕ Số lượng mới: +${accountCount} tài khoản\n` +
+                   `📊 Tồn kho hiện tại: ${product.stock || 0} sản phẩm\n\n` +
+                   `🔔 Sản phẩm đã có hàng, các bạn có thể mua ngay!`;
+    
+    try {
+      await bot.sendMessage(notificationChatId, message, { parse_mode: 'Markdown' });
+      console.log(`[NOTIFY_GROUP] ✅ Đã gửi thông báo vào nhóm về sản phẩm #${productId}`);
+    } catch (error) {
+      console.error(`[NOTIFY_GROUP] ❌ Lỗi khi gửi thông báo vào nhóm:`, error.message);
+    }
+    
+  } catch (error) {
+    console.error('[NOTIFY_GROUP] ❌ Lỗi khi thông báo vào nhóm:', error);
+  }
+};

@@ -4,7 +4,7 @@ import { updateBalance, getUserByTelegram } from '../controllers/userController.
 import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
-import { notifyAdminAboutNewManualOrder } from './handleNotify.js';
+import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase } from './handleNotify.js';
 import { query } from '../database/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -53,15 +53,28 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     return bot.sendMessage(chatId, 'Vui lòng /start để tạo tài khoản.');
   }
 
-  const stockText = product.stock > 0 ? `✅ Còn ${product.stock} sản phẩm` : '❌ Hết hàng';
+  const stock = product.stock || 0;
+  const stockText = stock > 0 ? `✅ Còn ${stock} sản phẩm` : '❌ Hết hàng';
   const description = product.description || 'Không có mô tả';
   
-  const detailText = `📦 **CHI TIẾT SẢN PHẨM**\n\n` +
-                    `🎁 **Tên:** ${product.name}\n` +
-                    `💰 **Giá:** ${formatCurrency(product.price)}\n` +
-                    `📊 **Tồn kho:** ${stockText}\n` +
-                    `📝 **Mô tả:** ${description}\n\n` +
-                    `💵 **Số dư của bạn:** ${formatCurrency(user.balance)}`;
+  let detailText = `📦 **CHI TIẾT SẢN PHẨM**\n\n` +
+                   `🎁 **Tên:** ${product.name}\n` +
+                   `💰 **Giá:** ${formatCurrency(product.price)}\n` +
+                   `📊 **Tồn kho:** ${stockText}\n` +
+                   `📝 **Mô tả:** ${description}\n` +
+                   `💵 **Số dư của bạn:** ${formatCurrency(user.balance)}`;
+
+  // Nếu còn hàng, thêm phần yêu cầu nhập số lượng vào cùng tin nhắn
+  if (stock > 0) {
+    // Lưu trạng thái đang chờ input quantity
+    waitingForProductQuantity.set(userId, { 
+      productId: product.id, 
+      price: product.price, 
+      stock: stock 
+    });
+
+    detailText += `\n\nVui lòng nhập số lượng bạn muốn mua (ví dụ: 1, 2, 5...):`;
+  }
 
   const inline_keyboard = [
     [
@@ -77,25 +90,8 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     reply_markup: { inline_keyboard }
   });
 
-  // Tự động yêu cầu nhập số lượng nếu còn hàng
-  const stock = product.stock || 0;
-  if (stock > 0) {
-    // Lưu trạng thái đang chờ input quantity
-    waitingForProductQuantity.set(userId, { 
-      productId: product.id, 
-      price: product.price, 
-      stock: stock 
-    });
-
-    await bot.sendMessage(
-      chatId,
-      `🛒 Bạn đã chọn: **${product.name}**\n\n` +
-      `💰 Giá: ${formatCurrency(product.price)} / 1 sản phẩm\n` +
-      `📊 Tồn kho: ${stock} sản phẩm\n\n` +
-      `Vui lòng nhập số lượng bạn muốn mua (ví dụ: 1, 2, 5...):`,
-      { parse_mode: 'Markdown' }
-    );
-  } else {
+  // Nếu hết hàng, gửi thông báo riêng
+  if (stock === 0) {
     await bot.sendMessage(chatId, '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.');
   }
 };
@@ -518,7 +514,7 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     await syncStock(product.id);
 
     // Tạo order
-    await createOrder({
+    const orderResult = await createOrder({
       userId: user.id,
       productId: product.id,
       price: totalPrice,
@@ -527,6 +523,37 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
     const updatedUser = await getUserByTelegram(msg.from.id);
     const finalBalance = Number(updatedUser.balance);
+
+    // Lấy order ID để thông báo admin
+    let orderId = null;
+    if (orderResult && orderResult.insertId) {
+      orderId = orderResult.insertId;
+    } else {
+      // Nếu không có insertId, tìm order mới nhất của user
+      const { listOrdersByUser } = await import('../controllers/orderController.js');
+      const { rows } = await listOrdersByUser(user.id, 0, 1);
+      if (rows.length > 0) {
+        orderId = rows[0].id;
+      }
+    }
+
+    // Thông báo cho admin
+    try {
+      const { globalConfig } = await import('../listen.js');
+      if (globalConfig && globalConfig.ADMIN_IDS && globalConfig.ADMIN_IDS.length > 0) {
+        await notifyAdminAboutPurchase(bot, globalConfig.ADMIN_IDS, {
+          orderId: orderId,
+          productName: product.name,
+          username: user.username,
+          telegramId: user.telegram_id,
+          quantity: quantity,
+          price: totalPrice,
+          finalBalance: finalBalance
+        });
+      }
+    } catch (err) {
+      console.error('[BUY_PRODUCT] Lỗi khi thông báo admin:', err);
+    }
 
     // Tạo file txt với tài khoản và mật khẩu
     const fileContent = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');

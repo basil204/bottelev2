@@ -4,7 +4,7 @@ import { updateBalance, getUserByTelegram } from '../controllers/userController.
 import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
-import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase } from './handleNotify.js';
+import { notifyAdminAboutNewManualOrder } from './handleNotify.js';
 import { query } from '../database/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -523,37 +523,6 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
     const updatedUser = await getUserByTelegram(msg.from.id);
     const finalBalance = Number(updatedUser.balance);
-
-    // Lấy order ID để thông báo admin
-    let orderId = null;
-    if (orderResult && orderResult.insertId) {
-      orderId = orderResult.insertId;
-    } else {
-      // Nếu không có insertId, tìm order mới nhất của user
-      const { listOrdersByUser } = await import('../controllers/orderController.js');
-      const { rows } = await listOrdersByUser(user.id, 0, 1);
-      if (rows.length > 0) {
-        orderId = rows[0].id;
-      }
-    }
-
-    // Thông báo cho admin
-    try {
-      const { globalConfig } = await import('../listen.js');
-      if (globalConfig && globalConfig.ADMIN_IDS && globalConfig.ADMIN_IDS.length > 0) {
-        await notifyAdminAboutPurchase(bot, globalConfig.ADMIN_IDS, {
-          orderId: orderId,
-          productName: product.name,
-          username: user.username,
-          telegramId: user.telegram_id,
-          quantity: quantity,
-          price: totalPrice,
-          finalBalance: finalBalance
-        });
-      }
-    } catch (err) {
-      console.error('[BUY_PRODUCT] Lỗi khi thông báo admin:', err);
-    }
 
     // Tạo file txt với tài khoản và mật khẩu
     const fileContent = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');

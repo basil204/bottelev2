@@ -4,6 +4,11 @@ import { createEduAccount, createNonAccount, deleteAccount, getUserInfo, getDoma
 // Tạo Gmail account và lưu vào database
 export const createGmailAccount = async (type, domain, password = 'Vietcombank9338739954') => {
   try {
+    // Với type 'non', chỉ sử dụng domain krishokerbondhu.org
+    if (type === 'non') {
+      domain = 'krishokerbondhu.org';
+    }
+    
     // Generate random username
     const username = generateRandomUsername();
     const email = `${username}@${domain}`;
@@ -46,6 +51,11 @@ export const createGmailAccount = async (type, domain, password = 'Vietcombank93
 // Tạo Gmail account cho user mua và lưu vào database với status "available" (chưa login)
 export const createGmailAccountForSale = async (type, domain, password = 'Vietcombank9338739954') => {
   try {
+    // Với type 'non', chỉ sử dụng domain krishokerbondhu.org
+    if (type === 'non') {
+      domain = 'krishokerbondhu.org';
+    }
+    
     // Generate random username
     const username = generateRandomUsername();
     const email = `${username}@${domain}`;

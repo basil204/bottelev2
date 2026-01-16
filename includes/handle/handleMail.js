@@ -115,11 +115,24 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
     const { accountType, name, apiPrice, sellPrice } = state;
     const totalPrice = sellPrice * quantity;
     
+    // Lấy lại số dư mới nhất trước khi kiểm tra để đảm bảo chính xác
+    const currentUser = await getUserByTelegram(msg.from.id);
+    if (!currentUser) {
+      delCache(mailStateKey);
+      return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy user. Vui lòng /start để tạo tài khoản.');
+    }
+    
+    const currentBalance = Number(currentUser.balance) || 0;
+    
     // Kiểm tra số dư
-    if (Number(user.balance) < totalPrice) {
+    if (currentBalance < totalPrice) {
       return bot.sendMessage(
         msg.chat.id,
-        `❌ Số dư không đủ.\n\nCần: ${formatCurrency(totalPrice)}\nBạn có: ${formatCurrency(user.balance)}`
+        `❌ **Số dư không đủ!**\n\n` +
+        `💵 Cần: ${formatCurrency(totalPrice)}\n` +
+        `💰 Bạn có: ${formatCurrency(currentBalance)}\n\n` +
+        `💡 Vui lòng nạp thêm tiền để tiếp tục.`,
+        { parse_mode: 'Markdown' }
       );
     }
     
@@ -139,10 +152,10 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
       );
     }
     
-    // Trừ tiền
-    await updateBalance(user.id, -totalPrice);
+    // Trừ tiền (đã kiểm tra số dư ở trên)
+    await updateBalance(currentUser.id, -totalPrice);
     await addBalanceLog({
-      userId: user.id,
+      userId: currentUser.id,
       amount: -totalPrice,
       reason: `buy_mail_${accountType}_${quantity}`,
       adminId: null

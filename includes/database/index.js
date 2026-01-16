@@ -77,6 +77,78 @@ export const initDb = async (config) => {
     } catch (e) {
       // ignore if already exists
     }
+    
+    // ensure delete_at column exists for gmail_accounts table
+    try {
+      // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)
+      await pool.execute('ALTER TABLE gmail_accounts ADD COLUMN delete_at TIMESTAMP NULL DEFAULT NULL');
+      console.log('✅ Added delete_at column to gmail_accounts table');
+      
+      // Thử thêm index
+      try {
+        await pool.execute('ALTER TABLE gmail_accounts ADD INDEX idx_delete_at (delete_at)');
+        console.log('✅ Added index idx_delete_at to gmail_accounts table');
+      } catch (idxError) {
+        // Index đã tồn tại hoặc có lỗi khác (không phải lỗi nghiêm trọng)
+        if (!idxError.message.includes('Duplicate') && !idxError.message.includes('already exists')) {
+          console.warn('⚠️ Could not add index idx_delete_at:', idxError.message);
+        }
+      }
+    } catch (e) {
+      // Nếu lỗi là do cột đã tồn tại hoặc bảng chưa tồn tại thì bỏ qua
+      if (e.message.includes('Duplicate column name') || e.message.includes('already exists')) {
+        // Cột đã tồn tại, không cần làm gì
+      } else if (e.message.includes('doesn\'t exist')) {
+        // Bảng chưa tồn tại, sẽ được tạo bởi schema.sql
+      } else {
+        console.error('Migration error for gmail_accounts.delete_at:', e.message);
+      }
+    }
+    
+    // ensure delete_at column exists for accounts table
+    try {
+      // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)
+      await pool.execute('ALTER TABLE accounts ADD COLUMN delete_at TIMESTAMP NULL DEFAULT NULL');
+      console.log('✅ Added delete_at column to accounts table');
+      
+      // Thử thêm index
+      try {
+        await pool.execute('ALTER TABLE accounts ADD INDEX idx_delete_at (delete_at)');
+        console.log('✅ Added index idx_delete_at to accounts table');
+      } catch (idxError) {
+        // Index đã tồn tại hoặc có lỗi khác (không phải lỗi nghiêm trọng)
+        if (!idxError.message.includes('Duplicate') && !idxError.message.includes('already exists')) {
+          console.warn('⚠️ Could not add index idx_delete_at:', idxError.message);
+        }
+      }
+    } catch (e) {
+      // Nếu lỗi là do cột đã tồn tại hoặc bảng chưa tồn tại thì bỏ qua
+      if (e.message.includes('Duplicate column name') || e.message.includes('already exists')) {
+        // Cột đã tồn tại, không cần làm gì
+      } else if (e.message.includes('doesn\'t exist')) {
+        // Bảng chưa tồn tại, sẽ được tạo bởi schema.sql
+      } else {
+        console.error('Migration error for accounts.delete_at:', e.message);
+      }
+    }
+    
+    // ensure settings table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS settings (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          \`key\` VARCHAR(100) UNIQUE NOT NULL,
+          value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_key (\`key\`)
+        )
+      `);
+      console.log('✅ Settings table ready');
+    } catch (e) {
+      if (!e.message.includes('already exists') && !e.message.includes('Table')) {
+        console.error('Migration error for settings table:', e.message);
+      }
+    }
   } catch (err) {
     // Error handling without logging
   }

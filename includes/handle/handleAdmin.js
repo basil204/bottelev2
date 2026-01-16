@@ -49,9 +49,19 @@ export const adminAddProduct = async (bot, chatId) => {
 export const adminParseAddProduct = async (bot, msg) => {
   const parts = msg.text.split('|').map((x) => x.trim());
   const [name, price, description] = parts;
-  if (!name || !price) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
   
-  await createProduct({ name, price, description: description || '' });
+  // Validation
+  if (!name || !price) {
+    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro\n- Tài khoản Netflix|100000|Tài khoản Premium');
+  }
+  
+  // Kiểm tra giá phải là số hợp lệ
+  const priceNum = Number(price);
+  if (isNaN(priceNum) || priceNum < 0) {
+    return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
+  }
+  
+  await createProduct({ name, price: priceNum, description: description || '' });
   
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n💡 Lưu ý: Sản phẩm sẽ tự động là "order" (yêu cầu nhập email/note) nếu không có tài khoản trong kho. Nếu có tài khoản trong kho, sẽ tự động giao khi mua.`);
 };
@@ -59,9 +69,19 @@ export const adminParseAddProduct = async (bot, msg) => {
 export const adminUpdateProduct = async (bot, msg, productId) => {
   const parts = msg.text.split('|').map((x) => x.trim());
   const [name, price, description] = parts;
-  if (!name || !price) return bot.sendMessage(msg.chat.id, 'Sai định dạng.');
   
-  await updateProduct(productId, { name, price, description: description || '' });
+  // Validation
+  if (!name || !price) {
+    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro\n- Tài khoản Netflix|100000|Tài khoản Premium');
+  }
+  
+  // Kiểm tra giá phải là số hợp lệ
+  const priceNum = Number(price);
+  if (isNaN(priceNum) || priceNum < 0) {
+    return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
+  }
+  
+  await updateProduct(productId, { name, price: priceNum, description: description || '' });
   await bot.sendMessage(msg.chat.id, `✅ Đã cập nhật sản phẩm.`);
 };
 
@@ -156,6 +176,11 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       { text: '➕ Thêm', callback_data: createCallbackData({ action: 'admin_add_account', productId }) },
       { text: '📂 Upload', callback_data: createCallbackData({ action: 'admin_upload_account', productId }) }
     ],
+    ...(productId ? [
+      [
+        { text: '📧 Thêm Gmail Edu', callback_data: createCallbackData({ action: 'admin_add_gmail_edu_stock', productId }) }
+      ]
+    ] : []),
     ...(status ? [
       [
         { 
@@ -268,66 +293,128 @@ export const handleUserCommand = async (bot, msg, args) => {
   const { getUserByTelegram } = await import('../controllers/userController.js');
   const { addBalanceLog } = await import('../controllers/balanceLogController.js');
 
+  // Hiển thị hướng dẫn nếu không có đủ tham số
   if (args.length < 2) {
-    return bot.sendMessage(msg.chat.id, 'Sai cú pháp.\n\nSử dụng:\n/user add <telegram_id> <số_tiền>\n/user -<số_tiền> <telegram_id>\n\nVí dụ:\n/user add 123456789 10000\n/user -5000 123456789');
+    return bot.sendMessage(
+      msg.chat.id,
+      '❌ **Sai cú pháp!**\n\n' +
+      '📝 **Cú pháp:**\n' +
+      '• `/user add <telegram_id> <số_tiền>` - Cộng tiền\n' +
+      '• `/user sub <telegram_id> <số_tiền>` - Trừ tiền\n' +
+      '• `/user -<số_tiền> <telegram_id>` - Trừ tiền (cách khác)\n\n' +
+      '💡 **Ví dụ:**\n' +
+      '• `/user add 123456789 100000` - Cộng 100,000 VNĐ\n' +
+      '• `/user sub 123456789 50000` - Trừ 50,000 VNĐ\n' +
+      '• `/user -50000 123456789` - Trừ 50,000 VNĐ',
+      { parse_mode: 'Markdown' }
+    );
   }
 
-  let telegramId, amount;
+  let telegramId, amount, isSubtract = false;
 
   // Parse format: /user add <telegram_id> <amount>
-  if (args[0] === 'add' && args.length >= 3) {
+  if (args[0].toLowerCase() === 'add' && args.length >= 3) {
     telegramId = args[1];
     amount = Number(args[2]);
+    isSubtract = false;
+  }
+  // Parse format: /user sub <telegram_id> <amount>
+  else if (args[0].toLowerCase() === 'sub' && args.length >= 3) {
+    telegramId = args[1];
+    amount = Number(args[2]);
+    isSubtract = true;
+    amount = -Math.abs(amount); // Đảm bảo số âm
   }
   // Parse format: /user -<amount> <telegram_id>
   else if (args[0].startsWith('-') && args.length >= 2) {
     amount = Number(args[0]);
     telegramId = args[1];
+    isSubtract = true;
   }
-  // Parse format: /user <amount> <telegram_id>
+  // Parse format: /user <amount> <telegram_id> (số dương = cộng, số âm = trừ)
   else if (args.length >= 2) {
     amount = Number(args[0]);
     telegramId = args[1];
+    isSubtract = amount < 0;
   } else {
-    return bot.sendMessage(msg.chat.id, 'Sai cú pháp.\n\nSử dụng:\n/user add <telegram_id> <số_tiền>\n/user -<số_tiền> <telegram_id>\n\nVí dụ:\n/user add 123456789 10000\n/user -5000 123456789');
+    return bot.sendMessage(
+      msg.chat.id,
+      '❌ **Sai cú pháp!**\n\n' +
+      '📝 **Cú pháp:**\n' +
+      '• `/user add <telegram_id> <số_tiền>` - Cộng tiền\n' +
+      '• `/user sub <telegram_id> <số_tiền>` - Trừ tiền\n' +
+      '• `/user -<số_tiền> <telegram_id>` - Trừ tiền (cách khác)\n\n' +
+      '💡 **Ví dụ:**\n' +
+      '• `/user add 123456789 100000`\n' +
+      '• `/user sub 123456789 50000`',
+      { parse_mode: 'Markdown' }
+    );
   }
 
-  if (!telegramId || isNaN(amount) || amount === 0) {
-    return bot.sendMessage(msg.chat.id, 'Sai định dạng. Telegram ID và số tiền phải hợp lệ.');
+  // Validation
+  if (!telegramId || !telegramId.match(/^\d+$/)) {
+    return bot.sendMessage(msg.chat.id, '❌ Telegram ID không hợp lệ. Vui lòng nhập số Telegram ID.');
   }
 
+  if (isNaN(amount) || amount === 0) {
+    return bot.sendMessage(msg.chat.id, '❌ Số tiền không hợp lệ. Số tiền phải khác 0.');
+  }
+
+  // Tìm user
   const user = await getUserByTelegram(telegramId);
   if (!user) {
-    return bot.sendMessage(msg.chat.id, `Không tìm thấy user với telegram_id: ${telegramId}`);
+    return bot.sendMessage(msg.chat.id, `❌ Không tìm thấy user với Telegram ID: \`${telegramId}\``, { parse_mode: 'Markdown' });
   }
 
-  // Check if balance would go negative
-  const newBalance = user.balance + amount;
+  // Kiểm tra số dư có đủ để trừ không
+  const currentBalance = Number(user.balance);
+  const newBalance = currentBalance + amount;
+  
   if (newBalance < 0) {
-    return bot.sendMessage(msg.chat.id, `Không thể trừ. Số dư hiện tại: ${formatCurrency(user.balance)}, số tiền muốn trừ: ${formatCurrency(Math.abs(amount))}`);
+    return bot.sendMessage(
+      msg.chat.id,
+      `❌ **Không thể trừ tiền!**\n\n` +
+      `💵 Số dư hiện tại: ${formatCurrency(currentBalance)}\n` +
+      `💰 Số tiền muốn trừ: ${formatCurrency(Math.abs(amount))}\n` +
+      `⚠️ Số dư sau khi trừ sẽ bị âm!`,
+      { parse_mode: 'Markdown' }
+    );
   }
 
-  // Update balance
+  // Cập nhật số dư
   await changeBalance(user.id, amount);
   
   // Lấy lại user để có số dư chính xác
   const updatedUser = await getUserByTelegram(telegramId);
   const finalBalance = Number(updatedUser.balance);
   
-  // Add balance log
-  const isSubtract = amount < 0;
-  const reason = isSubtract ? `Admin trừ tiền (${msg.from.id})` : `Admin cộng tiền (${msg.from.id})`;
-  await addBalanceLog({ userId: user.id, amount, reason, adminId: msg.from.id });
-  
+  // Ghi log
   const action = isSubtract ? 'Trừ' : 'Cộng';
+  const reason = isSubtract 
+    ? `Admin trừ tiền (Admin ID: ${msg.from.id})` 
+    : `Admin cộng tiền (Admin ID: ${msg.from.id})`;
+  await addBalanceLog({ 
+    userId: user.id, 
+    amount, 
+    reason, 
+    adminId: msg.from.id 
+  });
   
   // Thông báo cho admin
-  await bot.sendMessage(msg.chat.id, `✅ ${action} tiền thành công!\n\n👤 User: ${telegramId}\n💰 ${action}: ${formatCurrency(Math.abs(amount))}\n💵 Số dư mới: ${formatCurrency(finalBalance)}`);
+  const adminMessage = `✅ **${action} tiền thành công!**\n\n` +
+                      `👤 User ID: \`${telegramId}\`\n` +
+                      `👤 Username: ${user.username ? `@${user.username}` : 'N/A'}\n` +
+                      `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
+                      `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
+                      `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+  
+  await bot.sendMessage(msg.chat.id, adminMessage, { parse_mode: 'Markdown' });
   
   // Thông báo cho user
   try {
     const userMessage = `✅ **${action === 'Cộng' ? 'Nạp' : 'Trừ'} tiền thành công!**\n\n` +
                        `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
+                       `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
                        `💵 Số dư mới: ${formatCurrency(finalBalance)}\n` +
                        `📝 Lý do: ${reason}`;
     await bot.sendMessage(Number(telegramId), userMessage, { parse_mode: 'Markdown' });

@@ -1,5 +1,5 @@
 {
-  "TELEGRAM_BOT_TOKEN": "8566272687:AAGOadFrVLQODN72uYxnxwNQnWCx1F-tGm8",
+  "TELEGRAM_BOT_TOKEN": "7438542717:AAHEXLRQ4Jgl90b2x9k_3wRHxrDJgg6OKu8",
   "DB_HOST": "130.254.47.231",
   "DB_NAME": "Bottele2025",
   "DB_USER": "adminv1",
@@ -16,7 +16,17 @@
   "TIMO_ACCOUNT_NO": "0338739954",
   "TIMO_ACCOUNT_NAME": "Quy Vac Xin Covid",
   "GOOGLE_WP_V2_REFRESH_TOKEN": "1//0elZ17uSw8m7yCgYIARAAGA4SNwF-L9IrSmCHXxtiW-gzElTsFABEh9ORa8hiEFCeDN5H7DGw4yB5ve02c4OJOagbUA38Ckz9Twg",
-"NOTIFICATION_CHAT_ID": "-1002452496346"
+  "NOTIFICATION_CHAT_ID": "-1002452496346",
+  "TELEGRAM_GROUP_LINKS": [
+    {
+      "name": "Group thông báo và chat",
+      "url": "https://t.me/+SFp6Gttq18VmYThl"
+    },
+    {
+      "name": "Group hỗ trợ",
+      "url": ""
+    }
+  ]
 }
 
 

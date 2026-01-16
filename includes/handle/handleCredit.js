@@ -77,13 +77,8 @@ export const exchangeCreditForGmail = async (bot, msg, user, type, duration, cos
     // Đánh dấu account đã bán
     await markAccountSold(account.id);
 
-    // Tạo order
-    await createOrder({
-      userId: user.id,
-      productId: null, // Không có product_id cho credit exchange
-      price: 0, // Miễn phí vì dùng credit
-      status: 'completed'
-    });
+    // Không tạo order cho credit exchange vì không có product_id
+    // Credit exchange là giao dịch đổi credit, không phải mua sản phẩm
 
     // Schedule deletion dựa trên duration
     if (duration === 'single') {

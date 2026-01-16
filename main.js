@@ -28,7 +28,10 @@ const config = {
   TIMO_API_URL: process.env.TIMO_API_URL || fileConfig.TIMO_API_URL,
   TIMO_BANK_CODE: process.env.TIMO_BANK_CODE || fileConfig.TIMO_BANK_CODE,
   TIMO_ACCOUNT_NO: process.env.TIMO_ACCOUNT_NO || fileConfig.TIMO_ACCOUNT_NO,
-  TIMO_ACCOUNT_NAME: process.env.TIMO_ACCOUNT_NAME || fileConfig.TIMO_ACCOUNT_NAME
+  TIMO_ACCOUNT_NAME: process.env.TIMO_ACCOUNT_NAME || fileConfig.TIMO_ACCOUNT_NAME,
+  TELEGRAM_GROUP_LINKS: fileConfig.TELEGRAM_GROUP_LINKS || [
+    { name: 'Group thông báo và chat', url: 'https://t.me/+SFp6Gttq18VmYThl' }
+  ]
 };
 
 if (!config.TELEGRAM_BOT_TOKEN) {

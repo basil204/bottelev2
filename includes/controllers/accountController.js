@@ -19,8 +19,12 @@ export const takeOneAvailable = async (productId) => {
   return connRows[0];
 };
 
-export const markSold = async (accountId) => {
-  await query('UPDATE accounts SET status = "sold" WHERE id = ?', [accountId]);
+export const markSold = async (accountId, deleteAt = null) => {
+  if (deleteAt) {
+    await query('UPDATE accounts SET status = "sold", delete_at = ? WHERE id = ?', [deleteAt, accountId]);
+  } else {
+    await query('UPDATE accounts SET status = "sold" WHERE id = ?', [accountId]);
+  }
 };
 
 export const listAccounts = async (productId, offset, limit, status = null) => {

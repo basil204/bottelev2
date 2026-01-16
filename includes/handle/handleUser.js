@@ -8,19 +8,33 @@ export const ensureUser = async (bot, msg) => {
   return user;
 };
 
-export const sendMenu = async (bot, chatId, user) => {
+export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
   const credit = user.credit || 0;
+  
+  // Tạo danh sách link group
+  let groupLinksText = '';
+  if (groupLinks && groupLinks.length > 0) {
+    groupLinksText = groupLinks
+      .filter(link => link.url && link.url.trim() !== '')
+      .map(link => `📢 ${link.name}: ${link.url}`)
+      .join('\n');
+  } else {
+    // Fallback nếu không có config
+    groupLinksText = '📢 Group thông báo và chat: https://t.me/+SFp6Gttq18VmYThl';
+  }
+  
   const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}\n🎁 Credit: ${credit}
 
-📢 Group thông báo và chat: https://t.me/+SFp6Gttq18VmYThl
+${groupLinksText}
 👨‍💼 Admin: @nlmsp2025`;
   const opts = {
     reply_markup: {
       keyboard: [
         [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
         [{ text: '📧 Mua Gmail' }, { text: '📧 Mua Mail' }],
-        [{ text: '⭐ Gói VIP' }, { text: '🧾 Lịch sử mua' }],
-        [{ text: '🎁 Check-in' }, { text: '💎 Đổi Credit' }]
+        [{ text: '📧 Gmail sẵn thanh toán' }, { text: '⭐ Gói VIP' }],
+        [{ text: '🧾 Lịch sử mua' }, { text: '🎁 Check-in' }],
+        [{ text: '💎 Đổi Credit' }]
       ],
       resize_keyboard: true
     }

@@ -72,11 +72,32 @@ export const scheduleAccountDeletion = async (email, type) => {
   console.log(`[GMAIL_AUTO_DELETE]   - TimeUntilDelete: ${minutesUntilDelete} phút (${Math.floor(timeUntilDelete / 1000)} giây)`);
   
   // Update status trong database thành "sold" (đã login, đợi xóa)
+  // Với Gmail Non: lưu delete_at = 24h sau vào database
   try {
-    await query('UPDATE gmail_accounts SET status = "sold" WHERE email = ?', [email]);
-    console.log(`[GMAIL_AUTO_DELETE] ✅ Updated status to "sold" for ${email} in database`);
+    if (type === 'non') {
+      // Gmail Non: lưu delete_at = 24h sau
+      const deleteAt = new Date(now + deleteDelayMs);
+      await query(
+        'UPDATE gmail_accounts SET status = "sold", delete_at = ?, lastLoginTime = NOW() WHERE email = ?',
+        [deleteAt, email]
+      );
+      console.log(`[GMAIL_AUTO_DELETE] ✅ Updated status to "sold" and delete_at = ${deleteAt.toISOString()} for ${email} (Non) in database`);
+    } else {
+      // Gmail Edu: chỉ update status
+      await query('UPDATE gmail_accounts SET status = "sold", lastLoginTime = NOW() WHERE email = ?', [email]);
+      console.log(`[GMAIL_AUTO_DELETE] ✅ Updated status to "sold" for ${email} (Edu) in database`);
+    }
   } catch (error) {
     console.error(`[GMAIL_AUTO_DELETE] ❌ Error updating status for ${email}:`, error);
+    // Nếu lỗi do thiếu cột delete_at, thử update không có delete_at
+    if (error.code === 'ER_BAD_FIELD_ERROR' && error.message && error.message.includes('delete_at')) {
+      try {
+        await query('UPDATE gmail_accounts SET status = "sold", lastLoginTime = NOW() WHERE email = ?', [email]);
+        console.log(`[GMAIL_AUTO_DELETE] ⚠️ Updated status without delete_at (column may not exist yet)`);
+      } catch (retryError) {
+        console.error(`[GMAIL_AUTO_DELETE] ❌ Error on retry:`, retryError);
+      }
+    }
   }
 };
 
@@ -371,8 +392,18 @@ export const checkAccountsByType = async (type) => {
               // Đảm bảo status là "sold" nếu chưa được update
               if (currentStatus !== 'sold') {
                 try {
-                  await query('UPDATE gmail_accounts SET status = "sold" WHERE email = ?', [account.email]);
-                  console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Updated status to "sold" for ${account.email} (đã có schedule nhưng status chưa đúng)`);
+                  // Với Gmail Non: lưu delete_at = 24h sau
+                  if (account.type === 'non') {
+                    const deleteAt = new Date(Date.now() + DELETE_DELAY_NON_MS);
+                    await query(
+                      'UPDATE gmail_accounts SET status = "sold", delete_at = ?, lastLoginTime = NOW() WHERE email = ?',
+                      [deleteAt, account.email]
+                    );
+                    console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Updated status to "sold" and delete_at = ${deleteAt.toISOString()} for ${account.email} (Non)`);
+                  } else {
+                    await query('UPDATE gmail_accounts SET status = "sold", lastLoginTime = NOW() WHERE email = ?', [account.email]);
+                    console.log(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ✅ Updated status to "sold" for ${account.email} (Edu)`);
+                  }
                 } catch (error) {
                   console.error(`[GMAIL_LOGIN_CHECK_${type.toUpperCase()}] ❌ Error updating status:`, error);
                 }

@@ -28,9 +28,10 @@ export const showVipMenu = async (bot, chatId, user) => {
   
   const menuText = `⭐ **GÓI VIP**\n\n` +
                    `💰 Giá: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
-                   `📧 Bao gồm: ${VIP_PACKAGE_GMAIL_COUNT} Gmail accounts\n` +
+                   `📧 Bao gồm: ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts\n` +
                    `⏰ Hạn sử dụng: ${VIP_PACKAGE_DURATION_DAYS} ngày\n\n` +
-                   `💡 Khi mua gói VIP, bạn có thể tạo ${VIP_PACKAGE_GMAIL_COUNT} Gmail accounts miễn phí trong ${VIP_PACKAGE_DURATION_DAYS} ngày.` +
+                   `💡 Khi mua gói VIP, bạn có thể tạo ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts miễn phí trong ${VIP_PACKAGE_DURATION_DAYS} ngày.\n` +
+                   `⚠️ Lưu ý: Gói VIP chỉ áp dụng cho Gmail Edu, không áp dụng cho Google Non.` +
                    packageInfo;
 
   const keyboard = {
@@ -72,34 +73,46 @@ export const buyVipPackage = async (bot, msg, user) => {
       );
     }
 
+    // Lấy lại số dư mới nhất trước khi kiểm tra để đảm bảo chính xác
+    const currentUser = await getUserByTelegram(user.telegram_id);
+    if (!currentUser) {
+      return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy user. Vui lòng /start để tạo tài khoản.');
+    }
+    
+    const currentBalance = Number(currentUser.balance) || 0;
+    
     // Kiểm tra số dư
-    if (Number(user.balance) < VIP_PACKAGE_PRICE) {
+    if (currentBalance < VIP_PACKAGE_PRICE) {
       return bot.sendMessage(
         msg.chat.id,
-        `Số dư không đủ. Cần ${formatCurrency(VIP_PACKAGE_PRICE)}, bạn có ${formatCurrency(user.balance)}.`
+        `❌ **Số dư không đủ!**\n\n` +
+        `💵 Cần: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
+        `💰 Bạn có: ${formatCurrency(currentBalance)}\n\n` +
+        `💡 Vui lòng nạp thêm tiền để tiếp tục.`,
+        { parse_mode: 'Markdown' }
       );
     }
 
     // Tạo gói VIP
     const vipPackage = await createVipPackage({
-      userId: user.id,
+      userId: currentUser.id,
       totalGmail: VIP_PACKAGE_GMAIL_COUNT,
       expiresInDays: VIP_PACKAGE_DURATION_DAYS
     });
 
-    // Trừ tiền
-    await updateBalance(user.id, -VIP_PACKAGE_PRICE);
+    // Trừ tiền (đã kiểm tra số dư ở trên)
+    await updateBalance(currentUser.id, -VIP_PACKAGE_PRICE);
     
     // Thêm balance log
     await addBalanceLog({
-      userId: user.id,
+      userId: currentUser.id,
       amount: -VIP_PACKAGE_PRICE,
       reason: 'buy_vip_package',
       adminId: null
     });
 
     // Lấy lại user để có số dư chính xác
-    const updatedUser = await getUserByTelegram(user.telegram_id);
+    const updatedUser = await getUserByTelegram(currentUser.telegram_id);
     if (!updatedUser) {
       return bot.sendMessage(msg.chat.id, '❌ Lỗi: Không thể lấy thông tin user.');
     }

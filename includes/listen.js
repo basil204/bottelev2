@@ -15,7 +15,11 @@ import {
   adminCheckAllAccountsStatus,
   adminDeleteGmailAccount,
   adminGmailPricingMenu,
-  adminParseUpdateGmailPrice
+  adminParseUpdateGmailPrice,
+  adminCreateGmailEduOnly,
+  adminParseCreateGmailEduOnly,
+  adminToggleGmailEdu,
+  adminToggleGmailNon
 } from './handle/handleGmailAdmin.js';
 import {
   adminMenu,
@@ -42,26 +46,24 @@ import {
 } from './handle/handleAdmin.js';
 import { listPendingDeposits, approveDeposit, rejectDeposit } from './handle/handleDeposit.js';
 import { addBalanceLog } from './controllers/balanceLogController.js';
-import { createCallbackData } from '../utils/index.js';
+import { createCallbackData, formatCurrency } from '../utils/index.js';
+
+// Lưu config ở module level để có thể truy cập từ các callback
+let globalConfig = {};
 
 export const registerListeners = (bot, config) => {
+  globalConfig = config;
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
     
     // Xử lý referral code nếu có
     const referralCode = match[1] ? match[1].trim() : null;
+    let referralSuccess = false;
+    
     if (referralCode && referralCode.length > 0) {
       try {
         const referralResult = await processReferral(user.id, referralCode);
-        if (referralResult.success) {
-          await bot.sendMessage(
-            msg.chat.id,
-            `🎉 Chào mừng bạn đến với bot!\n\n` +
-            `✅ Bạn đã sử dụng mã giới thiệu thành công!\n` +
-            `💎 Người giới thiệu đã nhận được 3 credit.\n\n` +
-            `💡 Sử dụng /checkin để nhận credit miễn phí mỗi ngày!`
-          );
-        }
+        referralSuccess = referralResult.success;
         // Không hiển thị thông báo nếu đã sử dụng mã rồi (để tránh spam)
       } catch (error) {
         // Xử lý lỗi một cách im lặng để không làm gián đoạn flow
@@ -69,12 +71,69 @@ export const registerListeners = (bot, config) => {
       }
     }
     
-    await sendMenu(bot, msg.chat.id, user);
+    // Tạo nội dung tin nhắn gộp
+    const groupLinks = config.TELEGRAM_GROUP_LINKS || [];
+    const credit = user.credit || 0;
+    
+    let messageText = '';
+    
+    // Thêm phần chào mừng/ referral
+    if (referralSuccess) {
+      messageText += `🎉 **Chào mừng bạn đến với bot!**\n\n`;
+      messageText += `✅ Bạn đã sử dụng mã giới thiệu thành công!\n`;
+      messageText += `💎 Người giới thiệu đã nhận được 3 credit.\n\n`;
+    } else {
+      messageText += `🎉 **Chào mừng bạn đến với bot!**\n\n`;
+      messageText += `👋 Xin chào! Chúng tôi rất vui được phục vụ bạn.\n\n`;
+    }
+    
+    // Thông tin tài khoản
+    messageText += `👤 **Thông tin tài khoản:**\n`;
+    messageText += `• ID: ${user.telegram_id}\n`;
+    messageText += `• Số dư: ${formatCurrency(user.balance)}\n`;
+    messageText += `• Credit: ${credit}\n\n`;
+    
+    // Hướng dẫn sử dụng
+    messageText += `💡 **Hướng dẫn sử dụng:**\n`;
+    messageText += `• Sử dụng menu bên dưới để điều hướng\n`;
+    messageText += `• Nạp tiền để mua sản phẩm\n`;
+    messageText += `• Check-in hàng ngày để nhận credit miễn phí\n\n`;
+    
+    // Thêm link group nếu có
+    if (groupLinks.length > 0) {
+      messageText += `📢 **Tham gia các group của chúng tôi:**\n`;
+      groupLinks.forEach((link, index) => {
+        if (link.url && link.url.trim() !== '') {
+          messageText += `${index + 1}. ${link.name}: ${link.url}\n`;
+        }
+      });
+      messageText += `\n`;
+    }
+    
+    messageText += `👨‍💼 Liên hệ admin: @nlmsp2025\n\n`;
+    messageText += `Chúc bạn có trải nghiệm tuyệt vời! 🚀`;
+    
+    // Gửi 1 tin nhắn duy nhất kèm menu
+    const opts = {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        keyboard: [
+          [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
+          [{ text: '📧 Mua Gmail' }, { text: '📧 Mua Mail' }],
+          [{ text: '📧 Gmail sẵn thanh toán' }, { text: '⭐ Gói VIP' }],
+          [{ text: '🧾 Lịch sử mua' }, { text: '🎁 Check-in' }],
+          [{ text: '💎 Đổi Credit' }]
+        ],
+        resize_keyboard: true
+      }
+    };
+    
+    await bot.sendMessage(msg.chat.id, messageText, opts);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
     const user = await ensureUser(bot, msg);
-    await sendMenu(bot, msg.chat.id, user);
+    await sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
   });
 
   bot.onText(/^\/info/i, async (msg) => {
@@ -205,6 +264,10 @@ export const registerListeners = (bot, config) => {
     if (text === '🛒 Mua sản phẩm') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE);
     if (text === '📧 Mua Gmail') return showGmailMenu(bot, msg.chat.id);
     if (text === '📧 Mua Mail') return showMailMenu(bot, msg.chat.id);
+    if (text === '📧 Gmail sẵn thanh toán') {
+      const { showGmailEduPTTTDetail } = await import('./handle/handleBuy.js');
+      return showGmailEduPTTTDetail(bot, msg.chat.id, user);
+    }
     if (text === '⭐ Gói VIP') return showVipMenu(bot, msg.chat.id, user);
     if (text === '🧾 Lịch sử mua') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
     if (text === '🎁 Check-in') {
@@ -245,8 +308,12 @@ export const registerListeners = (bot, config) => {
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
-    // Kiểm tra xem có đang chờ input quantity cho Gmail hoặc Mail không
+    // Kiểm tra xem có đang chờ input quantity cho Gmail sẵn thanh toán không
     if (/^\d+$/.test(text)) {
+      const { handleGmailEduPTTTQuantityInput } = await import('./handle/handleBuy.js');
+      const handledPTTT = await handleGmailEduPTTTQuantityInput(bot, msg, text);
+      if (handledPTTT) return; // Đã xử lý input số lượng Gmail sẵn thanh toán
+      
       // Thử xử lý như quantity input cho Gmail trước
       const handledGmail = await handleGmailQuantityInput(bot, msg, text);
       if (handledGmail) return; // Đã xử lý, không cần check deposit nữa
@@ -286,6 +353,9 @@ export const registerListeners = (bot, config) => {
       switch (action) {
         case 'products':
           return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE);
+        case 'view_product':
+          const { showProductDetail } = await import('./handle/handleBuy.js');
+          return showProductDetail(bot, chatId, data.productId, query.from.id);
         case 'buy_product':
           return handlePurchase(bot, query.message, data.productId, query.from);
         case 'select_bank':
@@ -299,7 +369,10 @@ export const registerListeners = (bot, config) => {
         case 'vip_history':
           return showVipHistory(bot, chatId, user.id, data.page || 1, config.PAGE_SIZE);
         case 'back_to_menu':
-          return sendMenu(bot, chatId, user);
+          return sendMenu(bot, chatId, user, globalConfig.TELEGRAM_GROUP_LINKS);
+        case 'buy_gmail_edu_pttt_quantity':
+          const { requestGmailEduPTTTQuantity } = await import('./handle/handleBuy.js');
+          return requestGmailEduPTTTQuantity(bot, chatId, user);
         case 'admin_products':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return adminProducts(bot, chatId, data.page || 1, config.PAGE_SIZE);
@@ -324,12 +397,22 @@ export const registerListeners = (bot, config) => {
           return adminListAccounts(bot, chatId, productId, page, 10, status);
         case 'admin_add_account':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
-          bot.once('message', (m) => adminParseAddAccount(bot, m, data.productId));
-          return adminAddAccount(bot, chatId, data.productId);
+          // Hỗ trợ cả format đầy đủ và format ngắn
+          const addProductId = data.productId || data.p;
+          if (!addProductId) {
+            return bot.sendMessage(chatId, '❌ Lỗi: Không tìm thấy ID sản phẩm. Vui lòng thử lại.');
+          }
+          bot.once('message', (m) => adminParseAddAccount(bot, m, addProductId));
+          return adminAddAccount(bot, chatId, addProductId);
         case 'admin_upload_account':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          // Hỗ trợ cả format đầy đủ và format ngắn
+          const uploadProductId = data.productId || data.p;
+          if (!uploadProductId) {
+            return bot.sendMessage(chatId, '❌ Lỗi: Không tìm thấy ID sản phẩm. Vui lòng thử lại.');
+          }
           await bot.sendMessage(chatId, 'Gửi file .txt hoặc dán nội dung username|password mỗi dòng.');
-          bot.once('message', (m) => adminParseUploadAccounts(bot, m, data.productId));
+          bot.once('message', (m) => adminParseUploadAccounts(bot, m, uploadProductId));
           return;
         case 'admin_delete_account':
         case 'del_acc': // Hỗ trợ format ngắn
@@ -486,6 +569,63 @@ export const registerListeners = (bot, config) => {
           await bot.sendMessage(chatId, 'Nhập để sửa giá theo format: type|duration|quantity|price\nVí dụ: edu|single|1|700');
           bot.once('message', (m) => adminParseUpdateGmailPrice(bot, m));
           return adminGmailPricingMenu(bot, chatId);
+        case 'admin_gmail_toggle_edu':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          return adminToggleGmailEdu(bot, chatId);
+        case 'admin_gmail_toggle_non':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          return adminToggleGmailNon(bot, chatId);
+        case 'admin_gmail_edu_permanent':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminAddGmailEduPermanent, adminParseAddGmailEduPermanent } = await import('./handle/handleGmailAdmin.js');
+          await adminAddGmailEduPermanent(bot, chatId);
+          bot.once('message', (m) => adminParseAddGmailEduPermanent(bot, m));
+          return;
+        case 'admin_gmail_edu_pttt':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminAddGmailEduPTTT, adminParseAddGmailEduPTTT } = await import('./handle/handleGmailAdmin.js');
+          await adminAddGmailEduPTTT(bot, chatId);
+          bot.once('message', (m) => {
+            // Chỉ xử lý message từ cùng user và cùng chat
+            if (m.from.id === query.from.id && m.chat.id === chatId) {
+              adminParseAddGmailEduPTTT(bot, m, config.ADMIN_IDS);
+            }
+          });
+          return;
+        case 'admin_gmail_edu_create_only':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          await adminCreateGmailEduOnly(bot, chatId);
+          bot.once('message', (m) => adminParseCreateGmailEduOnly(bot, m));
+          return;
+        case 'admin_gmail_pttt_check_stock':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminCheckGmailPTTTStock } = await import('./handle/handleGmailAdmin.js');
+          return adminCheckGmailPTTTStock(bot, chatId);
+        case 'admin_gmail_pttt_delete_menu':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminDeleteGmailPTTTMenu } = await import('./handle/handleGmailAdmin.js');
+          return adminDeleteGmailPTTTMenu(bot, chatId);
+        case 'admin_gmail_pttt_delete_all':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminDeleteAllGmailPTTTByStatus } = await import('./handle/handleGmailAdmin.js');
+          const deleteStatus = data.status || 'available';
+          return adminDeleteAllGmailPTTTByStatus(bot, chatId, deleteStatus);
+        case 'admin_gmail_pttt_delete_by_id':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminDeleteGmailPTTTById, adminParseDeleteGmailPTTTById } = await import('./handle/handleGmailAdmin.js');
+          await adminDeleteGmailPTTTById(bot, chatId);
+          bot.once('message', (m) => adminParseDeleteGmailPTTTById(bot, m));
+          return;
+        case 'admin_add_gmail_edu_stock':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { adminAddGmailEduStock, adminParseAddGmailEduStock } = await import('./handle/handleGmailAdmin.js');
+          const stockProductId = data.productId || data.p;
+          if (!stockProductId) {
+            return bot.sendMessage(chatId, '❌ Lỗi: Không tìm thấy ID sản phẩm.');
+          }
+          await adminAddGmailEduStock(bot, chatId, stockProductId);
+          bot.once('message', (m) => adminParseAddGmailEduStock(bot, m, stockProductId));
+          return;
         case 'admin_delete_promotion':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           const { adminDeletePromotion } = await import('./handle/handleAdmin.js');

@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   username VARCHAR(255) NOT NULL,
   password VARCHAR(255) NOT NULL,
   status ENUM('available','sold') DEFAULT 'available',
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+  delete_at TIMESTAMP NULL DEFAULT NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  INDEX idx_delete_at (delete_at)
 );
 
 CREATE TABLE IF NOT EXISTS deposits (
@@ -71,8 +73,10 @@ CREATE TABLE IF NOT EXISTS gmail_accounts (
   lastLoginTime TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   sold_at TIMESTAMP NULL DEFAULT NULL,
+  delete_at TIMESTAMP NULL DEFAULT NULL,
   INDEX idx_type_status (type, status),
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  INDEX idx_delete_at (delete_at)
 );
 
 CREATE TABLE IF NOT EXISTS vip_packages (
@@ -140,5 +144,13 @@ CREATE TABLE IF NOT EXISTS referrals (
   UNIQUE KEY unique_referral (referrer_id, referred_id),
   INDEX idx_referrer (referrer_id),
   INDEX idx_referred (referred_id)
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  `key` VARCHAR(100) UNIQUE NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_key (`key`)
 );
 

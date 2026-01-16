@@ -74,6 +74,17 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const amount = Number(msg.text.replace(/\D/g, ''));
   if (!amount || amount <= 0) return bot.sendMessage(msg.chat.id, 'Số tiền không hợp lệ.');
   
+  // Kiểm tra số tiền nạp tối thiểu 50,000 VNĐ
+  const MIN_DEPOSIT_AMOUNT = 50000;
+  if (amount < MIN_DEPOSIT_AMOUNT) {
+    return bot.sendMessage(
+      msg.chat.id,
+      `❌ Số tiền nạp tối thiểu là ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.\n\n` +
+      `💰 Bạn đã nhập: ${formatCurrency(amount)}\n` +
+      `💡 Vui lòng nhập số tiền từ ${formatCurrency(MIN_DEPOSIT_AMOUNT)} trở lên.`
+    );
+  }
+  
   // Kiểm tra khuyến mại đang active
   const promotion = await getActivePromotion();
   const promotionResult = calculatePromotedAmount(amount, promotion);

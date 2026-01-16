@@ -1,11 +1,15 @@
 import { query } from '../database/index.js';
 
-export const createProduct = async ({ name, price, description }) => {
-  await query('INSERT INTO products (name, price, description, stock) VALUES (?, ?, ?, 0)', [name, price, description]);
+export const createProduct = async ({ name, price, description, type = 'stock' }) => {
+  await query('INSERT INTO products (name, price, description, stock, type) VALUES (?, ?, ?, 0, ?)', [name, price, description, type]);
 };
 
-export const updateProduct = async (id, { name, price, description }) => {
-  await query('UPDATE products SET name = ?, price = ?, description = ? WHERE id = ?', [name, price, description, id]);
+export const updateProduct = async (id, { name, price, description, type }) => {
+  if (type !== undefined) {
+    await query('UPDATE products SET name = ?, price = ?, description = ?, type = ? WHERE id = ?', [name, price, description, type, id]);
+  } else {
+    await query('UPDATE products SET name = ?, price = ?, description = ? WHERE id = ?', [name, price, description, id]);
+  }
 };
 
 export const deleteProduct = async (id) => {

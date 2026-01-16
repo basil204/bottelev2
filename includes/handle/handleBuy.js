@@ -53,24 +53,34 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     return bot.sendMessage(chatId, 'Vui lòng /start để tạo tài khoản.');
   }
 
+  const productType = product.type || 'stock';
   const stock = product.stock || 0;
-  const stockText = stock > 0 ? `✅ Còn ${stock} sản phẩm` : '❌ Hết hàng';
   const description = product.description || 'Không có mô tả';
   
   let detailText = `📦 **CHI TIẾT SẢN PHẨM**\n\n` +
                    `🎁 **Tên:** ${product.name}\n` +
                    `💰 **Giá:** ${formatCurrency(product.price)}\n` +
-                   `📊 **Tồn kho:** ${stockText}\n` +
-                   `📝 **Mô tả:** ${description}\n` +
-                   `💵 **Số dư của bạn:** ${formatCurrency(user.balance)}`;
+                   `📝 **Mô tả:** ${description}\n`;
+  
+  // Hiển thị thông tin theo loại sản phẩm
+  if (productType === 'order') {
+    detailText += `📋 **Loại:** 📝 Sản phẩm Order (yêu cầu nhập email/note)\n`;
+  } else {
+    const stockText = stock > 0 ? `✅ Còn ${stock} sản phẩm` : '❌ Hết hàng';
+    detailText += `📋 **Loại:** 📦 Sản phẩm Stock (tự động giao)\n` +
+                  `📊 **Tồn kho:** ${stockText}\n`;
+  }
+  
+  detailText += `💵 **Số dư của bạn:** ${formatCurrency(user.balance)}`;
 
-  // Nếu còn hàng, thêm phần yêu cầu nhập số lượng vào cùng tin nhắn
-  if (stock > 0) {
+  // Nếu là sản phẩm stock và còn hàng, hoặc là sản phẩm order, yêu cầu nhập số lượng
+  if ((productType === 'stock' && stock > 0) || productType === 'order') {
     // Lưu trạng thái đang chờ input quantity
     waitingForProductQuantity.set(userId, { 
       productId: product.id, 
       price: product.price, 
-      stock: stock 
+      stock: stock,
+      type: productType
     });
 
     detailText += `\n\nVui lòng nhập số lượng bạn muốn mua (ví dụ: 1, 2, 5...):`;
@@ -90,8 +100,8 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     reply_markup: { inline_keyboard }
   });
 
-  // Nếu hết hàng, gửi thông báo riêng
-  if (stock === 0) {
+  // Nếu là sản phẩm stock và hết hàng, gửi thông báo riêng
+  if (productType === 'stock' && stock === 0) {
     await bot.sendMessage(chatId, '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.');
   }
 };
@@ -430,7 +440,8 @@ export const handleProductQuantityInput = async (bot, msg, quantityStr) => {
     return true;
   }
 
-  if (quantity > waitingState.stock) {
+  // Kiểm tra tồn kho chỉ với sản phẩm stock
+  if (waitingState.type === 'stock' && quantity > waitingState.stock) {
     await bot.sendMessage(chatId, `❌ Số lượng bạn muốn mua (${quantity}) vượt quá số lượng tồn kho (${waitingState.stock}). Vui lòng nhập lại.`);
     return true;
   }
@@ -460,27 +471,96 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     const currentUser = await getUserByTelegram(msg.from.id);
     const currentBalance = Number(currentUser.balance) || 0;
 
+    // Kiểm tra loại sản phẩm
+    const productType = product.type || 'stock';
+    
+    // Nếu là sản phẩm stock, kiểm tra tồn kho
+    if (productType === 'stock') {
+      if (product.stock < quantity || product.stock === 0) {
+        return bot.sendMessage(
+          msg.chat.id,
+          `❌ Không đủ sản phẩm trong kho. Hiện tại còn ${product.stock} sản phẩm.`
+        );
+      }
+    }
+
+    // Nếu không đủ tiền, tự động tạo QR để nạp tiền
     if (currentBalance < totalPrice) {
-      return bot.sendMessage(
+      const missingAmount = totalPrice - currentBalance;
+      
+      // Lưu thông tin purchase vào cache để hoàn tất sau khi nạp tiền
+      const { getCache, setCache } = await import('../../lib/cache/index.js');
+      const purchaseKey = `purchase_${msg.from.id}`;
+      setCache(purchaseKey, {
+        productId,
+        quantity,
+        totalPrice,
+        userId: user.id,
+        telegramId: msg.from.id,
+        chatId: msg.chat.id
+      }, 30 * 60 * 1000); // 30 phút
+      
+      // Tạo QR với số tiền thiếu
+      const { handleDepositAmount } = await import('./handleDeposit.js');
+      const { globalConfig } = await import('../listen.js');
+      
+      // Tự động chọn MBBank và tạo QR
+      const { setCache: setCacheDeposit } = await import('../../lib/cache/index.js');
+      const bankKey = (telegramId) => `bank_${telegramId}`;
+      setCacheDeposit(bankKey(msg.from.id), 'mbbank', 10 * 60 * 1000);
+      
+      // Tạo message giả để gọi handleDepositAmount
+      const fakeMsg = {
+        ...msg,
+        text: missingAmount.toString()
+      };
+      
+      await bot.sendMessage(
         msg.chat.id,
         `❌ **Số dư không đủ!**\n\n` +
         `💵 Cần: ${formatCurrency(totalPrice)}\n` +
-        `💰 Bạn có: ${formatCurrency(currentBalance)}\n\n` +
-        `💡 Vui lòng nạp thêm tiền để tiếp tục.`,
+        `💰 Bạn có: ${formatCurrency(currentBalance)}\n` +
+        `💸 Thiếu: ${formatCurrency(missingAmount)}\n\n` +
+        `💡 Hệ thống sẽ tự động tạo QR để nạp số tiền thiếu. Sau khi chuyển khoản thành công, tài khoản sẽ tự động được gửi cho bạn.`,
         { parse_mode: 'Markdown' }
       );
+      
+      await handleDepositAmount(bot, fakeMsg, user, globalConfig);
+      return;
     }
 
-    // Kiểm tra tồn kho
-    if (product.stock < quantity) {
-      return bot.sendMessage(
+    // Xử lý theo loại sản phẩm
+    let purchasedAccounts = [];
+    
+    if (productType === 'order') {
+      // Sản phẩm order: yêu cầu nhập email/note (manual order)
+      await updateBalance(user.id, -totalPrice);
+      await addBalanceLog({
+        userId: user.id,
+        amount: -totalPrice,
+        reason: `buy_product_order_${product.id}_${quantity}`,
+        adminId: null
+      });
+      
+      // Lưu state để bắt đầu flow nhập thông tin
+      manualOrderState.set(msg.from.id, { productId, step: 'email', quantity });
+      
+      const updatedUser = await getUserByTelegram(msg.from.id);
+      const finalBalance = Number(updatedUser.balance);
+      
+      await bot.sendMessage(
         msg.chat.id,
-        `❌ Không đủ sản phẩm trong kho. Hiện tại còn ${product.stock} sản phẩm.`
+        `📝 **Sản phẩm yêu cầu thông tin**\n\n` +
+        `🎁 Sản phẩm: ${product.name}\n` +
+        `💰 Giá: ${formatCurrency(totalPrice)}\n` +
+        `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
+        `Vui lòng nhập **email** cần nâng cấp:`,
+        { parse_mode: 'Markdown' }
       );
+      return;
     }
-
-    // Lấy accounts từ kho
-    const purchasedAccounts = [];
+    
+    // Sản phẩm stock: lấy accounts từ kho
     for (let i = 0; i < quantity; i++) {
       const account = await takeOneAvailable(product.id);
       if (!account) {
@@ -694,4 +774,162 @@ export const handleBuyGmailEduPTTT = async (bot, msg, quantity = 1) => {
   }
 };
 
+// Hoàn tất purchase sau khi nạp tiền thành công
+export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chatId) => {
+  try {
+    const { getCache, delCache } = await import('../../lib/cache/index.js');
+    const purchaseKey = `purchase_${telegramId}`;
+    const purchaseInfo = getCache(purchaseKey);
+    
+    if (!purchaseInfo) {
+      return false; // Không có purchase pending
+    }
+    
+    // Xóa cache purchase
+    delCache(purchaseKey);
+    
+    const { productId, quantity, totalPrice } = purchaseInfo;
+    const product = await getProduct(productId);
+    if (!product) {
+      return bot.sendMessage(chatId, '❌ Sản phẩm không tồn tại.');
+    }
+    
+    const user = await getUserByTelegram(telegramId);
+    if (!user) {
+      return bot.sendMessage(chatId, '❌ Không tìm thấy user.');
+    }
+    
+    const currentBalance = Number(user.balance) || 0;
+    if (currentBalance < totalPrice) {
+      return bot.sendMessage(chatId, `❌ Số dư vẫn chưa đủ. Cần: ${formatCurrency(totalPrice)}, Bạn có: ${formatCurrency(currentBalance)}`);
+    }
+    
+    // Kiểm tra loại sản phẩm
+    const productType = product.type || 'stock';
+    
+    if (productType === 'order') {
+      // Sản phẩm order: yêu cầu nhập email/note
+      await updateBalance(user.id, -totalPrice);
+      await addBalanceLog({
+        userId: user.id,
+        amount: -totalPrice,
+        reason: `buy_product_order_${product.id}_${quantity}`,
+        adminId: null
+      });
+      
+      manualOrderState.set(telegramId, { productId, step: 'email', quantity });
+      
+      const updatedUser = await getUserByTelegram(telegramId);
+      const finalBalance = Number(updatedUser.balance);
+      
+      await bot.sendMessage(
+        chatId,
+        `✅ **Đã nạp tiền thành công!**\n\n` +
+        `📝 **Sản phẩm yêu cầu thông tin**\n\n` +
+        `🎁 Sản phẩm: ${product.name}\n` +
+        `💰 Giá: ${formatCurrency(totalPrice)}\n` +
+        `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
+        `Vui lòng nhập **email** cần nâng cấp:`,
+        { parse_mode: 'Markdown' }
+      );
+      return true;
+    }
+    
+    // Sản phẩm stock: lấy accounts từ kho
+    if (product.stock < quantity || product.stock === 0) {
+      return bot.sendMessage(chatId, `❌ Không đủ sản phẩm trong kho. Hiện tại còn ${product.stock} sản phẩm.`);
+    }
+    
+    const purchasedAccounts = [];
+    for (let i = 0; i < quantity; i++) {
+      const account = await takeOneAvailable(product.id);
+      if (!account) {
+        // Rollback nếu không đủ accounts
+        if (purchasedAccounts.length > 0) {
+          for (const acc of purchasedAccounts) {
+            await query('UPDATE accounts SET status = "available" WHERE id = ?', [acc.id]);
+          }
+        }
+        return bot.sendMessage(chatId, `❌ Không đủ tài khoản trong kho. Đã lấy được ${purchasedAccounts.length}/${quantity} tài khoản.`);
+      }
+      purchasedAccounts.push(account);
+    }
+    
+    // Trừ tiền
+    await updateBalance(user.id, -totalPrice);
+    await addBalanceLog({
+      userId: user.id,
+      amount: -totalPrice,
+      reason: `buy_product_${product.id}_${quantity}`,
+      adminId: null
+    });
+    
+    // Đánh dấu accounts đã bán
+    for (const account of purchasedAccounts) {
+      await markSold(account.id, null);
+    }
+    await syncStock(product.id);
+    
+    // Tạo order
+    await createOrder({
+      userId: user.id,
+      productId: product.id,
+      price: totalPrice,
+      status: 'completed'
+    });
+    
+    const updatedUser = await getUserByTelegram(telegramId);
+    const finalBalance = Number(updatedUser.balance);
+    
+    // Tạo file txt với tài khoản và mật khẩu
+    const fileContent = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+    const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
+    const tempFilePath = path.join(__dirname, '../../temp', fileName);
+    
+    // Đảm bảo thư mục temp tồn tại
+    const tempDir = path.dirname(tempFilePath);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    // Ghi file tạm thời
+    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+    
+    try {
+      // Gửi file từ đường dẫn
+      const caption = `✅ **Mua thành công!**\n\n` +
+                     `🎁 Sản phẩm: ${product.name}\n` +
+                     `📦 Số lượng: ${quantity}\n` +
+                     `💰 Giá: ${formatCurrency(totalPrice)}\n` +
+                     `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+      
+      await bot.sendDocument(chatId, tempFilePath, {
+        caption: caption,
+        parse_mode: 'Markdown'
+      });
+      console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công`);
+    } catch (sendError) {
+      console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
+      // Nếu không gửi được file, gửi thông tin account qua text
+      const accountText = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+      let messageText = `✅ Mua thành công!\n\n`;
+      messageText += `🎁 Sản phẩm: ${product.name}\n`;
+      messageText += `📦 Số lượng: ${quantity}\n`;
+      messageText += `💰 Giá: ${formatCurrency(totalPrice)}\n`;
+      messageText += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
+      messageText += `📋 Danh sách tài khoản:\n\n${accountText}`;
+      await bot.sendMessage(chatId, messageText);
+    } finally {
+      // Xóa file tạm thời sau khi gửi
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('[COMPLETE_PURCHASE_AFTER_DEPOSIT] Error:', error);
+    return false;
+  }
+};
 

@@ -112,6 +112,19 @@ const processMBTransaction = async (bot, tx, cached, user, promotion) => {
   }
   setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
 
+  // Kiểm tra và hoàn tất purchase nếu có
+  try {
+    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
+    const purchaseCompleted = await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
+    
+    if (purchaseCompleted) {
+      // Purchase đã được hoàn tất, không cần gửi thông báo nạp tiền riêng
+      return true;
+    }
+  } catch (err) {
+    console.error('[AUTO_DEPOSIT] Lỗi khi hoàn tất purchase:', err);
+  }
+
   try {
     let message = `✅ **Nạp tiền tự động thành công!**\n\n` +
                  `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
@@ -194,6 +207,19 @@ const processTimoTransaction = async (bot, item, cached, user, promotion) => {
     }
   }
   setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
+
+  // Kiểm tra và hoàn tất purchase nếu có
+  try {
+    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
+    const purchaseCompleted = await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
+    
+    if (purchaseCompleted) {
+      // Purchase đã được hoàn tất, không cần gửi thông báo nạp tiền riêng
+      return true;
+    }
+  } catch (err) {
+    console.error('[AUTO_DEPOSIT] Lỗi khi hoàn tất purchase:', err);
+  }
 
   try {
     let message = `✅ **Nạp tiền tự động thành công!**\n\n` +

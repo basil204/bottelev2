@@ -43,16 +43,16 @@ export const adminProducts = async (bot, chatId, page, pageSize) => {
 };
 
 export const adminAddProduct = async (bot, chatId) => {
-  await bot.sendMessage(chatId, 'Nhập theo định dạng: tên|giá|mô tả\n\nVí dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro\n- Tài khoản Netflix|100000|Tài khoản Premium\n\nLưu ý:\n- Sản phẩm sẽ tự động là "order" (yêu cầu nhập email/note) nếu không có tài khoản trong kho\n- Sản phẩm sẽ tự động là "stock" (tự động giao) nếu có tài khoản trong kho');
+  await bot.sendMessage(chatId, 'Nhập theo định dạng: tên|giá|mô tả|stock/order\n\nVí dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro|order\n- Tài khoản Netflix|100000|Tài khoản Premium|stock\n\nLưu ý:\n- Sản phẩm sẽ tự động là "order" (yêu cầu nhập email/note) nếu không có tài khoản trong kho\n- Sản phẩm sẽ tự động là "stock" (tự động giao) nếu có tài khoản trong kho');
 };
 
 export const adminParseAddProduct = async (bot, msg) => {
   const parts = msg.text.split('|').map((x) => x.trim());
-  const [name, price, description] = parts;
+  const [name, price, description, type] = parts;
   
   // Validation
   if (!name || !price) {
-    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro\n- Tài khoản Netflix|100000|Tài khoản Premium');
+    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả|type\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro|order\n- Tài khoản Netflix|100000|Tài khoản Premium|stock');
   }
   
   // Kiểm tra giá phải là số hợp lệ
@@ -61,18 +61,21 @@ export const adminParseAddProduct = async (bot, msg) => {
     return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
   }
   
-  await createProduct({ name, price: priceNum, description: description || '' });
+  // Kiểm tra type
+  const productType = (type && (type.toLowerCase() === 'order' || type.toLowerCase() === 'stock')) ? type.toLowerCase() : 'stock';
   
-  await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n💡 Lưu ý: Sản phẩm sẽ tự động là "order" (yêu cầu nhập email/note) nếu không có tài khoản trong kho. Nếu có tài khoản trong kho, sẽ tự động giao khi mua.`);
+  await createProduct({ name, price: priceNum, description: description || '', type: productType });
+  
+  await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n📦 Loại: ${productType === 'order' ? 'Order (yêu cầu nhập email/note)' : 'Stock (tự động giao, cần stock > 0)'}`);
 };
 
 export const adminUpdateProduct = async (bot, msg, productId) => {
   const parts = msg.text.split('|').map((x) => x.trim());
-  const [name, price, description] = parts;
+  const [name, price, description, type] = parts;
   
   // Validation
   if (!name || !price) {
-    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro\n- Tài khoản Netflix|100000|Tài khoản Premium');
+    return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả|type\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro|order\n- Tài khoản Netflix|100000|Tài khoản Premium|stock');
   }
   
   // Kiểm tra giá phải là số hợp lệ
@@ -81,16 +84,20 @@ export const adminUpdateProduct = async (bot, msg, productId) => {
     return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
   }
   
-  await updateProduct(productId, { name, price: priceNum, description: description || '' });
+  // Kiểm tra type (nếu có)
+  const productType = (type && (type.toLowerCase() === 'order' || type.toLowerCase() === 'stock')) ? type.toLowerCase() : undefined;
+  
+  await updateProduct(productId, { name, price: priceNum, description: description || '', type: productType });
   await bot.sendMessage(msg.chat.id, `✅ Đã cập nhật sản phẩm.`);
 };
 
 export const adminEditProductPrompt = async (bot, chatId, productId) => {
   const product = await getProduct(productId);
   if (!product) return bot.sendMessage(chatId, 'Không tìm thấy.');
+  const currentType = product.type || 'stock';
   await bot.sendMessage(
     chatId,
-    `Sửa sản phẩm #${productId}. Nhập: tên|giá|mô tả\n\nHiện tại: ${product.name} | ${product.price} | ${product.description || ''}\n\n💡 Lưu ý: Sản phẩm sẽ tự động là "order" nếu không có tài khoản trong kho, "stock" nếu có tài khoản trong kho.`,
+    `Sửa sản phẩm #${productId}. Nhập: tên|giá|mô tả|type\n\nHiện tại: ${product.name} | ${product.price} | ${product.description || ''} | ${currentType}\n\n💡 Lưu ý:\n- type = "order": Sản phẩm order (yêu cầu nhập email/note)\n- type = "stock": Sản phẩm tự động (cần stock > 0 để mua)`,
     { parse_mode: 'Markdown' }
   );
 };

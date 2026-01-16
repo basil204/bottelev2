@@ -1,6 +1,6 @@
 import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr, handleBankSelection } from './handle/handleDeposit.js';
-import { sendProductList, handlePurchase, handleManualOrderInput } from './handle/handleBuy.js';
+import { sendProductList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { showGmailMenu, showGmailQuantityMenu, buyGmailAccount, buyGmailAccountDaily, handleBuyGmailCommand, handleGmailTypeSelection, handleGmailQuantityInput } from './handle/handleGmail.js';
 import { showMailMenu, handleMailTypeSelection, handleMailQuantityInput } from './handle/handleMail.js';
 import { showVipMenu, buyVipPackage, showVipHistory } from './handle/handleVip.js';
@@ -308,8 +308,13 @@ export const registerListeners = (bot, config) => {
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
-    // Kiểm tra xem có đang chờ input quantity cho Gmail sẵn thanh toán không
+    // Kiểm tra xem có đang chờ input quantity không
     if (/^\d+$/.test(text)) {
+      // Kiểm tra input số lượng cho sản phẩm trước
+      const handledProduct = await handleProductQuantityInput(bot, msg, text);
+      if (handledProduct) return; // Đã xử lý input số lượng sản phẩm
+      
+      // Kiểm tra input số lượng cho Gmail sẵn thanh toán
       const { handleGmailEduPTTTQuantityInput } = await import('./handle/handleBuy.js');
       const handledPTTT = await handleGmailEduPTTTQuantityInput(bot, msg, text);
       if (handledPTTT) return; // Đã xử lý input số lượng Gmail sẵn thanh toán

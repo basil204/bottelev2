@@ -45,7 +45,7 @@ const createAccountFile = (accounts) => {
 };
 
 // Mua Gmail account (single) - Tạo mới qua API
-export const buyGmailAccount = async (bot, msg, type, quantity = 1) => {
+export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail = null) => {
   try {
     // Kiểm tra trạng thái bật/tắt
     if (type === 'edu') {
@@ -269,18 +269,29 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1) => {
       
       // Thông báo thêm phương thức thanh toán cho Google Non
       if (type === 'non') {
-        await bot.sendMessage(
-          msg.chat.id,
-          `💳 **HƯỚNG DẪN SỬ DỤNG**\n\n` +
-          `🔐 Để tài khoản Google Non hoạt động tốt nhất:\n\n` +
-          `1️⃣ Đăng nhập vào tài khoản Google vừa nhận\n` +
-          `2️⃣ Truy cập link bên dưới để thêm phương thức thanh toán:\n` +
+        let message = `💳 **HƯỚNG DẪN ĐĂNG NHẬP**\n\n`;
+        
+        if (backupEmail) {
+          message += `📮 Email phụ của bạn: \`${backupEmail}\`\n\n`;
+        }
+        
+        message += `🔐 **Các bước đăng nhập tài khoản Google Non:**\n\n` +
+          `1️⃣ Mở trình duyệt và truy cập: https://accounts.google.com\n` +
+          `2️⃣ Nhập email và password từ thông tin đã nhận\n` +
+          `3️⃣ Nếu yêu cầu xác minh, kiểm tra email phụ: \`${backupEmail || 'email của bạn'}\`\n` +
+          `4️⃣ Sau khi đăng nhập thành công, truy cập link bên dưới để thêm phương thức thanh toán:\n` +
           `🔗 https://play.google.com/store/paymentmethods?utm_source=emea_Med\n\n` +
-          `✨ **Lợi ích:**\n` +
+          `✨ **Lợi ích khi thêm phương thức thanh toán:**\n` +
           `• Tài khoản hoạt động ổn định hơn\n` +
           `• Không bị yêu cầu xác minh thẻ khi sử dụng\n` +
           `• Tránh các vấn đề về thanh toán về sau\n\n` +
-          `💡 **Khuyến nghị:** Thêm phương thức thanh toán ngay sau khi nhận tài khoản!`,
+          `💡 **Lưu ý:**\n` +
+          `• Kiểm tra email phụ để nhận mã xác minh nếu cần\n` +
+          `• Thêm phương thức thanh toán ngay sau khi đăng nhập để tài khoản hoạt động tốt nhất!`;
+        
+        await bot.sendMessage(
+          msg.chat.id,
+          message,
           { parse_mode: 'Markdown' }
         );
       }
@@ -466,6 +477,9 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
 // Map để lưu trạng thái đang chờ input quantity từ user
 const waitingForQuantity = new Map();
 
+// Map để lưu trạng thái đang chờ input email phụ cho Gmail non
+const waitingForNonEmail = new Map();
+
 // Hiển thị menu mua Gmail - chỉ chọn Edu hoặc Non
 export const showGmailMenu = async (bot, chatId) => {
   // Không cần kiểm tra tồn kho vì sẽ tạo mới qua API
@@ -587,8 +601,49 @@ export const handleGmailQuantityInput = async (bot, msg, quantityStr) => {
   
   const type = waitingState.type;
   
-  // Gọi hàm mua account
+  // Nếu là Gmail non, yêu cầu nhập email phụ
+  if (type === 'non') {
+    // Lưu trạng thái đang chờ email phụ
+    waitingForNonEmail.set(userId, { type, quantity, timestamp: Date.now() });
+    await bot.sendMessage(chatId, 
+      `📧 Bạn đã chọn mua **${quantity}** tài khoản Google Non\n\n` +
+      `📮 Vui lòng nhập **email phụ** để nhận hướng dẫn login:\n\n` +
+      `💡 Email phụ sẽ được dùng để gửi hướng dẫn đăng nhập tài khoản Google Non.`,
+      { parse_mode: 'Markdown' }
+    );
+    return true; // Đã xử lý
+  }
+  
+  // Gọi hàm mua account (cho Gmail Edu)
   await buyGmailAccount(bot, msg, type, quantity);
+  return true; // Đã xử lý
+};
+
+// Xử lý input email phụ cho Gmail non
+export const handleNonEmailInput = async (bot, msg, emailStr) => {
+  const userId = msg.from.id;
+  const chatId = msg.chat.id;
+  
+  // Kiểm tra xem user có đang chờ input email phụ không
+  const waitingState = waitingForNonEmail.get(userId);
+  if (!waitingState) {
+    return false; // Không phải input email phụ, bỏ qua
+  }
+  
+  // Xóa trạng thái chờ
+  waitingForNonEmail.delete(userId);
+  
+  // Validate email đơn giản
+  const email = emailStr.trim();
+  if (!email || !email.includes('@')) {
+    await bot.sendMessage(chatId, '❌ Email không hợp lệ. Vui lòng nhập email đúng định dạng (ví dụ: example@gmail.com).');
+    return true; // Đã xử lý (lỗi validation)
+  }
+  
+  const { type, quantity } = waitingState;
+  
+  // Gọi hàm mua account với email phụ
+  await buyGmailAccount(bot, msg, type, quantity, email);
   return true; // Đã xử lý
 };
 

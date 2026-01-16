@@ -308,6 +308,11 @@ export const registerListeners = (bot, config) => {
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
+    // Kiểm tra input email phụ cho Gmail non trước (có thể chứa @)
+    const { handleNonEmailInput } = await import('./handle/handleGmail.js');
+    const handledNonEmail = await handleNonEmailInput(bot, msg, text);
+    if (handledNonEmail) return; // Đã xử lý input email phụ
+    
     // Kiểm tra xem có đang chờ input quantity không
     if (/^\d+$/.test(text)) {
       // Kiểm tra input số lượng cho sản phẩm trước

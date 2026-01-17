@@ -6,7 +6,7 @@ import { showMailMenu, handleMailTypeSelection, handleMailQuantityInput } from '
 import { showVipMenu, buyVipPackage, showVipHistory } from './handle/handleVip.js';
 import { doCheckIn, processReferral } from './controllers/checkinController.js';
 import { showCreditExchangeMenu, exchangeCreditForGmail } from './handle/handleCredit.js';
-import { 
+import {
   adminShowGmailMenu,
   adminCheckAndDeleteNotLoggedIn,
   adminCreateGmailAccount,
@@ -55,11 +55,11 @@ export const registerListeners = (bot, config) => {
   globalConfig = config;
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
-    
+
     // Xử lý referral code nếu có
     const referralCode = match[1] ? match[1].trim() : null;
     let referralSuccess = false;
-    
+
     if (referralCode && referralCode.length > 0) {
       try {
         const referralResult = await processReferral(user.id, referralCode);
@@ -70,13 +70,13 @@ export const registerListeners = (bot, config) => {
         console.error('[REFERRAL] Error processing referral:', error.message);
       }
     }
-    
+
     // Tạo nội dung tin nhắn gộp
     const groupLinks = config.TELEGRAM_GROUP_LINKS || [];
     const credit = user.credit || 0;
-    
+
     let messageText = '';
-    
+
     // Thêm phần chào mừng/ referral
     if (referralSuccess) {
       messageText += `🎉 **Chào mừng bạn đến với bot!**\n\n`;
@@ -86,19 +86,19 @@ export const registerListeners = (bot, config) => {
       messageText += `🎉 **Chào mừng bạn đến với bot!**\n\n`;
       messageText += `👋 Xin chào! Chúng tôi rất vui được phục vụ bạn.\n\n`;
     }
-    
+
     // Thông tin tài khoản
     messageText += `👤 **Thông tin tài khoản:**\n`;
     messageText += `• ID: ${user.telegram_id}\n`;
     messageText += `• Số dư: ${formatCurrency(user.balance)}\n`;
     messageText += `• Credit: ${credit}\n\n`;
-    
+
     // Hướng dẫn sử dụng
     messageText += `💡 **Hướng dẫn sử dụng:**\n`;
     messageText += `• Sử dụng menu bên dưới để điều hướng\n`;
     messageText += `• Nạp tiền để mua sản phẩm\n`;
     messageText += `• Check-in hàng ngày để nhận credit miễn phí\n\n`;
-    
+
     // Thêm link group nếu có
     if (groupLinks.length > 0) {
       messageText += `📢 **Tham gia các group của chúng tôi:**\n`;
@@ -109,10 +109,10 @@ export const registerListeners = (bot, config) => {
       });
       messageText += `\n`;
     }
-    
+
     messageText += `👨‍💼 Liên hệ admin: @nlmsp2025\n\n`;
     messageText += `Chúc bạn có trải nghiệm tuyệt vời! 🚀`;
-    
+
     // Gửi 1 tin nhắn duy nhất kèm menu
     const opts = {
       parse_mode: 'Markdown',
@@ -127,7 +127,7 @@ export const registerListeners = (bot, config) => {
         resize_keyboard: true
       }
     };
-    
+
     await bot.sendMessage(msg.chat.id, messageText, opts);
   });
 
@@ -158,7 +158,7 @@ export const registerListeners = (bot, config) => {
     const { adminParseKmnap, adminListPromotions, adminDeletePromotion } = await import('./handle/handleAdmin.js');
     const text = msg.text.trim();
     const parts = text.split(/\s+/);
-    
+
     // Nếu là lệnh xóa: /kmnap delete <id>
     if (parts.length === 3 && parts[1].toLowerCase() === 'delete') {
       const promotionId = parseInt(parts[2]);
@@ -167,7 +167,7 @@ export const registerListeners = (bot, config) => {
       }
       return adminDeletePromotion(bot, msg.chat.id, promotionId);
     }
-    
+
     // Nếu có tham số thì parse, không thì hiển thị danh sách
     if (text === '/kmnap' || text === '/kmnap list') {
       await adminListPromotions(bot, msg.chat.id);
@@ -180,7 +180,7 @@ export const registerListeners = (bot, config) => {
     const user = await ensureUser(bot, msg);
     const { getUserCredit } = await import('./controllers/creditController.js');
     const { generateReferralCode, getReferralStats, createReferralLink } = await import('./controllers/checkinController.js');
-    
+
     const currentCredit = await getUserCredit(user.id);
     const referralCode = await generateReferralCode(user.id);
     const referralStats = await getReferralStats(user.id);
@@ -192,13 +192,13 @@ export const registerListeners = (bot, config) => {
     }
 
     const message = `📋 Thông tin giới thiệu\n\n` +
-                   `💰 Credit hiện tại: ${currentCredit}\n\n` +
-                   `📊 Thống kê:\n` +
-                   `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
-                   `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
-                   `${referralText}\n\n` +
-                   `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!\n` +
-                   `🎁 Mỗi người join qua link của bạn = +3 credit cho bạn!`;
+      `💰 Credit hiện tại: ${currentCredit}\n\n` +
+      `📊 Thống kê:\n` +
+      `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+      `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+      `${referralText}\n\n` +
+      `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!\n` +
+      `🎁 Mỗi người join qua link của bạn = +3 credit cho bạn!`;
 
     await bot.sendMessage(msg.chat.id, message);
   });
@@ -218,7 +218,7 @@ export const registerListeners = (bot, config) => {
 
     const { getUserCredit } = await import('./controllers/creditController.js');
     const { generateReferralCode, getReferralStats, createReferralLink } = await import('./controllers/checkinController.js');
-    
+
     const currentCredit = await getUserCredit(user.id);
     const referralCode = await generateReferralCode(user.id);
     const referralStats = await getReferralStats(user.id);
@@ -230,13 +230,13 @@ export const registerListeners = (bot, config) => {
     }
 
     const message = `✅ Check-in thành công!\n\n` +
-                   `🎁 Nhận được: 1 Credit\n` +
-                   `💰 Credit hiện tại: ${currentCredit}\n\n` +
-                   `📊 Thống kê:\n` +
-                   `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
-                   `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
-                   `${referralText}\n\n` +
-                   `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
+      `🎁 Nhận được: 1 Credit\n` +
+      `💰 Credit hiện tại: ${currentCredit}\n\n` +
+      `📊 Thống kê:\n` +
+      `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+      `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+      `${referralText}\n\n` +
+      `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
 
     await bot.sendMessage(msg.chat.id, message);
   });
@@ -244,11 +244,11 @@ export const registerListeners = (bot, config) => {
   bot.onText(/^\/buygmail/i, async (msg) => {
     const text = msg.text.trim();
     const parts = text.split(/\s+/);
-    
+
     if (parts.length !== 3) {
       return bot.sendMessage(msg.chat.id, 'Sai cú pháp.\n\nSử dụng:\n/buygmail gmail <số_lượng>\n/buygmail gmailnon <số_lượng>\n\nVí dụ:\n/buygmail gmail 1\n/buygmail gmailnon 1');
     }
-    
+
     const typeStr = parts[1].toLowerCase();
     const quantityStr = parts[2];
     await handleBuyGmailCommand(bot, msg, typeStr, quantityStr);
@@ -286,20 +286,20 @@ export const registerListeners = (bot, config) => {
       const referralCode = await generateReferralCode(user.id);
       const referralStats = await getReferralStats(user.id);
       const referralLink = createReferralLink(config.BOT_USERNAME, referralCode);
-      
+
       let referralText = `🔗 Mã giới thiệu của bạn:\n\`${referralCode}\``;
       if (referralLink) {
         referralText += `\n\n🔗 Link mời:\n${referralLink}`;
       }
-      
+
       const message = `✅ Check-in thành công!\n\n` +
-                     `🎁 Nhận được: 1 Credit\n` +
-                     `💰 Credit hiện tại: ${currentCredit}\n\n` +
-                     `📊 Thống kê:\n` +
-                     `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
-                     `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
-                     `${referralText}\n\n` +
-                     `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
+        `🎁 Nhận được: 1 Credit\n` +
+        `💰 Credit hiện tại: ${currentCredit}\n\n` +
+        `📊 Thống kê:\n` +
+        `• Tổng người giới thiệu: ${referralStats.total_referrals}\n` +
+        `• Credit từ giới thiệu: ${referralStats.total_credits_earned}\n\n` +
+        `${referralText}\n\n` +
+        `💡 Chia sẻ link này để nhận thêm 3 credit mỗi người!`;
       return bot.sendMessage(msg.chat.id, message);
     }
     if (text === '💎 Đổi Credit') return showCreditExchangeMenu(bot, msg.chat.id, user);
@@ -312,26 +312,26 @@ export const registerListeners = (bot, config) => {
     const { handleNonEmailInput } = await import('./handle/handleGmail.js');
     const handledNonEmail = await handleNonEmailInput(bot, msg, text);
     if (handledNonEmail) return; // Đã xử lý input email phụ
-    
+
     // Kiểm tra xem có đang chờ input quantity không
     if (/^\d+$/.test(text)) {
       // Kiểm tra input số lượng cho sản phẩm trước
       const handledProduct = await handleProductQuantityInput(bot, msg, text);
       if (handledProduct) return; // Đã xử lý input số lượng sản phẩm
-      
+
       // Kiểm tra input số lượng cho Gmail sẵn thanh toán
       const { handleGmailEduPTTTQuantityInput } = await import('./handle/handleBuy.js');
       const handledPTTT = await handleGmailEduPTTTQuantityInput(bot, msg, text);
       if (handledPTTT) return; // Đã xử lý input số lượng Gmail sẵn thanh toán
-      
+
       // Thử xử lý như quantity input cho Gmail trước
       const handledGmail = await handleGmailQuantityInput(bot, msg, text);
       if (handledGmail) return; // Đã xử lý, không cần check deposit nữa
-      
+
       // Thử xử lý như quantity input cho Mail
       const handledMail = await handleMailQuantityInput(bot, msg, user);
       if (handledMail) return; // Đã xử lý, không cần check deposit nữa
-      
+
       // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
       return handleDepositAmount(bot, msg, user, config);
     }
@@ -353,13 +353,13 @@ export const registerListeners = (bot, config) => {
         'add_acc': 'admin_add_account',
         'up_acc': 'admin_upload_account'
       };
-      
+
       let action = data.action || data.a;
       // Nếu action là format ngắn, chuyển về format đầy đủ
       if (action && actionMap[action]) {
         action = actionMap[action];
       }
-      
+
       switch (action) {
         case 'products':
           return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE);
@@ -370,6 +370,10 @@ export const registerListeners = (bot, config) => {
           return handlePurchase(bot, query.message, data.productId, query.from);
         case 'select_bank':
           return handleBankSelection(bot, chatId, query.from.id, data.bank);
+        case 'check_payment':
+          const { checkPaymentForUser } = await import('./services/autoDeposit.js');
+          const result = await checkPaymentForUser(bot, query.from.id, config);
+          return bot.sendMessage(chatId, result.message);
         case 'cancel_qr':
           return cancelQr(bot, chatId, query.from);
         case 'user_orders':
@@ -654,12 +658,12 @@ export const registerListeners = (bot, config) => {
           const exchangeType = data.type || data.t;
           const exchangeDuration = data.duration || data.d;
           const exchangeCost = data.cost || data.c;
-          
+
           // Map duration ngắn về đầy đủ
           let mappedDuration = exchangeDuration;
           if (exchangeDuration === 's') mappedDuration = 'single';
           if (exchangeDuration === 'd') mappedDuration = 'daily';
-          
+
           if (exchangeType && mappedDuration && exchangeCost) {
             const msgObj = {
               ...query.message,

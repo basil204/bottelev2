@@ -34,14 +34,14 @@ export const startDepositFlow = async (bot, msg, user, config) => {
       if (existing.token) delCache(contentKey(existing.token));
       await bot.sendMessage(msg.chat.id, 'QR cũ đã hết hạn. Bạn có thể tạo QR mới.');
     } else {
-    const ttlSec = Math.ceil((existing.expiresAt - Date.now()) / 1000);
-    return bot.sendMessage(
-      msg.chat.id,
-      `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`
-    );
+      const ttlSec = Math.ceil((existing.expiresAt - Date.now()) / 1000);
+      return bot.sendMessage(
+        msg.chat.id,
+        `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`
+      );
     }
   }
-  
+
   // Hiển thị menu chọn ngân hàng
   await bot.sendMessage(msg.chat.id, 'Chọn ngân hàng để nạp tiền:', {
     reply_markup: {
@@ -56,7 +56,7 @@ export const startDepositFlow = async (bot, msg, user, config) => {
 export const handleBankSelection = async (bot, chatId, userId, bank) => {
   // Lưu lựa chọn ngân hàng vào cache
   setCache(bankKey(userId), bank, 10 * 60 * 1000); // 10 phút
-  
+
   const bankName = bank === 'mbbank' ? 'MBBank' : 'Timo Bank';
   await bot.sendMessage(chatId, `Đã chọn ${bankName}. Nhập số tiền cần nạp (VNĐ).`);
 };
@@ -73,11 +73,11 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
 
   const amount = Number(msg.text.replace(/\D/g, ''));
   if (!amount || amount <= 0) return bot.sendMessage(msg.chat.id, 'Số tiền không hợp lệ.');
-  
+
   // Kiểm tra xem có pending purchase không (đang mua sản phẩm)
   const purchaseKey = `purchase_${msg.from.id}`;
   const pendingPurchase = getCache(purchaseKey);
-  
+
   // Nếu không có pending purchase, yêu cầu nạp tối thiểu 50k
   const MIN_DEPOSIT_AMOUNT = 50000;
   if (!pendingPurchase && amount < MIN_DEPOSIT_AMOUNT) {
@@ -88,7 +88,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
       `💡 Vui lòng nhập số tiền từ ${formatCurrency(MIN_DEPOSIT_AMOUNT)} trở lên.`
     );
   }
-  
+
   // Nếu có pending purchase, kiểm tra số tiền có đủ để mua sản phẩm không
   if (pendingPurchase) {
     const missingAmount = pendingPurchase.totalPrice - (Number(user.balance) || 0);
@@ -102,18 +102,18 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
       );
     }
   }
-  
+
   // Kiểm tra khuyến mại đang active
   const promotion = await getActivePromotion();
   const promotionResult = calculatePromotedAmount(amount, promotion);
-  
+
   const randomLetters = Array.from({ length: 4 }, () =>
     String.fromCharCode(65 + Math.floor(Math.random() * 26))
   ).join('');
   const randomDigits = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10)).join('');
   const token = `${randomLetters}${randomDigits}`;
   const content = token;
-  
+
   // Sử dụng thông tin ngân hàng đã chọn
   let bankCode, accountNo, accountName;
   if (selectedBank === 'timo') {
@@ -125,7 +125,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     accountNo = config.VIETQR_ACCOUNT_NO;
     accountName = null;
   }
-  
+
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
   const expiresAt = Date.now() + 5 * 60 * 1000;
   const depositId = await createDeposit(user.id, amount);
@@ -141,13 +141,16 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     caption,
     parse_mode: 'Markdown',
     reply_markup: {
-      inline_keyboard: [[{ text: '❌ Huỷ QR', callback_data: createCallbackData({ action: 'cancel_qr' }) }]]
+      inline_keyboard: [
+        [{ text: '✅ Tôi đã chuyển khoản', callback_data: createCallbackData({ action: 'check_payment' }) }],
+        [{ text: '❌ Huỷ QR', callback_data: createCallbackData({ action: 'cancel_qr' }) }]
+      ]
     }
   });
 
   setCache(qrKey(msg.from.id), { depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 5 * 60 * 1000);
   setCache(contentKey(token), { userId: user.id, depositId, amount, expiresAt, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 5 * 60 * 1000);
-  
+
   // Xóa cache bank selection sau khi đã tạo QR
   delCache(bankKey(msg.from.id));
 };
@@ -175,24 +178,24 @@ export const listPendingDeposits = async (bot, chatId, page, pageSize) => {
 export const approveDeposit = async (bot, chatId, depositId, admin) => {
   const deposit = await getDeposit(depositId);
   if (!deposit || deposit.status !== 'pending') return bot.sendMessage(chatId, 'Không hợp lệ.');
-  
+
   // Kiểm tra khuyến mại đang active
   const promotion = await getActivePromotion();
   const promotionResult = calculatePromotedAmount(Number(deposit.amount), promotion);
-  
+
   await updateDepositStatus(depositId, 'approved');
   await updateBalance(deposit.user_id, promotionResult.finalAmount);
-  await addBalanceLog({ 
-    userId: deposit.user_id, 
-    amount: promotionResult.finalAmount, 
-    reason: promotionResult.bonusAmount > 0 ? `deposit+promo_${promotion.id}` : 'deposit', 
-    adminId: admin.id 
+  await addBalanceLog({
+    userId: deposit.user_id,
+    amount: promotionResult.finalAmount,
+    reason: promotionResult.bonusAmount > 0 ? `deposit+promo_${promotion.id}` : 'deposit',
+    adminId: admin.id
   });
-  
+
   // Lấy thông tin user để có số dư mới và telegram_id
   const user = await getUserById(deposit.user_id);
   const finalBalance = Number(user.balance);
-  
+
   // Thông báo cho admin (gửi vào chat hiện tại và thông báo riêng cho tất cả admin)
   let adminMessage = `✅ Đã duyệt nạp #${depositId}.\n💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
   if (promotionResult.bonusAmount > 0) {
@@ -216,17 +219,17 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
       finalBalance: finalBalance
     });
   }
-  
+
   // Thông báo cho user
   try {
     let userMessage = `✅ **Nạp tiền thành công!**\n\n` +
-                     `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
+      `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
     if (promotionResult.bonusAmount > 0) {
       userMessage += `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`;
     }
     userMessage += `\n💵 **Tổng nhận: ${formatCurrency(promotionResult.finalAmount)}**\n` +
-                   `💵 Số dư mới: ${formatCurrency(finalBalance)}\n` +
-                   `📝 Mã giao dịch: #${depositId}`;
+      `💵 Số dư mới: ${formatCurrency(finalBalance)}\n` +
+      `📝 Mã giao dịch: #${depositId}`;
     await bot.sendMessage(Number(user.telegram_id), userMessage, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error(`[APPROVE_DEPOSIT] Không thể gửi thông báo cho user ${user.telegram_id}:`, error.message);

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { getUserByTelegram, updateBalance } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency, createCallbackData } from '../../utils/index.js';
+import { notifyAdminAboutPurchase } from './handleNotify.js';
+import { globalConfig } from '../listen.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +22,7 @@ export const getMailTypes = async () => {
       params: { apikey: MAIL_API_KEY },
       timeout: 10000
     });
-    
+
     if (response.data?.status && response.data?.data) {
       // Chỉ lấy id 5 và 6
       const filtered = response.data.data.filter(item => ALLOWED_ACCOUNT_TYPES.includes(item.id));
@@ -36,18 +38,18 @@ export const getMailTypes = async () => {
 export const showMailMenu = async (bot, chatId) => {
   try {
     const mailTypes = await getMailTypes();
-    
+
     if (mailTypes.length === 0) {
       return bot.sendMessage(chatId, '❌ Không thể lấy danh sách mail. Vui lòng thử lại sau.');
     }
-    
+
     const inline_keyboard = mailTypes.map((type) => [
       {
         text: `${type.name} - ${formatCurrency(type.price * 2)} (còn ${type.quality})`,
         callback_data: createCallbackData({ a: 'mail_sel', t: type.id, p: type.price })
       }
     ]);
-    
+
     await bot.sendMessage(
       chatId,
       '📧 **Chọn loại mail:**',
@@ -69,23 +71,23 @@ export const handleMailTypeSelection = async (bot, chatId, userId, accountType, 
     if (!user) {
       return bot.sendMessage(chatId, 'Vui lòng /start để tạo tài khoản.');
     }
-    
+
     // Lấy lại thông tin mail type để có name
     const mailTypes = await getMailTypes();
     const selectedType = mailTypes.find(t => t.id === accountType);
     if (!selectedType) {
       return bot.sendMessage(chatId, '❌ Loại mail không hợp lệ.');
     }
-    
+
     // Tính giá bán (API price * 2)
     const sellPrice = apiPrice * 2;
-    
+
     await bot.sendMessage(
       chatId,
       `📧 **${selectedType.name}**\n\n💰 Giá: ${formatCurrency(sellPrice)}/tài khoản\n\nNhập số lượng cần mua (1-100):`,
       { parse_mode: 'Markdown' }
     );
-    
+
     // Lưu state để xử lý input số lượng
     const { getCache, setCache } = await import('../../lib/cache/index.js');
     const mailStateKey = `mail_state_${userId}`;
@@ -102,28 +104,28 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
     const { getCache, delCache } = await import('../../lib/cache/index.js');
     const mailStateKey = `mail_state_${msg.from.id}`;
     const state = getCache(mailStateKey);
-    
+
     if (!state) {
       return false; // Không có state, bỏ qua
     }
-    
+
     const quantity = parseInt(msg.text);
     if (isNaN(quantity) || quantity < 1 || quantity > 100) {
       return bot.sendMessage(msg.chat.id, '❌ Số lượng không hợp lệ. Vui lòng nhập số từ 1 đến 100.');
     }
-    
+
     const { accountType, name, apiPrice, sellPrice } = state;
     const totalPrice = sellPrice * quantity;
-    
+
     // Lấy lại số dư mới nhất trước khi kiểm tra để đảm bảo chính xác
     const currentUser = await getUserByTelegram(msg.from.id);
     if (!currentUser) {
       delCache(mailStateKey);
       return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy user. Vui lòng /start để tạo tài khoản.');
     }
-    
+
     const currentBalance = Number(currentUser.balance) || 0;
-    
+
     // Kiểm tra số dư
     if (currentBalance < totalPrice) {
       return bot.sendMessage(
@@ -135,23 +137,23 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
         { parse_mode: 'Markdown' }
       );
     }
-    
+
     // Xóa state
     delCache(mailStateKey);
-    
+
     // Thông báo đang mua
     await bot.sendMessage(msg.chat.id, `⏳ Đang mua ${quantity} tài khoản ${name}...`);
-    
+
     // Gọi API mua
     const result = await buyMailFromAPI(accountType, quantity);
-    
+
     if (!result || !result.success) {
       return bot.sendMessage(
         msg.chat.id,
         `❌ Không thể mua mail. ${result?.message || 'Vui lòng thử lại sau.'}`
       );
     }
-    
+
     // Trừ tiền (đã kiểm tra số dư ở trên)
     await updateBalance(currentUser.id, -totalPrice);
     await addBalanceLog({
@@ -160,36 +162,51 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
       reason: `buy_mail_${accountType}_${quantity}`,
       adminId: null
     });
-    
+
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      const updatedUser = await getUserByTelegram(currentUser.telegram_id);
+      notifyAdminAboutPurchase(bot, adminIds, {
+        orderId: result.data.order_code || 'MAIL_API',
+        productName: `Mail ${name}`,
+        username: currentUser.username,
+        telegramId: currentUser.telegram_id,
+        quantity: quantity,
+        price: totalPrice,
+        finalBalance: Number(updatedUser.balance)
+      });
+    }
+
     // Không tạo order vì mail không có product_id (orders table yêu cầu product_id NOT NULL)
     // Thông tin đã được log vào balance_logs
-    
+
     // Parse accounts từ list_data
     const accounts = parseMailAccounts(result.data.list_data);
-    
+
     // Tạo file tạm thời
     console.log(`[BUY_MAIL] Đang tạo file tài khoản...`);
     const fileContent = createMailAccountFile(accounts);
     const fileName = `mail_${accountType}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
-    
+
     // Đảm bảo thư mục temp tồn tại
     const tempDir = path.dirname(tempFilePath);
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-    
+
     // Ghi file tạm thời
     fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-    
+
     try {
       // Gửi file từ đường dẫn
       const caption = `✅ **Mua mail thành công!**\n\n` +
-                     `📧 Loại: ${name}\n` +
-                     `📦 Số lượng: ${quantity}\n` +
-                     `💰 Tổng tiền: ${formatCurrency(totalPrice)}\n` +
-                     `📝 Mã đơn: ${result.data.order_code}`;
-      
+        `📧 Loại: ${name}\n` +
+        `📦 Số lượng: ${quantity}\n` +
+        `💰 Tổng tiền: ${formatCurrency(totalPrice)}\n` +
+        `📝 Mã đơn: ${result.data.order_code}`;
+
       await bot.sendDocument(msg.chat.id, tempFilePath, {
         caption: caption,
         parse_mode: 'Markdown'
@@ -212,9 +229,9 @@ export const handleMailQuantityInput = async (bot, msg, user) => {
         fs.unlinkSync(tempFilePath);
       }
     }
-    
+
     return true; // Đã xử lý thành công
-    
+
   } catch (error) {
     console.error('[HANDLE_MAIL_QUANTITY_INPUT] Lỗi:', error);
     await bot.sendMessage(msg.chat.id, '❌ Có lỗi xảy ra khi mua mail. Vui lòng thử lại sau.');
@@ -234,11 +251,11 @@ const buyMailFromAPI = async (accountType, quantity) => {
       },
       timeout: 30000
     });
-    
+
     if (response.data?.status && response.data?.error_code === 200) {
       return { success: true, data: response.data.data };
     }
-    
+
     return {
       success: false,
       message: response.data?.message || 'Không thể mua mail'
@@ -272,7 +289,7 @@ const parseMailAccounts = (listData) => {
   if (!Array.isArray(listData)) {
     return [];
   }
-  
+
   return listData.map((item) => {
     // Format: email|password|cookie|recoveryId
     const parts = item.split('|');

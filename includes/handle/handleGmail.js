@@ -1,5 +1,5 @@
 import { getUserByTelegram, updateBalance } from '../controllers/userController.js';
-import { 
+import {
   createGmailAccountForSale,
   getAvailableDomains
 } from '../controllers/gmailAccountController.js';
@@ -16,6 +16,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import { getGmailPrice } from '../controllers/gmailPricingController.js';
+import { notifyAdminAboutPurchase } from './handleNotify.js';
+import { globalConfig } from '../listen.js';
 
 // Tính giá dựa trên số lượng và loại (lấy từ database)
 const calculatePrice = async (type, duration, quantity) => {
@@ -52,7 +54,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     if (!gmailBuyEnabled) {
       return bot.sendMessage(msg.chat.id, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
     }
-    
+
     // Kiểm tra trạng thái bật/tắt
     if (type === 'edu') {
       const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
@@ -65,7 +67,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
         return bot.sendMessage(msg.chat.id, '❌ Dịch vụ mua Google Non hiện đang tạm dừng. Vui lòng thử lại sau.');
       }
     }
-    
+
     const user = await getUserByTelegram(msg.from.id);
     if (!user) {
       return bot.sendMessage(msg.chat.id, 'Vui lòng /start để tạo tài khoản.');
@@ -74,10 +76,10 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     // Kiểm tra VIP package - chỉ áp dụng cho Gmail Edu (type === 'edu')
     const vipPackage = await getActiveVipPackage(user.id);
     const useVipPackage = vipPackage && type === 'edu' && (vipPackage.used_gmail + quantity <= vipPackage.total_gmail);
-    
+
     let price = 0;
     let paymentMethod = 'balance'; // 'vip' or 'balance'
-    
+
     if (useVipPackage) {
       // Sử dụng VIP package (chỉ cho Gmail Edu)
       paymentMethod = 'vip';
@@ -85,7 +87,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     } else {
       // Nếu không có VIP hoặc đã hết quota, tính giá bình thường
       price = await calculatePrice(type, 'single', quantity);
-      
+
       // Kiểm tra giá hợp lệ
       if (price === null || price === undefined || isNaN(price) || price <= 0) {
         console.error(`[BUY_GMAIL] Giá không hợp lệ: ${price} cho type: ${type}, quantity: ${quantity}`);
@@ -95,7 +97,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
       // Kiểm tra số dư - lấy lại user để đảm bảo số dư chính xác
       const currentUser = await getUserByTelegram(msg.from.id);
       const currentBalance = Number(currentUser.balance) || 0;
-      
+
       if (currentBalance < price) {
         // Hiển thị thông tin VIP nếu đang mua Gmail Edu và có VIP package
         const remaining = (vipPackage && type === 'edu') ? (vipPackage.total_gmail - vipPackage.used_gmail) : 0;
@@ -122,7 +124,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     // Google Non: random domain cho mỗi account
     const accounts = [];
     const password = 'Vietcombank9338739954';
-    
+
     for (let i = 0; i < quantity; i++) {
       // Gmail Edu: dùng domain đầu tiên (index 0)
       // Google Non: random domain
@@ -152,7 +154,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
         email: result.email,
         password: result.password
       });
-      
+
       // Delay nhỏ để tránh rate limit
       if (i < quantity - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -177,7 +179,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
           console.error(`[BUY_GMAIL] ❌ VIP package không còn đủ quota. Đã tạo ${accounts.length} account nhưng không thể thanh toán.`);
           return bot.sendMessage(msg.chat.id, `❌ Lỗi: Gói VIP không còn đủ quota. Vui lòng thử lại hoặc thanh toán bằng số dư.`);
         }
-        
+
         // Trừ VIP quota cho từng account
         for (const account of accounts) {
           await incrementVipUsage(vipPackage.id, account.email);
@@ -196,6 +198,22 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
           adminId: null
         });
         console.log(`[BUY_GMAIL] ✅ Đã trừ tiền: ${formatCurrency(price)}`);
+
+        // Notify admins
+        const adminIds = globalConfig?.ADMIN_IDS || [];
+        if (adminIds.length > 0) {
+          // Lấy lại user để có số dư mới
+          const updatedUser = await getUserByTelegram(msg.from.id);
+          notifyAdminAboutPurchase(bot, adminIds, {
+            orderId: 'GMAIL_API',
+            productName: `Gmail ${type} (${quantity})`,
+            username: user.username,
+            telegramId: user.telegram_id,
+            quantity: quantity,
+            price: price,
+            finalBalance: Number(updatedUser.balance)
+          });
+        }
       }
     } catch (error) {
       console.error(`[BUY_GMAIL] ❌ Lỗi khi thanh toán:`, error);
@@ -207,17 +225,17 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     const fileContent = createAccountFile(accounts);
     const fileName = `gmail_${type}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
-    
+
     // Đảm bảo thư mục temp tồn tại
     const tempDir = path.dirname(tempFilePath);
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-    
+
     // Ghi file tạm thời
     fs.writeFileSync(tempFilePath, fileContent, 'utf8');
     console.log(`[BUY_GMAIL] ✅ Đã tạo file: ${tempFilePath}`);
-    
+
     try {
       // Gửi file từ đường dẫn
       console.log(`[BUY_GMAIL] Đang gửi file tài khoản...`);
@@ -233,12 +251,12 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
         caption += `💰 Giá: ${formatCurrency(price)}\n`;
       }
       caption += `📧 Số lượng: ${quantity} account(s)`;
-      
+
       await bot.sendDocument(msg.chat.id, tempFilePath, {
         caption: caption
       });
       console.log(`[BUY_GMAIL] ✅ Đã gửi file tài khoản thành công`);
-      
+
       // Thông báo thêm phương thức thanh toán cho Google Non
       if (type === 'non') {
         await bot.sendMessage(
@@ -272,15 +290,15 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
       }
       messageText += `\n📧 Thông tin tài khoản:\n\`\`\`\n${accountText}\n\`\`\``;
       await bot.sendMessage(msg.chat.id, messageText, { parse_mode: 'Markdown' });
-      
+
       // Thông báo thêm phương thức thanh toán cho Google Non
       if (type === 'non') {
         let message = `💳 **HƯỚNG DẪN ĐĂNG NHẬP**\n\n`;
-        
+
         if (backupEmail) {
           message += `📮 Email phụ của bạn: \`${backupEmail}\`\n\n`;
         }
-        
+
         message += `🔐 **Các bước đăng nhập tài khoản Google Non:**\n\n` +
           `1️⃣ Mở trình duyệt và truy cập: https://accounts.google.com\n` +
           `2️⃣ Nhập email và password từ thông tin đã nhận\n` +
@@ -294,7 +312,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
           `💡 **Lưu ý:**\n` +
           `• Kiểm tra email phụ để nhận mã xác minh nếu cần\n` +
           `• Thêm phương thức thanh toán ngay sau khi đăng nhập để tài khoản hoạt động tốt nhất!`;
-        
+
         await bot.sendMessage(
           msg.chat.id,
           message,
@@ -331,7 +349,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
     if (!gmailBuyEnabled) {
       return bot.sendMessage(msg.chat.id, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
     }
-    
+
     // Kiểm tra trạng thái bật/tắt
     if (type === 'edu') {
       const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
@@ -344,14 +362,14 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
         return bot.sendMessage(msg.chat.id, '❌ Dịch vụ mua Google Non hiện đang tạm dừng. Vui lòng thử lại sau.');
       }
     }
-    
+
     const user = await getUserByTelegram(msg.from.id);
     if (!user) {
       return bot.sendMessage(msg.chat.id, 'Vui lòng /start để tạo tài khoản.');
     }
 
     const price = await calculatePrice(type, 'daily', quantity);
-    
+
     // Kiểm tra giá hợp lệ
     if (price === null || price === undefined || isNaN(price) || price <= 0) {
       console.error(`[BUY_GMAIL_DAILY] Giá không hợp lệ: ${price} cho type: ${type}, quantity: ${quantity}`);
@@ -361,7 +379,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
     // Kiểm tra số dư - lấy lại user để đảm bảo số dư chính xác
     const currentUser = await getUserByTelegram(msg.from.id);
     const currentBalance = Number(currentUser.balance) || 0;
-    
+
     if (currentBalance < price) {
       return bot.sendMessage(msg.chat.id, `❌ Số dư không đủ!\n\n💵 Cần: ${formatCurrency(price)}\n💰 Bạn có: ${formatCurrency(currentBalance)}`);
     }
@@ -383,7 +401,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
     // Google Non: random domain cho mỗi account
     const accounts = [];
     const password = 'Vietcombank9338739954';
-    
+
     for (let i = 0; i < quantity; i++) {
       // Gmail Edu: dùng domain đầu tiên (index 0)
       // Google Non: random domain
@@ -412,7 +430,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
         email: result.email,
         password: result.password
       });
-      
+
       // Delay nhỏ để tránh rate limit
       if (i < quantity - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -435,28 +453,44 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
     });
     console.log(`[BUY_GMAIL_DAILY] ✅ Đã trừ tiền: ${formatCurrency(price)}`);
 
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      // Lấy lại user để có số dư mới
+      const updatedUser = await getUserByTelegram(msg.from.id);
+      notifyAdminAboutPurchase(bot, adminIds, {
+        orderId: 'GMAIL_API_DAILY',
+        productName: `Gmail ${type} Daily (${quantity})`,
+        username: user.username,
+        telegramId: user.telegram_id,
+        quantity: quantity,
+        price: price,
+        finalBalance: Number(updatedUser.balance)
+      });
+    }
+
     // Tạo file tạm thời
     const fileContent = createAccountFile(accounts);
     const fileName = `gmail_${type}_daily_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
-    
+
     // Đảm bảo thư mục temp tồn tại
     const tempDir = path.dirname(tempFilePath);
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-    
+
     // Ghi file tạm thời
     fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-    
+
     try {
       // Gửi file từ đường dẫn
       await bot.sendDocument(msg.chat.id, tempFilePath, {
         caption: `✅ Mua thành công ${quantity} tài khoản ${type === 'edu' ? 'Gmail Edu' : 'Google Non'} (1 ngày)\n` +
-                 `💰 Giá: ${formatCurrency(price)}\n` +
-                 `📧 Số lượng: ${quantity} account(s)`
+          `💰 Giá: ${formatCurrency(price)}\n` +
+          `📧 Số lượng: ${quantity} account(s)`
       });
-      
+
       // Thông báo thêm phương thức thanh toán cho Google Non
       if (type === 'non') {
         await bot.sendMessage(
@@ -499,7 +533,7 @@ export const showGmailMenu = async (bot, chatId) => {
   if (!gmailBuyEnabled) {
     return bot.sendMessage(chatId, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
   }
-  
+
   // Không cần kiểm tra tồn kho vì sẽ tạo mới qua API
   const eduCount = 'Unlimited';
   const nonCount = 'Unlimited';
@@ -507,7 +541,7 @@ export const showGmailMenu = async (bot, chatId) => {
   // Lấy giá từ database
   const eduPrice = await getGmailPrice('edu', 'single', 1);
   const nonPrice = await getGmailPrice('non', 'single', 1);
-  
+
   // Kiểm tra trạng thái bật/tắt
   const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
   const nonEnabled = await getSettingBoolean('gmail_non_enabled', true);
@@ -533,19 +567,19 @@ Chọn loại tài khoản bạn muốn mua:`;
   const keyboard = {
     inline_keyboard: [
       [
-        { 
-          text: `📧 Gmail Edu${eduEnabled ? '' : ' (Tạm dừng)'}`, 
+        {
+          text: `📧 Gmail Edu${eduEnabled ? '' : ' (Tạm dừng)'}`,
           callback_data: createCallbackData({ a: 'gmail_select_type', t: 'edu' })
         },
-        { 
-          text: `🌐 Google Non${nonEnabled ? '' : ' (Tạm dừng)'}`, 
+        {
+          text: `🌐 Google Non${nonEnabled ? '' : ' (Tạm dừng)'}`,
           callback_data: createCallbackData({ a: 'gmail_select_type', t: 'non' })
         }
       ]
     ]
   };
 
-  await bot.sendMessage(chatId, menuText, { 
+  await bot.sendMessage(chatId, menuText, {
     reply_markup: keyboard,
     parse_mode: 'Markdown'
   });
@@ -558,7 +592,7 @@ export const handleGmailTypeSelection = async (bot, chatId, userId, type) => {
   if (!gmailBuyEnabled) {
     return bot.sendMessage(chatId, '❌ Chức năng mua Gmail hiện đang tạm dừng. Vui lòng thử lại sau.');
   }
-  
+
   // Kiểm tra trạng thái bật/tắt
   if (type === 'edu') {
     const eduEnabled = await getSettingBoolean('gmail_edu_enabled', true);
@@ -571,11 +605,11 @@ export const handleGmailTypeSelection = async (bot, chatId, userId, type) => {
       return bot.sendMessage(chatId, '❌ Dịch vụ mua Google Non hiện đang tạm dừng. Vui lòng thử lại sau.');
     }
   }
-  
+
   const typeName = type === 'edu' ? 'Gmail Edu' : 'Google Non';
   // Lấy giá từ database
   const pricePerAccount = await getGmailPrice(type, 'single', 1);
-  
+
   // Thông tin bảo hành chi tiết
   let warrantyInfo = '';
   if (type === 'edu') {
@@ -589,11 +623,11 @@ export const handleGmailTypeSelection = async (bot, chatId, userId, type) => {
 • Bảo hành: Live 24h, không login 72h
 • ✅ Cam kết add thẻ không bị verify`;
   }
-  
+
   // Lưu trạng thái đang chờ input quantity
   waitingForQuantity.set(userId, { type, timestamp: Date.now() });
-  
-  await bot.sendMessage(chatId, 
+
+  await bot.sendMessage(chatId,
     `📧 Bạn đã chọn: **${typeName}**\n\n` +
     `💰 Giá: ${formatCurrency(pricePerAccount)} / 1 account\n\n` +
     `${warrantyInfo}\n\n` +
@@ -606,30 +640,30 @@ export const handleGmailTypeSelection = async (bot, chatId, userId, type) => {
 export const handleGmailQuantityInput = async (bot, msg, quantityStr) => {
   const userId = msg.from.id;
   const chatId = msg.chat.id;
-  
+
   // Kiểm tra xem user có đang chờ input quantity không
   const waitingState = waitingForQuantity.get(userId);
   if (!waitingState) {
     return false; // Không phải input quantity, bỏ qua
   }
-  
+
   // Xóa trạng thái chờ
   waitingForQuantity.delete(userId);
-  
+
   // Parse quantity
   const quantity = parseInt(quantityStr.trim(), 10);
   if (isNaN(quantity) || quantity < 1) {
     await bot.sendMessage(chatId, '❌ Số lượng không hợp lệ. Vui lòng nhập số nguyên dương (ví dụ: 1, 2, 5, 10).');
     return true; // Đã xử lý (lỗi validation)
   }
-  
+
   const type = waitingState.type;
-  
+
   // Nếu là Gmail non, yêu cầu nhập email phụ
   if (type === 'non') {
     // Lưu trạng thái đang chờ email phụ
     waitingForNonEmail.set(userId, { type, quantity, timestamp: Date.now() });
-    await bot.sendMessage(chatId, 
+    await bot.sendMessage(chatId,
       `📧 Bạn đã chọn mua **${quantity}** tài khoản Google Non\n\n` +
       `📮 Vui lòng nhập **email phụ** để nhận hướng dẫn login:\n\n` +
       `💡 Email phụ sẽ được dùng để gửi hướng dẫn đăng nhập tài khoản Google Non.`,
@@ -637,7 +671,7 @@ export const handleGmailQuantityInput = async (bot, msg, quantityStr) => {
     );
     return true; // Đã xử lý
   }
-  
+
   // Gọi hàm mua account (cho Gmail Edu)
   await buyGmailAccount(bot, msg, type, quantity);
   return true; // Đã xử lý
@@ -647,25 +681,25 @@ export const handleGmailQuantityInput = async (bot, msg, quantityStr) => {
 export const handleNonEmailInput = async (bot, msg, emailStr) => {
   const userId = msg.from.id;
   const chatId = msg.chat.id;
-  
+
   // Kiểm tra xem user có đang chờ input email phụ không
   const waitingState = waitingForNonEmail.get(userId);
   if (!waitingState) {
     return false; // Không phải input email phụ, bỏ qua
   }
-  
+
   // Xóa trạng thái chờ
   waitingForNonEmail.delete(userId);
-  
+
   // Validate email đơn giản
   const email = emailStr.trim();
   if (!email || !email.includes('@')) {
     await bot.sendMessage(chatId, '❌ Email không hợp lệ. Vui lòng nhập email đúng định dạng (ví dụ: example@gmail.com).');
     return true; // Đã xử lý (lỗi validation)
   }
-  
+
   const { type, quantity } = waitingState;
-  
+
   // Gọi hàm mua account với email phụ
   await buyGmailAccount(bot, msg, type, quantity, email);
   return true; // Đã xử lý

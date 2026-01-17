@@ -11,6 +11,8 @@ import { getActivePromotion, calculatePromotedAmount } from '../controllers/depo
 import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
 import { deleteQrMessage } from '../handle/handleDeposit.js';
+import { notifyAdminAboutDeposit } from '../handle/handleNotify.js';
+import { globalConfig } from '../listen.js';
 
 const processedKey = (ref) => `tx_${ref}`;
 const qrKey = (telegramId) => `qr_${telegramId}`;
@@ -216,6 +218,21 @@ const processMBTransaction = async (bot, tx, cached, user, promotion) => {
       `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
       `\n📝 Ref: ${ref}`;
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
+
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      notifyAdminAboutDeposit(bot, adminIds, {
+        depositId: cached.depositId || 'AUTO', // auto deposit might not have ID yet if created via createDepositWithStatus but we can use ref
+        username: user.username,
+        telegramId: user.telegram_id,
+        originalAmount: promotionResult.originalAmount,
+        bonusAmount: promotionResult.bonusAmount,
+        bonusPercentage: promotion?.bonus_percentage || 0,
+        finalAmount: promotionResult.finalAmount,
+        finalBalance: finalBalance
+      });
+    }
   } catch (err) {
     // Error handling without logging
   }
@@ -312,6 +329,21 @@ const processTimoTransaction = async (bot, item, cached, user, promotion) => {
       `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
       `\n📝 Ref: ${ref}`;
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
+
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      notifyAdminAboutDeposit(bot, adminIds, {
+        depositId: cached.depositId || 'AUTO',
+        username: user.username,
+        telegramId: user.telegram_id,
+        originalAmount: promotionResult.originalAmount,
+        bonusAmount: promotionResult.bonusAmount,
+        bonusPercentage: promotion?.bonus_percentage || 0,
+        finalAmount: promotionResult.finalAmount,
+        finalBalance: finalBalance
+      });
+    }
   } catch (err) {
     // Error handling without logging
   }

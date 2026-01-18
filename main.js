@@ -7,33 +7,7 @@ import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
 import { startGmailAutoDeleteChecker, startGmailLoginChecker, startEduAccountsDailyCleanup } from './includes/services/gmailAutoDelete.js';
 
-dotenv.config();
-
-const configPath = path.join(process.cwd(), 'config.json');
-const fileConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath)) : {};
-
-const config = {
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || fileConfig.TELEGRAM_BOT_TOKEN,
-  DB_HOST: process.env.DB_HOST || fileConfig.DB_HOST,
-  DB_NAME: process.env.DB_NAME || fileConfig.DB_NAME,
-  DB_USER: process.env.DB_USER || fileConfig.DB_USER,
-  DB_PASS: process.env.DB_PASS || fileConfig.DB_PASS,
-  VIETQR_ACCOUNT_NO: process.env.VIETQR_ACCOUNT_NO || fileConfig.VIETQR_ACCOUNT_NO,
-  VIETQR_BANK_CODE: process.env.VIETQR_BANK_CODE || fileConfig.VIETQR_BANK_CODE,
-  ADMIN_IDS: process.env.ADMIN_IDS ? JSON.parse(process.env.ADMIN_IDS) : fileConfig.ADMIN_IDS || [],
-  NOTIFY_MODE: process.env.NOTIFY_MODE || fileConfig.NOTIFY_MODE || 'all',
-  PAGE_SIZE: Number(process.env.PAGE_SIZE || fileConfig.PAGE_SIZE || 10),
-  MB_API_URL: process.env.MB_API_URL || fileConfig.MB_API_URL,
-  MB_CHECK_INTERVAL: Number(process.env.MB_CHECK_INTERVAL || fileConfig.MB_CHECK_INTERVAL || 20000),
-  TIMO_API_URL: process.env.TIMO_API_URL || fileConfig.TIMO_API_URL,
-  TIMO_BANK_CODE: process.env.TIMO_BANK_CODE || fileConfig.TIMO_BANK_CODE,
-  TIMO_ACCOUNT_NO: process.env.TIMO_ACCOUNT_NO || fileConfig.TIMO_ACCOUNT_NO,
-  TIMO_ACCOUNT_NAME: process.env.TIMO_ACCOUNT_NAME || fileConfig.TIMO_ACCOUNT_NAME,
-  TELEGRAM_GROUP_LINKS: fileConfig.TELEGRAM_GROUP_LINKS || [
-    { name: 'Group thông báo và chat', url: 'https://t.me/+SFp6Gttq18VmYThl' }
-  ],
-  NOTIFICATION_CHAT_ID: process.env.NOTIFICATION_CHAT_ID || fileConfig.NOTIFICATION_CHAT_ID || null
-};
+import { config } from './config.js';
 
 if (!config.TELEGRAM_BOT_TOKEN) {
   console.error('Missing TELEGRAM_BOT_TOKEN');
@@ -44,7 +18,7 @@ const bootstrap = async () => {
   await initDb(config);
 
   const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
-  
+
   // Lấy bot info để có username
   try {
     const botInfo = await bot.getMe();
@@ -53,7 +27,7 @@ const bootstrap = async () => {
   } catch (error) {
     console.error('⚠️  Could not get bot info:', error.message);
   }
-  
+
   registerListeners(bot, config);
   startQrExpirationChecker(bot); // Always start QR expiration checker
   startAutoDepositWatcher(bot, config);

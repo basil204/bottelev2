@@ -18,6 +18,7 @@ const __dirname = path.dirname(__filename);
 import { getGmailPrice } from '../controllers/gmailPricingController.js';
 import { notifyAdminAboutPurchase } from './handleNotify.js';
 import { globalConfig } from '../listen.js';
+import { config } from '../../config.js';
 
 // Tính giá dựa trên số lượng và loại (lấy từ database)
 const calculatePrice = async (type, duration, quantity) => {
@@ -123,7 +124,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     // Gmail Edu: chỉ dùng domain index 0
     // Google Non: random domain cho mỗi account
     const accounts = [];
-    const password = 'Vietcombank9338739954';
+    const password = config.GMAIL_DEFAULT_PASSWORD;
 
     for (let i = 0; i < quantity; i++) {
       // Gmail Edu: dùng domain đầu tiên (index 0)
@@ -400,7 +401,7 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
     // Gmail Edu: chỉ dùng domain index 0
     // Google Non: random domain cho mỗi account
     const accounts = [];
-    const password = 'Vietcombank9338739954';
+    const password = config.GMAIL_DEFAULT_PASSWORD;
 
     for (let i = 0; i < quantity; i++) {
       // Gmail Edu: dùng domain đầu tiên (index 0)

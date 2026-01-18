@@ -18,7 +18,7 @@ const SCOPES = [
 ];
 
 /**
- * Đọc credentials từ file
+ * Đọc credentials từ file (để lấy client_id/secret)
  */
 function loadCredentials() {
   try {
@@ -33,18 +33,37 @@ function loadCredentials() {
 }
 
 /**
- * Lưu token vào file
+ * Lấy token hiện tại từ DB
  */
-function saveToken(token) {
+async function getExistingToken() {
   try {
-    // Tạo thư mục nếu chưa có
-    const tokenDir = path.dirname(TOKEN_PATH);
-    if (!fs.existsSync(tokenDir)) {
-      fs.mkdirSync(tokenDir, { recursive: true });
+    const [row] = await query('SELECT token FROM google_tokens WHERE type = ?', ['non']);
+    if (row && row.token) {
+      return JSON.parse(row.token);
     }
-    
-    fs.writeFileSync(TOKEN_PATH, JSON.stringify(token, null, 2));
-    console.log('✅ Đã lưu token vào:', TOKEN_PATH);
+  } catch (err) {
+    console.error('Error reading token from DB:', err.message);
+  }
+  return null;
+}
+
+import { initDb, query } from './includes/database/index.js';
+import { config } from './config.js';
+
+// Khởi tạo DB
+await initDb(config);
+
+/**
+ * Lưu token vào database
+ */
+async function saveToken(token) {
+  try {
+    await query(`
+      INSERT INTO google_tokens (type, token)
+      VALUES ('non', ?)
+      ON DUPLICATE KEY UPDATE token = VALUES(token)
+    `, [JSON.stringify(token, null, 2)]);
+    console.log('✅ Đã lưu token vào Database (type: non)');
   } catch (error) {
     console.error('❌ Lỗi khi lưu token:', error.message);
     process.exit(1);
@@ -67,23 +86,35 @@ async function authorize() {
 
   // Kiểm tra nếu đã có token
   try {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-    oAuth2Client.setCredentials(token);
-    
-    // Test token bằng cách lấy thông tin user
-    console.log('✅ Đã tìm thấy token hiện tại. Đang kiểm tra...');
-    
-    try {
-      const admin = google.admin({ version: 'directory_v1', auth: oAuth2Client });
-      // Test API call
-      await admin.domains.list({ customer: 'my_customer' });
-      console.log('✅ Token hiện tại vẫn còn hiệu lực!');
-      return;
-    } catch (error) {
-      console.log('⚠️ Token đã hết hạn hoặc không hợp lệ. Đang lấy token mới...');
+    const token = await getExistingToken();
+    if (token) {
+      oAuth2Client.setCredentials(token);
+
+      // Test token bằng cách lấy thông tin user
+      console.log('✅ Đã tìm thấy token hiện tại trong DB. Đang kiểm tra...');
+
+      try {
+        const admin = google.admin({ version: 'directory_v1', auth: oAuth2Client });
+        // Test API call
+        await admin.domains.list({ customer: 'my_customer' });
+        console.log('✅ Token hiện tại vẫn còn hiệu lực!');
+        // Update credentials if valid? No need, it's just a check. 
+        // But if we want to ensure client_credentials are in DB too:
+        const credsContent = fs.readFileSync(CREDENTIALS_PATH, 'utf8');
+        await query(`
+          INSERT INTO google_tokens (type, client_credentials) VALUES ('non', ?)
+          ON DUPLICATE KEY UPDATE client_credentials = VALUES(client_credentials)
+        `, [credsContent]);
+
+        return;
+      } catch (error) {
+        console.log('⚠️ Token đã hết hạn hoặc không hợp lệ. Đang lấy token mới...');
+      }
+    } else {
+      console.log('📝 Chưa có token trong DB. Đang bắt đầu quá trình đăng nhập...');
     }
   } catch (error) {
-    console.log('📝 Chưa có token. Đang bắt đầu quá trình đăng nhập...');
+    console.log('📝 Lỗi check token:', error.message);
   }
 
   // Tạo URL authorization
@@ -100,11 +131,11 @@ async function authorize() {
   console.log('3. Cho phép quyền truy cập');
   console.log('4. Copy authorization code từ URL (code=...)');
   console.log('   Ví dụ: URL có dạng http://localhost:5000/oauth2callback?code=4/0AeanS...\n');
-  
+
   // Thử mở browser tự động
   try {
     const { exec } = await import('child_process');
-    
+
     // Windows
     if (process.platform === 'win32') {
       exec(`start "" "${authUrl}"`, (error) => {
@@ -153,7 +184,7 @@ async function authorize() {
       }
 
       // Lưu token
-      saveToken(tokens);
+      await saveToken(tokens);
 
       console.log('\n✅ Đăng nhập thành công!');
       console.log('📝 Token đã được lưu vào:', TOKEN_PATH);

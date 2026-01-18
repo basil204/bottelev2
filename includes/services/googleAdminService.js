@@ -7,30 +7,29 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load credentials và tokens
-const loadCredentials = (type) => {
-  const clientSecretFile = type === 'edu' 
-    ? path.join(process.cwd(), 'TokenGGW', 'client_secret.json')
-    : path.join(process.cwd(), 'TokenGGW', 'client_secret-v2.json');
-  
-  const tokenFile = type === 'edu'
-    ? path.join(process.cwd(), 'TokenGGW', 'token.json')
-    : path.join(process.cwd(), 'TokenGGW', 'token-v2.json');
+import { query } from '../database/index.js';
 
-  const credentials = JSON.parse(fs.readFileSync(clientSecretFile, 'utf8'));
-  let token = null;
-  
+// Load credentials và tokens từ database
+const loadCredentials = async (type) => {
   try {
-    token = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
-  } catch (err) {
-    console.error(`Error loading token file: ${err.message}`);
-  }
+    const [row] = await query('SELECT * FROM google_tokens WHERE type = ?', [type]);
+    if (!row) {
+      console.warn(`[GOOGLE_API] No credentials found in DB for type: ${type}`);
+      return { credentials: null, token: null };
+    }
 
-  return { credentials, token, tokenFile };
+    const credentials = row.client_credentials ? JSON.parse(row.client_credentials) : null;
+    const token = row.token ? JSON.parse(row.token) : null;
+
+    return { credentials, token };
+  } catch (err) {
+    console.error(`Error loading credentials from DB: ${err.message}`);
+    return { credentials: null, token: null };
+  }
 };
 
 // Refresh access token
-const refreshAccessToken = async (credentials, refreshToken, tokenFile) => {
+const refreshAccessToken = async (credentials, refreshToken, type) => {
   try {
     const clientId = credentials.web.client_id;
     const clientSecret = credentials.web.client_secret;
@@ -43,18 +42,26 @@ const refreshAccessToken = async (credentials, refreshToken, tokenFile) => {
       grant_type: 'refresh_token'
     });
 
-    const newToken = {
+    const newTokenData = {
       access_token: response.data.access_token,
-      refresh_token: refreshToken,
+      refresh_token: refreshToken, // Keep old refresh token
       scope: response.data.scope,
       token_type: response.data.token_type || 'Bearer',
       expiry_date: Date.now() + (response.data.expires_in * 1000)
     };
 
-    // Lưu token mới
-    fs.writeFileSync(tokenFile, JSON.stringify(newToken, null, 2));
-    
-    return newToken.access_token;
+    // Update token in DB
+    // First retrieve current token to merge if needed (though we rebuild it here)
+    // Actually we should just update the token column
+
+    // Nếu API trả về refresh_token mới (thường không, nhưng đề phòng)
+    if (response.data.refresh_token) {
+      newTokenData.refresh_token = response.data.refresh_token;
+    }
+
+    await query('UPDATE google_tokens SET token = ? WHERE type = ?', [JSON.stringify(newTokenData, null, 2), type]);
+
+    return newTokenData.access_token;
   } catch (error) {
     console.error('Error refreshing token:', error.message);
     throw error;
@@ -63,8 +70,12 @@ const refreshAccessToken = async (credentials, refreshToken, tokenFile) => {
 
 // Get authenticated client
 const getAuthenticatedClient = async (type) => {
-  const { credentials, token, tokenFile } = loadCredentials(type);
-  
+  const { credentials, token } = await loadCredentials(type);
+
+  if (!credentials) {
+    throw new Error(`No credentials found for type: ${type}`);
+  }
+
   const oauth2Client = new google.auth.OAuth2(
     credentials.web.client_id,
     credentials.web.client_secret,
@@ -77,17 +88,17 @@ const getAuthenticatedClient = async (type) => {
 
   // Check if token is expired
   if (token.expiry_date && token.expiry_date < Date.now()) {
-    console.log('Token expired, refreshing...');
+    console.log(`Token (${type}) expired, refreshing...`);
     if (token.refresh_token) {
-      const newAccessToken = await refreshAccessToken(credentials, token.refresh_token, tokenFile);
+      const newAccessToken = await refreshAccessToken(credentials, token.refresh_token, type);
       token.access_token = newAccessToken;
-      token.expiry_date = Date.now() + (3600 * 1000); // 1 hour
-      fs.writeFileSync(tokenFile, JSON.stringify(token, null, 2));
+      token.expiry_date = Date.now() + (3600 * 1000); // 1 hour approximation if not updated in obj
+      // Note: refreshAccessToken already updates DB
     }
   }
 
   oauth2Client.setCredentials(token);
-  
+
   return { auth: oauth2Client, token };
 };
 
@@ -275,7 +286,7 @@ export const sendSignInInstructions = async (email, recoveryEmail, type) => {
     });
 
     console.log(`[GOOGLE_API] ✅ Đã cập nhật recovery email cho ${email}. Google sẽ gửi sign-in instructions đến ${recoveryEmail}`);
-    
+
     return {
       success: true,
       message: `Sign-in instructions đã được gửi đến ${recoveryEmail}`

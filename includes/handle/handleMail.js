@@ -8,11 +8,13 @@ import { formatCurrency, createCallbackData } from '../../utils/index.js';
 import { notifyAdminAboutPurchase } from './handleNotify.js';
 import { globalConfig } from '../listen.js';
 
+import { config } from '../../config.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const MAIL_API_KEY = 'uJ5ktBJ19znIA77z709JaQnlN';
-const MAIL_API_BASE = 'https://api.dongvanfb.net';
+const MAIL_API_KEY = config.MAIL_API_KEY || 'uJ5ktBJ19znIA77z709JaQnlN'; // Fallback for safety during migration, but ideally should be env only
+const MAIL_API_BASE = config.MAIL_API_BASE;
 const ALLOWED_ACCOUNT_TYPES = [5, 6]; // Chỉ lấy Hotmail TRUSTED và Outlook TRUSTED
 
 // Lấy danh sách loại mail từ API

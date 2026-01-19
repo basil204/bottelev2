@@ -2,6 +2,8 @@ import { getUserCredit, deductCredit } from '../controllers/creditController.js'
 import { getAvailableAccount, markAccountSold } from '../controllers/gmailAccountController.js';
 import { createOrder } from '../controllers/orderController.js';
 import { formatCurrency, createCallbackData } from '../../utils/index.js';
+import { notifyAdminAboutExchange } from './handleNotify.js';
+import { globalConfig } from '../listen.js';
 import { checkAccountLoginStatus, scheduleAccountDeletion } from '../services/gmailAutoDelete.js';
 import fs from 'fs';
 import path from 'path';
@@ -13,25 +15,25 @@ const __dirname = path.dirname(__filename);
 // Hiển thị menu đổi credit
 export const showCreditExchangeMenu = async (bot, chatId, user) => {
   const credit = await getUserCredit(user.id);
-  
+
   const message = `💎 **Đổi Credit**\n\n` +
-                 `💰 Credit hiện tại: **${credit}**\n\n` +
-                 `📋 **Bảng giá:**\n` +
-                 `• 🎓 Gmail Edu 1 giờ: **2 Credit**\n` +
-                 `• 🌐 Gmail Non 1 ngày: **10 Credit**\n\n` +
-                 `💡 Chọn loại bạn muốn đổi:`;
+    `💰 Credit hiện tại: **${credit}**\n\n` +
+    `📋 **Bảng giá:**\n` +
+    `• 🎓 Gmail Edu 1 giờ: **2 Credit**\n` +
+    `• 🌐 Gmail Non 1 ngày: **10 Credit**\n\n` +
+    `💡 Chọn loại bạn muốn đổi:`;
 
   // Sử dụng format ngắn để tránh vượt quá 64 bytes
   const inline_keyboard = [
     [
-      { 
-        text: '🎓 Gmail Edu 1h (2 Credit)', 
+      {
+        text: '🎓 Gmail Edu 1h (2 Credit)',
         callback_data: JSON.stringify({ a: 'ex_cr', t: 'edu', d: 's', c: 2 })
       }
     ],
     [
-      { 
-        text: '🌐 Gmail Non 1 ngày (10 Credit)', 
+      {
+        text: '🌐 Gmail Non 1 ngày (10 Credit)',
         callback_data: JSON.stringify({ a: 'ex_cr', t: 'non', d: 'd', c: 10 })
       }
     ]
@@ -91,15 +93,27 @@ export const exchangeCreditForGmail = async (bot, msg, user, type, duration, cos
 
     // Gửi thông tin account
     const accountInfo = `✅ **Đổi credit thành công!**\n\n` +
-                       `🎁 Loại: ${type === 'edu' ? 'Gmail Edu' : 'Gmail Non'}\n` +
-                       `⏰ Thời hạn: ${duration === 'single' ? '1 giờ' : '1 ngày'}\n` +
-                       `💎 Đã trừ: ${cost} Credit\n` +
-                       `💰 Credit còn lại: ${deductResult.remainingCredit}\n\n` +
-                       `📧 **Thông tin tài khoản:**\n` +
-                       `Email: \`${account.email}\`\n` +
-                       `Password: \`${account.password}\``;
+      `🎁 Loại: ${type === 'edu' ? 'Gmail Edu' : 'Gmail Non'}\n` +
+      `⏰ Thời hạn: ${duration === 'single' ? '1 giờ' : '1 ngày'}\n` +
+      `💎 Đã trừ: ${cost} Credit\n` +
+      `💰 Credit còn lại: ${deductResult.remainingCredit}\n\n` +
+      `📧 **Thông tin tài khoản:**\n` +
+      `Email: \`${account.email}\`\n` +
+      `Password: \`${account.password}\``;
 
     await bot.sendMessage(msg.chat.id, accountInfo, { parse_mode: 'Markdown' });
+
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      notifyAdminAboutExchange(bot, adminIds, {
+        productName: `Gmail ${type === 'edu' ? 'Edu' : 'Non'} (${duration === 'single' ? '1h' : '1 ngày'})`,
+        username: user.username,
+        telegramId: user.telegram_id,
+        cost: cost,
+        remainingCredit: deductResult.remainingCredit
+      });
+    }
 
     // Gửi file text nếu cần
     try {

@@ -2,6 +2,8 @@ import { getUserByTelegram, updateBalance } from '../controllers/userController.
 import { createVipPackage, getActiveVipPackage, getUserVipPackages } from '../controllers/vipPackageController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
+import { notifyAdminAboutPurchase } from './handleNotify.js';
+import { globalConfig } from '../listen.js';
 
 const VIP_PACKAGE_PRICE = 200000; // 200k
 const VIP_PACKAGE_GMAIL_COUNT = 400;
@@ -11,28 +13,28 @@ const VIP_PACKAGE_DURATION_DAYS = 30; // 1 tháng
 export const showVipMenu = async (bot, chatId, user) => {
   // Kiểm tra gói VIP đang active
   const activePackage = await getActiveVipPackage(user.id);
-  
+
   let packageInfo = '';
   if (activePackage) {
     const remaining = activePackage.total_gmail - activePackage.used_gmail;
     const expiresAt = new Date(activePackage.expires_at);
     const daysLeft = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-    
+
     packageInfo = `\n\n✅ **Gói VIP hiện tại:**\n` +
-                 `📧 Đã dùng: ${activePackage.used_gmail}/${activePackage.total_gmail} Gmail\n` +
-                 `📊 Còn lại: ${remaining} Gmail\n` +
-                 `⏰ Hết hạn sau: ${daysLeft} ngày`;
+      `📧 Đã dùng: ${activePackage.used_gmail}/${activePackage.total_gmail} Gmail\n` +
+      `📊 Còn lại: ${remaining} Gmail\n` +
+      `⏰ Hết hạn sau: ${daysLeft} ngày`;
   } else {
     packageInfo = `\n\n❌ Chưa có gói VIP đang active`;
   }
-  
+
   const menuText = `⭐ **GÓI VIP**\n\n` +
-                   `💰 Giá: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
-                   `📧 Bao gồm: ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts\n` +
-                   `⏰ Hạn sử dụng: ${VIP_PACKAGE_DURATION_DAYS} ngày\n\n` +
-                   `💡 Khi mua gói VIP, bạn có thể tạo ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts miễn phí trong ${VIP_PACKAGE_DURATION_DAYS} ngày.\n` +
-                   `⚠️ Lưu ý: Gói VIP chỉ áp dụng cho Gmail Edu, không áp dụng cho Google Non.` +
-                   packageInfo;
+    `💰 Giá: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
+    `📧 Bao gồm: ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts\n` +
+    `⏰ Hạn sử dụng: ${VIP_PACKAGE_DURATION_DAYS} ngày\n\n` +
+    `💡 Khi mua gói VIP, bạn có thể tạo ${VIP_PACKAGE_GMAIL_COUNT} Gmail Edu accounts miễn phí trong ${VIP_PACKAGE_DURATION_DAYS} ngày.\n` +
+    `⚠️ Lưu ý: Gói VIP chỉ áp dụng cho Gmail Edu, không áp dụng cho Google Non.` +
+    packageInfo;
 
   const keyboard = {
     inline_keyboard: [
@@ -42,7 +44,7 @@ export const showVipMenu = async (bot, chatId, user) => {
     ]
   };
 
-  await bot.sendMessage(chatId, menuText, { 
+  await bot.sendMessage(chatId, menuText, {
     reply_markup: keyboard,
     parse_mode: 'Markdown'
   });
@@ -62,7 +64,7 @@ export const buyVipPackage = async (bot, msg, user) => {
       const remaining = activePackage.total_gmail - activePackage.used_gmail;
       const expiresAt = new Date(activePackage.expires_at);
       const daysLeft = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-      
+
       return bot.sendMessage(
         msg.chat.id,
         `❌ Bạn đã có gói VIP đang active!\n\n` +
@@ -78,9 +80,9 @@ export const buyVipPackage = async (bot, msg, user) => {
     if (!currentUser) {
       return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy user. Vui lòng /start để tạo tài khoản.');
     }
-    
+
     const currentBalance = Number(currentUser.balance) || 0;
-    
+
     // Kiểm tra số dư
     if (currentBalance < VIP_PACKAGE_PRICE) {
       return bot.sendMessage(
@@ -102,7 +104,7 @@ export const buyVipPackage = async (bot, msg, user) => {
 
     // Trừ tiền (đã kiểm tra số dư ở trên)
     await updateBalance(currentUser.id, -VIP_PACKAGE_PRICE);
-    
+
     // Thêm balance log
     await addBalanceLog({
       userId: currentUser.id,
@@ -118,15 +120,29 @@ export const buyVipPackage = async (bot, msg, user) => {
     }
     const finalBalance = Number(updatedUser.balance);
 
+    // Notify admins
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      notifyAdminAboutPurchase(bot, adminIds, {
+        orderId: `VIP_${vipPackage.id}`,
+        productName: `Gói VIP (${VIP_PACKAGE_GMAIL_COUNT} Gmail)`,
+        username: updatedUser.username,
+        telegramId: updatedUser.telegram_id,
+        quantity: 1,
+        price: VIP_PACKAGE_PRICE,
+        finalBalance: finalBalance
+      });
+    }
+
     const expiresAt = new Date(vipPackage.expires_at);
     const message = `✅ **Mua gói VIP thành công!**\n\n` +
-                   `💰 Đã thanh toán: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
-                   `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
-                   `📧 Gói VIP:\n` +
-                   `• Số lượng: ${VIP_PACKAGE_GMAIL_COUNT} Gmail accounts\n` +
-                   `• Hạn sử dụng: ${expiresAt.toLocaleDateString('vi-VN')}\n` +
-                   `• Trạng thái: Active\n\n` +
-                   `💡 Bây giờ bạn có thể mua Gmail mà không cần trả tiền (tối đa ${VIP_PACKAGE_GMAIL_COUNT} accounts).`;
+      `💰 Đã thanh toán: ${formatCurrency(VIP_PACKAGE_PRICE)}\n` +
+      `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
+      `📧 Gói VIP:\n` +
+      `• Số lượng: ${VIP_PACKAGE_GMAIL_COUNT} Gmail accounts\n` +
+      `• Hạn sử dụng: ${expiresAt.toLocaleDateString('vi-VN')}\n` +
+      `• Trạng thái: Active\n\n` +
+      `💡 Bây giờ bạn có thể mua Gmail mà không cần trả tiền (tối đa ${VIP_PACKAGE_GMAIL_COUNT} accounts).`;
 
     await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
 

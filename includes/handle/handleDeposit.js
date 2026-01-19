@@ -167,9 +167,65 @@ export const listPendingDeposits = async (bot, chatId, page, pageSize) => {
       inline_keyboard: [
         ...buildPaginationKeyboard({ action: 'admin_deposits', page }, page, hasPrev, hasNext),
         ...rows.map((d) => [
+          { text: `🔄 Check`, callback_data: createCallbackData({ action: 'check_deposit', id: d.id }) },
           { text: `✅ ${d.id}`, callback_data: createCallbackData({ action: 'approve_deposit', id: d.id }) },
           { text: `❌ ${d.id}`, callback_data: createCallbackData({ action: 'reject_deposit', id: d.id }) }
-        ])
+        ]),
+        [{ text: '📜 Lịch sử', callback_data: createCallbackData({ action: 'admin_deposit_history', page: 1 }) }]
+      ]
+    }
+  });
+};
+
+export const checkDepositStatus = async (bot, chatId, depositId, adminId) => {
+  const deposit = await getDeposit(depositId);
+  if (!deposit) return bot.sendMessage(chatId, 'Không tìm thấy yêu cầu nạp.');
+  if (deposit.status !== 'pending') return bot.sendMessage(chatId, `Yêu cầu này đang ở trạng thái: ${deposit.status}`);
+
+  // Thử check qua autoDeposit service (checkPaymentForUser)
+  // Logic này yêu cầu user phải có QR cache đang active
+  const { checkPaymentForUser } = await import('../services/autoDeposit.js');
+  // Lấy user từ deposit
+  const user = await getUserById(deposit.user_id);
+  if (!user) return bot.sendMessage(chatId, 'User không tồn tại.');
+
+  // Check payment
+  // Lưu ý: checkPaymentForUser sử dụng user.id để tìm cache QR
+  // Nếu admin check, ta cần giả lập hoặc gọi hàm check
+  const result = await checkPaymentForUser(bot, user.id, globalConfig); // globalConfig cần được import hoặc pass vào
+
+  if (result.success) {
+    await bot.sendMessage(chatId, `✅ Đã check thành công: ${result.message}`);
+    // Refresh list?
+  } else {
+    await bot.sendMessage(chatId, `⚠️ Check thất bại: ${result.message}\n(Có thể QR đã hết hạn cache hoặc chưa có giao dịch khớp)`);
+  }
+};
+
+export const listDepositHistory = async (bot, chatId, page, pageSize) => {
+  const offset = (page - 1) * pageSize;
+  // Custom query for history (non-pending)
+  const { query } = await import('../database/index.js');
+  const [rows] = await query(
+    'SELECT d.*, u.telegram_id FROM deposits d JOIN users u ON u.id = d.user_id WHERE d.status != "pending" ORDER BY d.id DESC LIMIT ? OFFSET ?',
+    [pageSize, offset]
+  );
+  const [{ total }] = await query('SELECT COUNT(*) as total FROM deposits WHERE status != "pending"');
+
+  if (!rows.length) return bot.sendMessage(chatId, 'Không có lịch sử nạp tiền.');
+  const lines = rows.map((d) => {
+    const statusEmoji = d.status === 'approved' ? '✅' : '❌';
+    return `${statusEmoji} #${d.id} | ${d.telegram_id} | ${formatCurrency(d.amount)} | ${d.created_at}`;
+  });
+
+  const hasPrev = page > 1;
+  const hasNext = offset + rows.length < total;
+
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        ...buildPaginationKeyboard({ action: 'admin_deposit_history', page }, page, hasPrev, hasNext),
+        [{ text: '⬅️ Quay lại DS chờ', callback_data: createCallbackData({ action: 'admin_deposits' }) }]
       ]
     }
   });

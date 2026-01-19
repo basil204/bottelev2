@@ -44,7 +44,7 @@ import {
   adminDeleteAccount,
   adminDeleteAccountsByStatus
 } from './handle/handleAdmin.js';
-import { listPendingDeposits, approveDeposit, rejectDeposit } from './handle/handleDeposit.js';
+import { listPendingDeposits, approveDeposit, rejectDeposit, checkDepositStatus, listDepositHistory } from './handle/handleDeposit.js';
 import { addBalanceLog } from './controllers/balanceLogController.js';
 import { createCallbackData, formatCurrency } from '../utils/index.js';
 
@@ -451,6 +451,12 @@ export const registerListeners = (bot, config) => {
         case 'admin_deposits':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return listPendingDeposits(bot, chatId, data.page || 1, config.PAGE_SIZE);
+        case 'admin_deposit_history':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          return listDepositHistory(bot, chatId, data.page || 1, config.PAGE_SIZE);
+        case 'check_deposit':
+          if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          return checkDepositStatus(bot, chatId, data.id, query.from.id);
         case 'approve_deposit':
           if (!requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return approveDeposit(bot, chatId, data.id, query.from);

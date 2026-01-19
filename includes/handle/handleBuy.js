@@ -212,7 +212,8 @@ export const handlePurchase = async (bot, msg, productId, fromUser) => {
       telegramId: user.telegram_id,
       quantity: 1,
       price: productPrice,
-      finalBalance: finalBalance
+      finalBalance: finalBalance,
+      accounts: [account] // Pass single account as array
     });
   }
 };
@@ -628,7 +629,8 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
         telegramId: user.telegram_id,
         quantity: quantity,
         price: totalPrice,
-        finalBalance: finalBalance
+        finalBalance: finalBalance,
+        accounts: purchasedAccounts // Pass account list
       });
     }
 
@@ -793,7 +795,8 @@ export const handleBuyGmailEduPTTT = async (bot, msg, quantity = 1) => {
         telegramId: user.telegram_id,
         quantity: quantity,
         price: totalPrice,
-        finalBalance: finalBalance
+        finalBalance: finalBalance,
+        accounts: purchasedAccounts // Pass account list
       });
     }
 

@@ -130,7 +130,7 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
       return;
     }
 
-    const message = `🛒 **MUA HÀNG THÀNH CÔNG**\n\n` +
+    let message = `🛒 **MUA HÀNG THÀNH CÔNG**\n\n` +
       `🆔 Mã đơn: #${purchaseInfo.orderId || 'N/A'}\n` +
       `🎁 Sản phẩm: ${purchaseInfo.productName}\n` +
       `👤 User: ${purchaseInfo.username || purchaseInfo.telegramId}\n` +
@@ -138,6 +138,24 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
       `📦 Số lượng: ${purchaseInfo.quantity}\n` +
       `💰 Giá: ${formatCurrency(purchaseInfo.price)}\n` +
       `💵 Số dư sau mua: ${formatCurrency(purchaseInfo.finalBalance)}`;
+
+    // Nếu có thông tin tài khoản, hiển thị thêm
+    if (purchaseInfo.accounts) {
+      message += `\n\n📋 **CHI TIẾT TÀI KHOẢN:**\n`;
+      if (Array.isArray(purchaseInfo.accounts)) {
+        // Nếu là array object {username/email, password, ...}
+        const accountList = purchaseInfo.accounts.map(acc => {
+          const user = acc.username || acc.email;
+          const pass = acc.password;
+          const twofa = acc.twofa ? ` | 2FA: ${acc.twofa}` : '';
+          return `• \`${user}\` | \`${pass}\`${twofa}`;
+        }).join('\n');
+        message += accountList;
+      } else if (typeof purchaseInfo.accounts === 'string') {
+        // Nếu đã là string format sẵn
+        message += purchaseInfo.accounts;
+      }
+    }
 
     let successCount = 0;
     let failCount = 0;
@@ -183,6 +201,11 @@ export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
 
     message += `\n💵 Tổng nhận: ${formatCurrency(depositInfo.finalAmount)}` +
       `\n💵 Số dư mới: ${formatCurrency(depositInfo.finalBalance)}`;
+
+    // Thêm mã tham chiếu ngân hàng nếu có
+    if (depositInfo.transactionRef) {
+      message += `\n📝 Ref: \`${depositInfo.transactionRef}\``;
+    }
 
     let successCount = 0;
     let failCount = 0;

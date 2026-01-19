@@ -170,6 +170,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     }
 
     // Thanh toán: Trừ tiền hoặc trừ VIP quota (sau khi tạo account thành công)
+    let finalBalance = 0;
     try {
       if (paymentMethod === 'vip' && vipPackage) {
         // Kiểm tra lại VIP quota trước khi trừ
@@ -189,6 +190,10 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
         const [updatedPkg] = await query('SELECT * FROM vip_packages WHERE id = ?', [vipPackage.id]);
         const remaining = updatedPkg ? (updatedPkg.total_gmail - updatedPkg.used_gmail) : 0;
         console.log(`[BUY_GMAIL] ✅ Đã sử dụng ${quantity} quota từ VIP package (còn ${remaining}/${vipPackage.total_gmail})`);
+
+        // Lấy balance hiện tại để hiển thị
+        const userNow = await getUserByTelegram(msg.from.id);
+        finalBalance = Number(userNow.balance);
       } else {
         // Trừ tiền từ balance (đã kiểm tra số dư trước khi tạo account)
         await updateBalance(user.id, -price);
@@ -202,9 +207,10 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
 
         // Notify admins
         const adminIds = globalConfig?.ADMIN_IDS || [];
+        const updatedUser = await getUserByTelegram(msg.from.id);
+        finalBalance = Number(updatedUser.balance);
+
         if (adminIds.length > 0) {
-          // Lấy lại user để có số dư mới
-          const updatedUser = await getUserByTelegram(msg.from.id);
           notifyAdminAboutPurchase(bot, adminIds, {
             orderId: 'GMAIL_API',
             productName: `Gmail ${type} (${quantity})`,
@@ -212,124 +218,125 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
             telegramId: user.telegram_id,
             quantity: quantity,
             price: price,
-            finalBalance: Number(updatedUser.balance)
+            finalBalance: finalBalance,
+            accounts: accounts // Pass account details
           });
         }
       }
     } catch (error) {
       console.error(`[BUY_GMAIL] ❌ Lỗi khi thanh toán:`, error);
-      // Vẫn tiếp tục gửi file dù có lỗi thanh toán
+      // Vẫn tiếp tục gửi thông tin tài khoản dù có lỗi thanh toán (log lại để xử lý sau nếu cần)
     }
 
-    // Tạo file tạm thời
-    console.log(`[BUY_GMAIL] Đang tạo file tài khoản...`);
-    const fileContent = createAccountFile(accounts);
-    const fileName = `gmail_${type}_${quantity}_${Date.now()}.txt`;
-    const tempFilePath = path.join(__dirname, '../../temp', fileName);
+    // Xử lý hiển thị kết quả
+    if (quantity === 1) {
+      // Trường hợp mua 1 account: Hiển thị dạng Receipt đẹp
+      const account = accounts[0];
+      const orderId = `PUR${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Đảm bảo thư mục temp tồn tại
-    const tempDir = path.dirname(tempFilePath);
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+      let message = `✅ **MUA ${type === 'edu' ? 'GMAIL EDU' : 'GOOGLE NON'} THÀNH CÔNG!**\n\n` +
+        `🆔 Mã đơn hàng: \`${orderId}\`\n` +
+        `📧 Số lượng: ${quantity} Gmail (1 giờ)\n`;
 
-    // Ghi file tạm thời
-    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-    console.log(`[BUY_GMAIL] ✅ Đã tạo file: ${tempFilePath}`);
-
-    try {
-      // Gửi file từ đường dẫn
-      console.log(`[BUY_GMAIL] Đang gửi file tài khoản...`);
-      // Tạo caption với thông tin VIP
-      let caption = `✅ Mua thành công ${quantity} tài khoản ${type === 'edu' ? 'Gmail Edu' : 'Google Non'}\n`;
-      if (paymentMethod === 'vip' && vipPackage) {
-        // Lấy lại VIP package để có số liệu chính xác
-        const { query } = await import('../database/index.js');
-        const [updatedPkg] = await query('SELECT * FROM vip_packages WHERE id = ?', [vipPackage.id]);
-        const remaining = updatedPkg ? (updatedPkg.total_gmail - updatedPkg.used_gmail) : 0;
-        caption += `📦 Sử dụng gói VIP (còn ${remaining}/${vipPackage.total_gmail})\n`;
+      if (paymentMethod === 'vip') {
+        // Lấy lại VIP package (ước lượng)
+        const remaining = vipPackage ? (vipPackage.total_gmail - vipPackage.used_gmail - quantity) : 0;
+        message += `📦 Thanh toán: VIP Package (Còn ${remaining})\n`;
       } else {
-        caption += `💰 Giá: ${formatCurrency(price)}\n`;
+        message += `💰 Đã thanh toán: ${formatCurrency(price)}\n` +
+          `💵 Số dư còn lại: ${formatCurrency(finalBalance)}\n`;
       }
-      caption += `📧 Số lượng: ${quantity} account(s)`;
 
-      await bot.sendDocument(msg.chat.id, tempFilePath, {
-        caption: caption
-      });
-      console.log(`[BUY_GMAIL] ✅ Đã gửi file tài khoản thành công`);
+      message += `⏰ Thời hạn: ${type === 'edu' ? '1 giờ (Login)' : '24 giờ (Login)'}\n\n` +
+        `📧 **THÔNG TIN GMAIL:**\n` +
+        `📧 Email: \`${account.email}\`\n` +
+        `🔑 Mật khẩu: \`${account.password}\`\n\n`;
 
-      // Thông báo thêm phương thức thanh toán cho Google Non
-      if (type === 'non') {
-        await bot.sendMessage(
-          msg.chat.id,
-          `💳 **HƯỚNG DẪN SỬ DỤNG**\n\n` +
-          `🔐 Để tài khoản Google Non hoạt động tốt nhất:\n\n` +
-          `1️⃣ Đăng nhập vào tài khoản Google vừa nhận\n` +
-          `2️⃣ Truy cập link bên dưới để thêm phương thức thanh toán:\n` +
-          `🔗 https://play.google.com/store/paymentmethods?utm_source=emea_Med\n\n` +
-          `✨ **Lợi ích:**\n` +
-          `• Tài khoản hoạt động ổn định hơn\n` +
-          `• Không bị yêu cầu xác minh thẻ khi sử dụng\n` +
-          `• Tránh các vấn đề về thanh toán về sau\n\n` +
-          `💡 **Khuyến nghị:** Thêm phương thức thanh toán ngay sau khi nhận tài khoản!`,
-          { parse_mode: 'Markdown' }
-        );
-      }
-    } catch (sendError) {
-      console.error(`[BUY_GMAIL] ❌ Lỗi khi gửi file:`, sendError);
-      // Nếu không gửi được file, gửi thông tin account qua text
-      const accountText = accounts.map(acc => `${acc.email}|${acc.password}`).join('\n');
-      let messageText = `✅ Mua thành công ${quantity} tài khoản ${type === 'edu' ? 'Gmail Edu' : 'Google Non'}\n`;
-      if (paymentMethod === 'vip' && vipPackage) {
-        // Lấy lại VIP package để có số liệu chính xác
-        const { query } = await import('../database/index.js');
-        const [updatedPkg] = await query('SELECT * FROM vip_packages WHERE id = ?', [vipPackage.id]);
-        const remaining = updatedPkg ? (updatedPkg.total_gmail - updatedPkg.used_gmail) : 0;
-        messageText += `📦 Sử dụng gói VIP (còn ${remaining}/${vipPackage.total_gmail})\n`;
+      // Hướng dẫn login hoặc lưu ý
+      if (type === 'edu') {
+        message += `⚠️ **Lưu ý:**\n` +
+          `• Login ngay để kiểm tra tài khoản.\n` +
+          `• Chỉ bảo hành login trong 1 giờ.\n`;
       } else {
-        messageText += `💰 Giá: ${formatCurrency(price)}\n`;
+        message += `⚠️ **Lưu ý:**\n` +
+          `• Login ngay để kiểm tra tài khoản.\n` +
+          `• Nên thêm phương thức thanh toán ngay để tài khoản ổn định nhất.\n`;
       }
-      messageText += `\n📧 Thông tin tài khoản:\n\`\`\`\n${accountText}\n\`\`\``;
-      await bot.sendMessage(msg.chat.id, messageText, { parse_mode: 'Markdown' });
 
-      // Thông báo thêm phương thức thanh toán cho Google Non
-      if (type === 'non') {
-        let message = `💳 **HƯỚNG DẪN ĐĂNG NHẬP**\n\n`;
+      await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
 
-        if (backupEmail) {
-          message += `📮 Email phụ của bạn: \`${backupEmail}\`\n\n`;
-        }
+    } else {
+      // Trường hợp mua nhiều: Gửi file như cũ
+      // Tạo file tạm thời
+      console.log(`[BUY_GMAIL] Đang tạo file tài khoản...`);
+      const fileContent = createAccountFile(accounts);
+      const fileName = `gmail_${type}_${quantity}_${Date.now()}.txt`;
+      const tempFilePath = path.join(__dirname, '../../temp', fileName);
 
-        message += `🔐 **Các bước đăng nhập tài khoản Google Non:**\n\n` +
-          `1️⃣ Mở trình duyệt và truy cập: https://accounts.google.com\n` +
-          `2️⃣ Nhập email và password từ thông tin đã nhận\n` +
-          `3️⃣ Nếu yêu cầu xác minh, kiểm tra email phụ: \`${backupEmail || 'email của bạn'}\`\n` +
-          `4️⃣ Sau khi đăng nhập thành công, truy cập link bên dưới để thêm phương thức thanh toán:\n` +
-          `🔗 https://play.google.com/store/paymentmethods?utm_source=emea_Med\n\n` +
-          `✨ **Lợi ích khi thêm phương thức thanh toán:**\n` +
-          `• Tài khoản hoạt động ổn định hơn\n` +
-          `• Không bị yêu cầu xác minh thẻ khi sử dụng\n` +
-          `• Tránh các vấn đề về thanh toán về sau\n\n` +
-          `💡 **Lưu ý:**\n` +
-          `• Kiểm tra email phụ để nhận mã xác minh nếu cần\n` +
-          `• Thêm phương thức thanh toán ngay sau khi đăng nhập để tài khoản hoạt động tốt nhất!`;
-
-        await bot.sendMessage(
-          msg.chat.id,
-          message,
-          { parse_mode: 'Markdown' }
-        );
+      // Đảm bảo thư mục temp tồn tại
+      const tempDir = path.dirname(tempFilePath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
       }
-    } finally {
-      // Xóa file tạm thời sau khi gửi
+
+      // Ghi file tạm thời
+      fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+      console.log(`[BUY_GMAIL] ✅ Đã tạo file: ${tempFilePath}`);
+
       try {
-        if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-          console.log(`[BUY_GMAIL] ✅ Đã xóa file tạm: ${tempFilePath}`);
+        // Gửi file từ đường dẫn
+        console.log(`[BUY_GMAIL] Đang gửi file tài khoản...`);
+        // Tạo caption với thông tin VIP
+        let caption = `✅ Mua thành công ${quantity} tài khoản ${type === 'edu' ? 'Gmail Edu' : 'Google Non'}\n`;
+        if (paymentMethod === 'vip' && vipPackage) {
+          // Lấy lại VIP package để có số liệu chính xác
+          const { query } = await import('../database/index.js');
+          const [updatedPkg] = await query('SELECT * FROM vip_packages WHERE id = ?', [vipPackage.id]);
+          const remaining = updatedPkg ? (updatedPkg.total_gmail - updatedPkg.used_gmail) : 0;
+          caption += `📦 Sử dụng gói VIP (còn ${remaining}/${vipPackage.total_gmail})\n`;
+        } else {
+          caption += `💰 Giá: ${formatCurrency(price)}\n`;
         }
-      } catch (cleanupError) {
-        console.error(`[BUY_GMAIL] ⚠️ Lỗi khi xóa file tạm:`, cleanupError);
+        caption += `📧 Số lượng: ${quantity} account(s)`;
+
+        await bot.sendDocument(msg.chat.id, tempFilePath, {
+          caption: caption
+        });
+        console.log(`[BUY_GMAIL] ✅ Đã gửi file tài khoản thành công`);
+      } catch (sendError) {
+        console.error(`[BUY_GMAIL] ❌ Lỗi khi gửi file:`, sendError);
+        // Fallback send text
+        const accountText = accounts.map(acc => `${acc.email}|${acc.password}`).join('\n');
+        await bot.sendMessage(msg.chat.id, `✅ Mua thành công. Thông tin:\n\`\`\`\n${accountText}\n\`\`\``, { parse_mode: 'Markdown' });
+      } finally {
+        // Xóa file tạm thời sau khi gửi
+        try {
+          if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+            console.log(`[BUY_GMAIL] ✅ Đã xóa file tạm: ${tempFilePath}`);
+          }
+        } catch (cleanupError) {
+          console.error(`[BUY_GMAIL] ⚠️ Lỗi khi xóa file tạm:`, cleanupError);
+        }
       }
+    }
+
+    // Thông báo thêm phương thức thanh toán cho Google Non (chung cho cả single/multiple)
+    if (type === 'non') {
+      await bot.sendMessage(
+        msg.chat.id,
+        `💳 **HƯỚNG DẪN SỬ DỤNG**\n\n` +
+        `🔐 Để tài khoản Google Non hoạt động tốt nhất:\n\n` +
+        `1️⃣ Đăng nhập vào tài khoản Google vừa nhận\n` +
+        `2️⃣ Truy cập link bên dưới để thêm phương thức thanh toán:\n` +
+        `🔗 https://play.google.com/store/paymentmethods?utm_source=emea_Med\n\n` +
+        `✨ **Lợi ích:**\n` +
+        `• Tài khoản hoạt động ổn định hơn\n` +
+        `• Không bị yêu cầu xác minh thẻ khi sử dụng\n` +
+        `• Tránh các vấn đề về thanh toán về sau\n\n` +
+        `💡 **Khuyến nghị:** Thêm phương thức thanh toán ngay sau khi nhận tài khoản!`,
+        { parse_mode: 'Markdown' }
+      );
     }
 
     // Gmail thông thường: KHÔNG check login status ngay khi mua
@@ -338,6 +345,7 @@ export const buyGmailAccount = async (bot, msg, type, quantity = 1, backupEmail 
     console.log(`[BUY_GMAIL] ✅ Đã gửi ${accounts.length} account(s). Hệ thống sẽ tự động phát hiện và xóa khi user đăng nhập.`);
 
   } catch (error) {
+    console.error(`[BUY_GMAIL] Global error:`, error);
     bot.sendMessage(msg.chat.id, 'Có lỗi xảy ra khi mua tài khoản.');
   }
 };
@@ -466,7 +474,8 @@ export const buyGmailAccountDaily = async (bot, msg, type, quantity = 1) => {
         telegramId: user.telegram_id,
         quantity: quantity,
         price: price,
-        finalBalance: Number(updatedUser.balance)
+        finalBalance: Number(updatedUser.balance),
+        accounts: accounts // Pass account details
       });
     }
 

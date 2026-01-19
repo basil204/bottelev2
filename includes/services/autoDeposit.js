@@ -230,7 +230,8 @@ const processMBTransaction = async (bot, tx, cached, user, promotion) => {
         bonusAmount: promotionResult.bonusAmount,
         bonusPercentage: promotion?.bonus_percentage || 0,
         finalAmount: promotionResult.finalAmount,
-        finalBalance: finalBalance
+        finalBalance: finalBalance,
+        transactionRef: ref // Pass transaction ref
       });
     }
   } catch (err) {
@@ -341,7 +342,8 @@ const processTimoTransaction = async (bot, item, cached, user, promotion) => {
         bonusAmount: promotionResult.bonusAmount,
         bonusPercentage: promotion?.bonus_percentage || 0,
         finalAmount: promotionResult.finalAmount,
-        finalBalance: finalBalance
+        finalBalance: finalBalance,
+        transactionRef: ref // Pass transaction ref
       });
     }
   } catch (err) {

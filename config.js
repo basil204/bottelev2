@@ -11,7 +11,13 @@ export const config = {
     // Telegram
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || fileConfig.TELEGRAM_BOT_TOKEN,
     BOT_USERNAME: null, // Will be set in main.js
-    ADMIN_IDS: process.env.ADMIN_IDS ? JSON.parse(process.env.ADMIN_IDS) : fileConfig.ADMIN_IDS || [],
+    ADMIN_IDS: (() => {
+        let ids = process.env.ADMIN_IDS ? JSON.parse(process.env.ADMIN_IDS) : fileConfig.ADMIN_IDS || [];
+        if (!Array.isArray(ids)) {
+            ids = [ids];
+        }
+        return ids.filter(id => id);
+    })(),
     NOTIFICATION_CHAT_ID: process.env.NOTIFICATION_CHAT_ID || fileConfig.NOTIFICATION_CHAT_ID || null,
     TELEGRAM_GROUP_LINKS: fileConfig.TELEGRAM_GROUP_LINKS || [
         { name: 'Group thông báo và chat', url: 'https://t.me/+SFp6Gttq18VmYThl' }

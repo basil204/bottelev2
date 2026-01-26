@@ -1,14 +1,12 @@
 {
-  "TELEGRAM_BOT_TOKEN": "8555737049:AAHS1gFPuqYv_v-IY1W-HMVsROcMJJv2e0o",
+  "TELEGRAM_BOT_TOKEN": "6585070982:AAHkUDYfH9yt1tc7DrS9M0x76HRiMosaeLE",
   "DB_HOST": "130.254.47.231",
   "DB_NAME": "Bottele2025",
   "DB_USER": "adminv1",
   "DB_PASS": "adminv1",
   "VIETQR_ACCOUNT_NO": "334218",
   "VIETQR_BANK_CODE": "MB",
-  "ADMIN_IDS": [
-    8228217247
-  ],
+  "ADMIN_IDS": [1645636506],
   "NOTIFY_MODE": "all",
   "PAGE_SIZE": 10,
   "MB_API_URL": "http://160.191.245.27:6868/",
@@ -30,3 +28,5 @@
     }
   ]
 }
+
+

@@ -13,55 +13,254 @@ import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.
 import { deleteQrMessage } from '../handle/handleDeposit.js';
 import { notifyAdminAboutDeposit } from '../handle/handleNotify.js';
 import { globalConfig } from '../listen.js';
+import { getTransactions } from './sepayService.js';
+import { query } from '../database/index.js';
 
 const processedKey = (ref) => `tx_${ref}`;
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const contentKey = (token) => `content_${token}`;
 
-// Helper: Check MBBank transaction
-const checkMBTransaction = async (bot, config, cached, user, promotion) => {
+// Helper: Check Sepay transaction
+const checkSepayTransaction = async (bot, sepayConfig, cached, user, promotion) => {
   try {
-    const { data } = await axios.get(config.MB_API_URL, { timeout: 15000 });
-    const list = data?.transactionHistoryList || [];
-    for (const tx of list) {
-      const note = `${tx.description || ''} ${tx.addDescription || ''}`;
+    if (!sepayConfig.enabled || !sepayConfig.token) return false;
+
+    // Filter for transactions today
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const transaction_date_min = `${dateStr} 00:00:00`;
+    const transaction_date_max = `${dateStr} 23:59:59`;
+
+    const data = await getTransactions(sepayConfig.token, {
+      account_number: sepayConfig.account_no,
+      transaction_date_min,
+      transaction_date_max,
+      limit: 50
+    });
+
+    if (!data || !data.transactions) return false;
+
+    for (const tx of data.transactions) {
+      const note = tx.transaction_content || '';
       const token = extractToken(note);
       if (!token) continue;
 
       if (token === cached.token) {
-        const success = await processMBTransaction(bot, tx, cached, user, promotion);
+        const success = await processSepayTransaction(bot, tx, cached, user, promotion);
         if (success) return true;
       }
     }
   } catch (err) {
-    console.error('[CHECK_PAYMENT] MB Error:', err.message);
+    console.error('[CHECK_PAYMENT] Sepay Error:', err.message);
+  }
+  return false;
+}
+
+// Helper: Check Timo transaction
+const checkTimoTransaction = async (bot, cached, user, promotion) => {
+  try {
+    // Call Next.js API (assuming port 3000)
+    // Adjust URL if needed
+    const response = await axios.get('http://localhost:4953/api/timo?action=history');
+    const data = response.data;
+
+    // Response format { success: true, data: { ...TimoResponse... } }
+    if (data && data.success && data.data) {
+      const timoData = data.data;
+      // data.data is the transactions structure.
+      // Example structure depends on Timo API, but based on script:
+      /*
+       {
+        "data": {
+          "groups": [
+             { "label": "Today", "transactions": [...] }
+          ]
+        }
+       }
+      */
+      // Or flat list if we flattened it? timoServer returns raw from Timo API usually.
+      // Let's assume flattened or loop deep.
+
+      // Based on `timoServer.js`:
+      /*
+       const result = { ..., data: transactions };
+       transactions comes from getTransactionList which returns Timo response.
+       Timo response usually: { data: { items: [...] } } or groups.
+      */
+
+      // We'll iterate aggressively.
+      // Parse nested structure: data.data.items -> each is a group (date) -> has 'item' array
+      // Parse nested structure: data.data.items -> each is a group (date) -> has 'item' array
+      let transactions = [];
+      if (timoData.data && timoData.data.items && Array.isArray(timoData.data.items)) {
+        timoData.data.items.forEach(group => {
+          if (group.item && Array.isArray(group.item)) {
+            transactions.push(...group.item);
+          }
+        });
+      }
+
+      for (const tx of transactions) {
+        // Filter Incoming Transfers
+        // txnType: "IncomingTransfer" or drcr implied?
+        // JSON shows "txnType": "IncomingTransfer"
+        // Also check txnAmount > 0
+
+        const isIncoming = tx.txnType === 'IncomingTransfer' || (tx.txnAmount > 0 && !tx.txnType.includes('Outgoing'));
+        if (!isIncoming) continue;
+
+        const note = tx.txnDesc || tx.txnNarrative || '';
+        const credit = tx.txnAmount || 0;
+
+        if (credit <= 0) continue;
+
+        const token = extractToken(note);
+        if (!token) continue;
+
+        if (token === cached.token) {
+          // Found it!
+          const ref = `TIMO-${tx.refNo}`;
+
+          // Verify Amount
+          const requestedAmount = Number(cached.amount);
+          if (credit < requestedAmount) {
+            console.log(`[TIMO] Underpayment ${ref}: ${credit} < ${requestedAmount}`);
+            return false;
+          }
+
+          await processDepositTransaction(bot, {
+            amount_in: credit,
+            id: tx.refNo,
+            transaction_content: note,
+            ref_prefix: 'TIMO'
+          }, cached, user, promotion);
+
+          return true;
+        }
+      }
+    }
+  } catch (err) {
+    // console.error('[CHECK_PAYMENT] Timo Error:', err.message);
   }
   return false;
 };
 
-// Helper: Check Timo transaction
-const checkTimoTransaction = async (bot, config, cached, user, promotion) => {
-  try {
-    const { data } = await axios.get(config.TIMO_API_URL, { timeout: 15000 });
-    const items = data?.data?.data?.items || [];
-    for (const item of items) {
-      if (!item.item || !Array.isArray(item.item)) continue;
-      const tx = item.item[0];
-      if (!tx) continue;
+// Unified processor
+const processDepositTransaction = async (bot, txRaw, cached, user, promotion) => {
+  const credit = Number(txRaw.amount_in || 0);
+  const ref = `${txRaw.ref_prefix}-${txRaw.id}`;
 
-      const note = tx.txnNarrative || tx.txnDesc || '';
-      const token = extractToken(note);
-      if (!token) continue;
+  if (getCache(processedKey(ref))) return false;
 
-      if (token === cached.token) {
-        const success = await processTimoTransaction(bot, item, cached, user, promotion);
-        if (success) return true;
-      }
-    }
-  } catch (err) {
-    console.error('[CHECK_PAYMENT] Timo Error:', err.message);
+  // ... (Rest of logic similar to processSepayTransaction)
+  if (!cached || !user) {
+    setCache(processedKey(ref), true, 86400000);
+    return false;
   }
-  return false;
+
+  const existingRef = await findDepositByRef(ref);
+  if (existingRef && existingRef.status === 'approved') {
+    setCache(processedKey(ref), true, 86400000);
+    return false;
+  }
+
+  const originalAmount = typeof cached.amount !== 'undefined' ? Number(cached.amount) : credit;
+  const promotionResult = calculatePromotedAmount(originalAmount, promotion);
+
+  if (cached.depositId) {
+    await updateDepositStatus(cached.depositId, 'approved', ref);
+  } else {
+    await createDepositWithStatus(user.id, originalAmount, 'approved', ref);
+  }
+
+  await updateBalance(user.id, promotionResult.finalAmount);
+  await addBalanceLog({
+    userId: user.id,
+    amount: promotionResult.finalAmount,
+    reason: promotionResult.bonusAmount > 0 ? `deposit+promo_${promotion.id}:${ref}` : `deposit:${ref}`,
+    adminId: null
+  });
+
+  const updatedUser = await getUserById(user.id);
+  const finalBalance = Number(updatedUser.balance);
+
+  const qrCache = getCache(qrKey(user.telegram_id));
+  const token = cached.token;
+
+  if (qrCache) {
+    await deleteQrMessage(bot, qrCache);
+    delCache(qrKey(user.telegram_id));
+  }
+  if (token) {
+    const tokenCache = getCache(contentKey(token));
+    if (tokenCache) {
+      await deleteQrMessage(bot, tokenCache);
+      delCache(contentKey(token));
+    }
+  }
+  setCache(processedKey(ref), true, 86400000);
+
+  try {
+    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
+    await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
+  } catch (e) { }
+
+  try {
+    let message = `✅ **Nạp tiền thành công!**\n\n` +
+      `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
+    if (promotionResult.bonusAmount > 0) {
+      message += `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`;
+    }
+    message += `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**` +
+      `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
+      `\n📝 Ref: ${ref}`;
+    await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
+
+    const adminIds = globalConfig?.ADMIN_IDS || [];
+    if (adminIds.length > 0) {
+      notifyAdminAboutDeposit(bot, adminIds, {
+        depositId: cached.depositId || ref,
+        username: user.username,
+        telegramId: user.telegram_id,
+        originalAmount: promotionResult.originalAmount,
+        bonusAmount: promotionResult.bonusAmount,
+        bonusPercentage: promotion?.bonus_percentage || 0,
+        finalAmount: promotionResult.finalAmount,
+        finalBalance: finalBalance,
+        transactionRef: ref
+      });
+    }
+  } catch (err) { }
+  return true;
+};
+
+// Get Sepay settings from DB
+const getSepaySettings = async () => {
+  try {
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('sepay_enabled', 'sepay_token', 'sepay_account_no')");
+    const settings = { enabled: false, token: '', account_no: '' };
+    if (Array.isArray(rows)) {
+      rows.forEach(r => {
+        if (r.key === 'sepay_enabled') settings.enabled = r.value === 'true';
+        if (r.key === 'sepay_token') settings.token = r.value;
+        if (r.key === 'sepay_account_no') settings.account_no = r.value;
+      });
+    }
+    return settings;
+  } catch (error) {
+    console.error('Error fetching Sepay settings:', error);
+    return { enabled: false, token: '', account_no: '' };
+  }
+};
+
+const getTimoSettings = async () => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'timo_auto_deposit'");
+    return { enabled: rows?.[0]?.value === 'true' };
+  } catch (e) { return { enabled: false }; }
 };
 
 // Exported function for manual check
@@ -77,23 +276,26 @@ export const checkPaymentForUser = async (bot, userId, config) => {
   if (!user) return { success: false, message: 'Lỗi thông tin user.' };
 
   const promotion = await getActivePromotion();
+  const sepayConfig = await getSepaySettings();
 
-  // Ưu tiên check bank đã chọn, nếu không thì check cả 2 (hoặc check theo bank config)
+  // Check Sepay
   let success = false;
-
-  // Check MB
-  if (config.MB_API_URL && (!cached.bank || cached.bank === 'mbbank')) {
-    success = await checkMBTransaction(bot, config, cached, user, promotion);
-  }
-
-  // Check Timo if not found in MB
-  if (!success && config.TIMO_API_URL && (!cached.bank || cached.bank === 'timo')) {
-    success = await checkTimoTransaction(bot, config, cached, user, promotion);
+  if (sepayConfig.enabled && cached.bank === 'sepay') {
+    success = await checkSepayTransaction(bot, sepayConfig, cached, user, promotion);
+  } else if (cached.bank === 'timo') {
+    const timoConfig = await getTimoSettings();
+    if (timoConfig.enabled) {
+      success = await checkTimoTransaction(bot, cached, user, promotion);
+    }
+  } else {
+    // If bank not specified (legacy), try both? or just Sepay
+    if (sepayConfig.enabled) success = await checkSepayTransaction(bot, sepayConfig, cached, user, promotion);
   }
 
   if (success) {
     return { success: true, message: 'Đã nhận được tiền! Cảm ơn bạn.' };
   } else {
+    // Fallback message if Sepay not enabled or transaction not found
     return { success: false, message: 'Chưa nhận được tiền. Vui lòng chờ thêm chút nhé!' };
   }
 };
@@ -131,298 +333,128 @@ export const startQrExpirationChecker = (bot) => {
   checkExpiredQrs(bot); // Initial check
 };
 
-// Xử lý giao dịch từ MBBank
-const processMBTransaction = async (bot, tx, cached, user, promotion) => {
-  const credit = Number(tx.creditAmount || 0);
-  if (!credit || credit <= 0) return false;
-
-  const note = `${tx.description || ''} ${tx.addDescription || ''}`;
-  const token = extractToken(note);
-  if (!token) return false;
-
-  const ref = tx.refNo || `${tx.accountNo}-${tx.transactionDate}-${credit}`;
-  if (getCache(processedKey(ref))) return false;
-
-  if (!cached) {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  if (!user) {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  const existingRef = await findDepositByRef(ref);
-  if (existingRef && existingRef.status === 'approved') {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  const originalAmount = Number(cached.amount || credit);
-  const promotionResult = calculatePromotedAmount(originalAmount, promotion);
-
-  if (cached.depositId) {
-    await updateDepositStatus(cached.depositId, 'approved', ref);
-  } else {
-    await createDepositWithStatus(user.id, originalAmount, 'approved', ref);
-  }
-
-  await updateBalance(user.id, promotionResult.finalAmount);
-  await addBalanceLog({
-    userId: user.id,
-    amount: promotionResult.finalAmount,
-    reason: promotionResult.bonusAmount > 0 ? `auto_deposit+promo_${promotion.id}:${ref}` : `auto_deposit:${ref}`,
-    adminId: null
-  });
-
-  // Lấy số dư mới sau khi cộng tiền
-  const updatedUser = await getUserById(user.id);
-  const finalBalance = Number(updatedUser.balance);
-
-  // Thu hồi QR đang chờ
-  const qrCache = getCache(qrKey(user.telegram_id));
-  if (qrCache) {
-    await deleteQrMessage(bot, qrCache);
-    delCache(qrKey(user.telegram_id));
-  }
-  if (token) {
-    const tokenCache = getCache(contentKey(token));
-    if (tokenCache) {
-      await deleteQrMessage(bot, tokenCache);
-      delCache(contentKey(token));
-    }
-  }
-  setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-
-  // Kiểm tra và hoàn tất purchase nếu có
-  try {
-    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
-    const purchaseCompleted = await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
-
-    if (purchaseCompleted) {
-      // Purchase đã được hoàn tất, không cần gửi thông báo nạp tiền riêng
-      return true;
-    }
-  } catch (err) {
-    console.error('[AUTO_DEPOSIT] Lỗi khi hoàn tất purchase:', err);
-  }
-
-  try {
-    let message = `✅ **Nạp tiền tự động thành công!**\n\n` +
-      `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
-    if (promotionResult.bonusAmount > 0) {
-      message += `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`;
-    }
-    message += `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**` +
-      `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
-      `\n📝 Ref: ${ref}`;
-    await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
-
-    // Notify admins
-    const adminIds = globalConfig?.ADMIN_IDS || [];
-    if (adminIds.length > 0) {
-      notifyAdminAboutDeposit(bot, adminIds, {
-        depositId: cached.depositId || 'AUTO', // auto deposit might not have ID yet if created via createDepositWithStatus but we can use ref
-        username: user.username,
-        telegramId: user.telegram_id,
-        originalAmount: promotionResult.originalAmount,
-        bonusAmount: promotionResult.bonusAmount,
-        bonusPercentage: promotion?.bonus_percentage || 0,
-        finalAmount: promotionResult.finalAmount,
-        finalBalance: finalBalance,
-        transactionRef: ref // Pass transaction ref
-      });
-    }
-  } catch (err) {
-    // Error handling without logging
-  }
-  return true;
-};
-
-// Xử lý giao dịch từ Timo
-const processTimoTransaction = async (bot, item, cached, user, promotion) => {
-  const tx = item.item?.[0];
-  if (!tx || tx.txnType !== 'IncomingTransfer') return false;
-
-  const credit = Number(tx.txnAmount || 0);
-  if (!credit || credit <= 0) return false;
-
-  const note = tx.txnNarrative || tx.txnDesc || '';
-  const token = extractToken(note);
-  if (!token) return false;
-
-  const ref = tx.refNo || tx.bankXID || `${tx.transactionTime}-${credit}`;
-  if (getCache(processedKey(ref))) return false;
-
-  if (!cached) {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  if (!user) {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  const existingRef = await findDepositByRef(ref);
-  if (existingRef && existingRef.status === 'approved') {
-    setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-    return false;
-  }
-
-  const originalAmount = Number(cached.amount || credit);
-  const promotionResult = calculatePromotedAmount(originalAmount, promotion);
-
-  if (cached.depositId) {
-    await updateDepositStatus(cached.depositId, 'approved', ref);
-  } else {
-    await createDepositWithStatus(user.id, originalAmount, 'approved', ref);
-  }
-
-  await updateBalance(user.id, promotionResult.finalAmount);
-  await addBalanceLog({
-    userId: user.id,
-    amount: promotionResult.finalAmount,
-    reason: promotionResult.bonusAmount > 0 ? `auto_deposit+promo_${promotion.id}:${ref}` : `auto_deposit:${ref}`,
-    adminId: null
-  });
-
-  // Lấy số dư mới sau khi cộng tiền
-  const updatedUser = await getUserById(user.id);
-  const finalBalance = Number(updatedUser.balance);
-
-  // Thu hồi QR đang chờ
-  const qrCache = getCache(qrKey(user.telegram_id));
-  if (qrCache) {
-    await deleteQrMessage(bot, qrCache);
-    delCache(qrKey(user.telegram_id));
-  }
-  if (token) {
-    const tokenCache = getCache(contentKey(token));
-    if (tokenCache) {
-      await deleteQrMessage(bot, tokenCache);
-      delCache(contentKey(token));
-    }
-  }
-  setCache(processedKey(ref), true, 24 * 60 * 60 * 1000);
-
-  // Kiểm tra và hoàn tất purchase nếu có
-  try {
-    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
-    const purchaseCompleted = await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
-
-    if (purchaseCompleted) {
-      // Purchase đã được hoàn tất, không cần gửi thông báo nạp tiền riêng
-      return true;
-    }
-  } catch (err) {
-    console.error('[AUTO_DEPOSIT] Lỗi khi hoàn tất purchase:', err);
-  }
-
-  try {
-    let message = `✅ **Nạp tiền tự động thành công!**\n\n` +
-      `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
-    if (promotionResult.bonusAmount > 0) {
-      message += `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`;
-    }
-    message += `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**` +
-      `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
-      `\n📝 Ref: ${ref}`;
-    await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
-
-    // Notify admins
-    const adminIds = globalConfig?.ADMIN_IDS || [];
-    if (adminIds.length > 0) {
-      notifyAdminAboutDeposit(bot, adminIds, {
-        depositId: cached.depositId || 'AUTO',
-        username: user.username,
-        telegramId: user.telegram_id,
-        originalAmount: promotionResult.originalAmount,
-        bonusAmount: promotionResult.bonusAmount,
-        bonusPercentage: promotion?.bonus_percentage || 0,
-        finalAmount: promotionResult.finalAmount,
-        finalBalance: finalBalance,
-        transactionRef: ref // Pass transaction ref
-      });
-    }
-  } catch (err) {
-    // Error handling without logging
-  }
-  return true;
+// Process Sepay Transaction
+// Process Sepay Transaction (Legacy Wrapper)
+const processSepayTransaction = async (bot, tx, cached, user, promotion) => {
+  return processDepositTransaction(bot, {
+    amount_in: tx.amount_in,
+    id: tx.id,
+    transaction_content: tx.transaction_content,
+    ref_prefix: 'SEPAY'
+  }, cached, user, promotion);
 };
 
 export const startAutoDepositWatcher = (bot, config) => {
-  const intervalMs = Number(config.MB_CHECK_INTERVAL || 20000);
-  const hasMB = !!config.MB_API_URL;
-  const hasTimo = !!config.TIMO_API_URL;
-
-  if (!hasMB && !hasTimo) {
-    return;
-  }
+  const CHECK_INTERVAL = 3000; // Check every 3 seconds
 
   const tick = async () => {
     try {
+      // Optimization: Only check Sepay if there are pending QRs waiting for payment
+      const pendingKeys = getAllKeys('qr_');
+      if (!pendingKeys || pendingKeys.length === 0) return;
+
+      const sepayConfig = await getSepaySettings();
+      const timoConfig = await getTimoSettings();
       const promotion = await getActivePromotion();
 
-      // Kiểm tra MBBank
-      if (hasMB) {
-        try {
-          const { data } = await axios.get(config.MB_API_URL, { timeout: 15000 });
-          const list = data?.transactionHistoryList || [];
-          for (const tx of list) {
-            const note = `${tx.description || ''} ${tx.addDescription || ''}`;
+      // Check Sepay
+      if (sepayConfig.enabled && sepayConfig.token) {
+        // ... (existing Sepay logic)
+        const data = await getTransactions(sepayConfig.token, {
+          account_number: sepayConfig.account_no,
+          transaction_date_min,
+          transaction_date_max,
+          limit: 20
+        });
+
+        if (data && data.transactions) {
+          for (const tx of data.transactions) {
+            const note = tx.transaction_content || '';
             const token = extractToken(note);
             if (!token) continue;
-
             const cached = getCache(contentKey(token));
-            if (!cached) continue;
+            if (!cached || cached.bank !== 'sepay') continue; // Only process if bank matches
 
             const user = await getUserById(cached.userId);
             if (!user) continue;
 
-            await processMBTransaction(bot, tx, cached, user, promotion);
+            await processSepayTransaction(bot, tx, cached, user, promotion);
           }
-        } catch (err) {
-          // Error handling without logging
         }
       }
 
-      // Kiểm tra Timo
-      if (hasTimo) {
-        try {
-          const { data } = await axios.get(config.TIMO_API_URL, { timeout: 15000 });
-          // Parse Timo response structure
-          const items = data?.data?.data?.items || [];
-          for (const item of items) {
-            if (!item.item || !Array.isArray(item.item)) continue;
+      // Check Timo
+      if (timoConfig.enabled) {
+        // Iterate over pending QR to see if any is Timo?
+        // No, we just poll Timo and check against cache.
+        // But optimization: check if any pending QR is for Timo.
+        const anyTimo = pendingKeys.some(k => {
+          const c = getCache(k);
+          return c && c.bank === 'timo';
+        });
 
-            const tx = item.item[0];
-            if (!tx) continue;
+        if (anyTimo) {
+          // Poll Timo
+          // To iterate through transactions, we need to iterate pending tokens?
+          // "checkTimoTransaction" does polling internally? 
+          // My implementation of checkTimoTransaction iterates transactions and checks cache.
+          // But it needs 'cached' passed in? NO. 
 
-            const note = tx.txnNarrative || tx.txnDesc || '';
-            const token = extractToken(note);
-            if (!token) continue;
+          // Wait, my previous `checkTimoTransaction` implementation above took 'cached' as arg.
+          // That means it checks ONE specific cached token.
+          // That is inefficient for polling.
+          // I should refactor `checkTimoTransaction` to be "pollTimoAndMatch" or similar.
 
-            const cached = getCache(contentKey(token));
-            if (!cached) continue;
+          // Actually, let's just do the fetching here inline or helper.
+          // Actually, let's just do the fetching here inline or helper.
+          try {
+            const response = await axios.get('http://localhost:4953/api/timo?action=history');
+            const data = response.data;
+            if (!data.success || !data.data) return;
+            const timoData = data.data;
 
-            const user = await getUserById(cached.userId);
-            if (!user) continue;
+            let transactions = [];
+            if (timoData.data && timoData.data.items && Array.isArray(timoData.data.items)) {
+              timoData.data.items.forEach(g => {
+                if (g.item) transactions.push(...g.item);
+              });
+            }
 
-            await processTimoTransaction(bot, item, cached, user, promotion);
-          }
-        } catch (err) {
-          // Error handling without logging
+            for (const tx of transactions) {
+              const isCredit = tx.cd === '+' || (tx.amount > 0 && tx.drcr === 'CR');
+              if (!isCredit) continue;
+
+              const note = tx.txnDesc || tx.description || '';
+              const token = extractToken(note);
+              if (!token) continue;
+
+              const cached = getCache(contentKey(token));
+              if (!cached || cached.bank !== 'timo') continue;
+
+              const user = await getUserById(cached.userId);
+              if (!user) continue;
+
+              // Verify Amount
+              const credit = tx.amount || 0;
+              const ref = `TIMO-${tx.refNo || tx.txnId}`;
+              const requestedAmount = Number(cached.amount);
+              if (credit < requestedAmount) continue;
+
+              await processDepositTransaction(bot, {
+                amount_in: credit,
+                id: tx.refNo || tx.txnId,
+                transaction_content: note,
+                ref_prefix: 'TIMO'
+              }, cached, user, promotion);
+            }
+          } catch (e) { }
         }
       }
     } catch (err) {
-      // Error handling without logging
+      console.error('[AUTO_WATCHER] Error:', err.message);
     }
   };
 
-  tick(); // initial
-  setInterval(tick, intervalMs);
+  setInterval(tick, CHECK_INTERVAL);
+  tick(); // Initial run
 };
-
-

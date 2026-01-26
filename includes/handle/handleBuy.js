@@ -30,7 +30,37 @@ export const sendProductList = async (bot, chatId, page, pageSize) => {
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listProducts(offset, pageSize);
   if (!rows.length) return bot.sendMessage(chatId, 'Chưa có sản phẩm.');
-  const inline_keyboard = rows.map((p) => [
+
+  // Get settings
+  let settings = { buy_gmail_edu: true, buy_gmail_non: true };
+  try {
+    const settingRows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('buy_gmail_edu', 'buy_gmail_non')");
+    if (Array.isArray(settingRows)) {
+      settingRows.forEach(r => {
+        if (r.key === 'buy_gmail_edu') settings.buy_gmail_edu = r.value === 'true';
+        if (r.key === 'buy_gmail_non') settings.buy_gmail_non = r.value === 'true';
+      });
+    }
+  } catch (err) {
+    console.error('Error fetching settings for product list:', err);
+  }
+
+  // Filter products
+  const filteredRows = rows.filter(p => {
+    const name = p.name.toLowerCase();
+    const isEdu = name.includes('edu');
+
+    if (isEdu && !settings.buy_gmail_edu) return false;
+    if (!isEdu && !settings.buy_gmail_non) return false;
+
+    return true;
+  });
+
+  if (!filteredRows.length && rows.length > 0) {
+    return bot.sendMessage(chatId, '🚫 Các sản phẩm đang tạm ẩn. Vui lòng quay lại sau.');
+  }
+
+  const inline_keyboard = filteredRows.map((p) => [
     {
       text: `${p.name} - ${formatCurrency(p.price)} (còn ${p.stock})`,
       callback_data: createCallbackData({ action: 'view_product', productId: p.id })

@@ -1,5 +1,5 @@
 import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
-import { startDepositFlow, handleDepositAmount, cancelQr, handleBankSelection } from './handle/handleDeposit.js';
+import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
 import { sendProductList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { showGmailMenu, showGmailQuantityMenu, buyGmailAccount, buyGmailAccountDaily, handleBuyGmailCommand, handleGmailTypeSelection, handleGmailQuantityInput } from './handle/handleGmail.js';
 import { showMailMenu, handleMailTypeSelection, handleMailQuantityInput } from './handle/handleMail.js';
@@ -368,8 +368,7 @@ export const registerListeners = (bot, config) => {
           return showProductDetail(bot, chatId, data.productId, query.from.id);
         case 'buy_product':
           return handlePurchase(bot, query.message, data.productId, query.from);
-        case 'select_bank':
-          return handleBankSelection(bot, chatId, query.from.id, data.bank);
+
         case 'check_payment':
           const { checkPaymentForUser } = await import('./services/autoDeposit.js');
           const result = await checkPaymentForUser(bot, query.from.id, config);

@@ -126,7 +126,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const purchaseKey = `purchase_${msg.from.id}`;
   const pendingPurchase = getCache(purchaseKey);
 
-  const MIN_DEPOSIT_AMOUNT = 10000;
+  const MIN_DEPOSIT_AMOUNT = 50000;
   if (!pendingPurchase && amount < MIN_DEPOSIT_AMOUNT) {
     return bot.sendMessage(
       msg.chat.id,

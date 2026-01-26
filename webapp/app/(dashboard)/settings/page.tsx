@@ -1,10 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Banknote, CreditCard } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Save, Banknote, CreditCard, Trash2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { formatCurrency } from '@/lib/utils';
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from '@/components/ui/tabs'; // Added Tabs components
 
 interface Settings {
     mb_auto_deposit: boolean;
@@ -44,15 +61,97 @@ export default function SettingsPage() {
     const [otpValue, setOtpValue] = useState('');
     const [otpMessage, setOtpMessage] = useState('');
 
+    // Promotion states
+    const [promotions, setPromotions] = useState<any[]>([]);
+    const [promoLoading, setPromoLoading] = useState(false);
+    const [newPromo, setNewPromo] = useState({
+        start_time: '',
+        end_time: '',
+        bonus_percentage: 10,
+        min_amount: 0
+    });
+
     useEffect(() => {
+        setLoading(true);
         fetch('/api/settings')
             .then((res) => res.json())
             .then((data) => {
                 setSettings(data);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch((err) => {
+                console.error(err);
+                setLoading(false);
+            });
+
+        loadPromotions();
     }, []);
+
+    const loadPromotions = () => {
+        setPromoLoading(true);
+        fetch('/api/promotions')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) setPromotions(data);
+            })
+            .finally(() => setPromoLoading(false));
+    };
+
+    const handleCreatePromotion = async () => {
+        if (!newPromo.start_time || !newPromo.end_time) {
+            // Assuming 'toast' is available, if not, this would cause an error.
+            // For this response, I'll assume it's imported or handled elsewhere.
+            // If not, a simple console.error or alert would be needed.
+            // toast({
+            //     title: "Error",
+            //     description: "Please select start and end time",
+            //     variant: "destructive"
+            // });
+            console.error("Please select start and end time");
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/promotions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newPromo)
+            });
+
+            if (res.ok) {
+                // toast({ title: "Success", description: "Promotion created" });
+                console.log("Promotion created successfully");
+                loadPromotions();
+                // Reset form slightly but keep useful defaults
+                setNewPromo(prev => ({ ...prev, start_time: '', end_time: '' }));
+            } else {
+                const err = await res.json();
+                // toast({ title: "Error", description: err.error || "Failed to create", variant: "destructive" });
+                console.error("Failed to create promotion:", err.error || "Unknown error");
+            }
+        } catch (e) {
+            // toast({ title: "Error", description: "Network error", variant: "destructive" });
+            console.error("Network error:", e);
+        }
+    };
+
+    const handleDeletePromotion = async (id: number) => {
+        if (!confirm('Are you sure?')) return;
+
+        try {
+            const res = await fetch(`/api/promotions?id=${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                // toast({ title: "Success", description: "Promotion deleted" });
+                console.log("Promotion deleted successfully");
+                loadPromotions();
+            } else {
+                console.error("Failed to delete promotion");
+            }
+        } catch (e) {
+            // toast({ title: "Error", description: "Failed to delete", variant: "destructive" });
+            console.error("Failed to delete promotion:", e);
+        }
+    };
 
     const handleToggle = (key: keyof Settings) => {
         setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -146,11 +245,101 @@ export default function SettingsPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Banknote className="w-5 h-5 text-primary" />
-                        {t('settings.deposit_config')}
-                    </CardTitle>
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
+                        <TabsTrigger value="payment">{t('settings.payment')}</TabsTrigger>
+                        <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
+                        <TabsTrigger value="promotions">Promotions</TabsTrigger>
+                    </TabsList>
                 </CardHeader>
+                <TabsContent value="promotions">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Deposit Promotions</CardTitle>
+                            <CardDescription>Manage automated deposit bonuses.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
+                                <h3 className="font-semibold">Create New Promotion</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Start Time</Label>
+                                        <Input
+                                            type="datetime-local"
+                                            value={newPromo.start_time}
+                                            onChange={(e) => setNewPromo({ ...newPromo, start_time: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>End Time</Label>
+                                        <Input
+                                            type="datetime-local"
+                                            value={newPromo.end_time}
+                                            onChange={(e) => setNewPromo({ ...newPromo, end_time: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Bonus Percentage (%)</Label>
+                                        <Input
+                                            type="number"
+                                            value={newPromo.bonus_percentage}
+                                            onChange={(e) => setNewPromo({ ...newPromo, bonus_percentage: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Min Deposit Amount</Label>
+                                        <Input
+                                            type="number"
+                                            value={newPromo.min_amount}
+                                            onChange={(e) => setNewPromo({ ...newPromo, min_amount: Number(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
+                                <Button onClick={handleCreatePromotion} disabled={promoLoading}>
+                                    Create Promotion
+                                </Button>
+                            </div>
+
+                            <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Start</TableHead>
+                                            <TableHead>End</TableHead>
+                                            <TableHead>Bonus</TableHead>
+                                            <TableHead>Min Amount</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {promotions.map((p) => (
+                                            <TableRow key={p.id}>
+                                                <TableCell>{new Date(p.start_time).toLocaleString()}</TableCell>
+                                                <TableCell>{new Date(p.end_time).toLocaleString()}</TableCell>
+                                                <TableCell className="font-bold text-green-500">+{p.bonus_percentage}%</TableCell>
+                                                <TableCell>{formatCurrency(p.min_amount)}</TableCell>
+                                                <TableCell>{p.status}</TableCell>
+                                                <TableCell>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeletePromotion(p.id)}>
+                                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {promotions.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                                                    No promotions found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
                 <CardContent className="space-y-6">
 
                     <div className="mb-6">

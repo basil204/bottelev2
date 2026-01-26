@@ -17,25 +17,54 @@ interface DashboardStats {
   revenueChart: { date: string; total: number }[];
 }
 
+interface Promotion {
+  id: number;
+  start_time: string;
+  end_time: string;
+  bonus_percentage: number;
+  min_amount: number;
+}
+
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [promotion, setPromotion] = useState<Promotion | null>(null);
   const { theme } = useTheme();
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetch('/api/stats')
-      .then((res) => res.json())
-      .then((data) => {
-        setStats(data);
+    const fetchData = async () => {
+      try {
+        const [statsRes, promoRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/promotions')
+        ]);
+
+        const statsData = await statsRes.json();
+        setStats(statsData);
+
+        const promoData = await promoRes.json();
+        if (Array.isArray(promoData)) {
+          // Find active promotion
+          const now = new Date();
+          const active = promoData.find((p: any) => {
+            const start = new Date(p.start_time);
+            const end = new Date(p.end_time);
+            return now >= start && now <= end && p.status === 'active';
+          });
+          setPromotion(active || null);
+        }
+
         setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error(err);
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
   }, []);
 
   if (loading) return (
@@ -96,6 +125,23 @@ export default function Dashboard() {
           <span>System Normal</span>
         </div>
       </div>
+
+      {promotion && (
+        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg p-6 text-white shadow-lg relative overflow-hidden animate-in zoom-in-95 duration-500">
+          <div className="absolute top-0 right-0 p-4 opacity-20">
+            <DollarSign className="w-24 h-24" />
+          </div>
+          <div className="relative z-10">
+            <h3 className="text-2xl font-bold mb-2">🎉 {t('dashboard.promotion_active', 'Def: Promotion Active!')}</h3>
+            <p className="text-lg opacity-90 mb-4">
+              Get <span className="font-bold text-yellow-100">{promotion.bonus_percentage}% bonus</span> on deposits over {formatCurrency(promotion.min_amount)}!
+            </p>
+            <div className="text-sm font-medium bg-white/20 inline-block px-3 py-1 rounded-full">
+              Ends: {new Date(promotion.end_time).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((card, i) => (

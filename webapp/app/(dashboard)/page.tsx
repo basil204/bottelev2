@@ -17,10 +17,13 @@ interface DashboardStats {
   revenueChart: { date: string; total: number }[];
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetch('/api/stats')
@@ -49,23 +52,23 @@ export default function Dashboard() {
 
   const cards = [
     {
-      title: 'Doanh thu nạp thẻ hôm nay',
+      title: t('dashboard.total_revenue'), // Approx map or use specific keys
       value: formatCurrency(stats.todayDeposits),
       icon: DollarSign,
-      desc: 'Hôm nay',
+      desc: t('dashboard.today'),
       iconStartColor: 'from-green-500',
       iconEndColor: 'to-emerald-700',
     },
     {
-      title: 'Doanh thu tháng này',
+      title: t('dashboard.month_revenue'),
       value: formatCurrency(stats.monthDeposits),
       icon: CreditCard,
-      desc: 'Tháng này',
+      desc: t('dashboard.this_month'),
       iconStartColor: 'from-blue-500',
       iconEndColor: 'to-indigo-700',
     },
     {
-      title: 'Active Users',
+      title: t('dashboard.active_users'),
       value: stats.totalUsers,
       icon: Users,
       desc: '+19 this week',
@@ -73,7 +76,7 @@ export default function Dashboard() {
       iconEndColor: 'to-pink-700',
     },
     {
-      title: 'Total Orders',
+      title: t('dashboard.total_orders'),
       value: stats.totalOrders,
       icon: ShoppingCart,
       desc: '+201 since last hour',
@@ -87,7 +90,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-500">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-3xl font-bold tracking-tight">{t('sidebar.dashboard')}</h2>
         <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground bg-card border px-3 py-1 rounded-full shadow-sm">
           <Activity className="w-4 h-4 text-green-500" />
           <span>System Normal</span>
@@ -120,7 +123,7 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
-              Revenue Overview
+              {t('dashboard.total_revenue')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pl-2">

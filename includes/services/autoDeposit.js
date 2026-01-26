@@ -62,9 +62,16 @@ const checkSepayTransaction = async (bot, sepayConfig, cached, user, promotion) 
 // Helper: Check Timo transaction
 const checkTimoTransaction = async (bot, cached, user, promotion) => {
   try {
+    const admin = await getAdminSettings();
     // Call Next.js API (assuming port 3000)
     // Adjust URL if needed
-    const response = await axios.get('http://localhost:4953/api/timo?action=history');
+    const response = await axios.get('http://localhost:4953/api/timo?action=history', {
+      params: {
+        username: admin.username,
+        password: admin.password
+      }
+    });
+
     const data = response.data;
 
     // Response format { success: true, data: { ...TimoResponse... } }
@@ -263,6 +270,21 @@ const getTimoSettings = async () => {
   } catch (e) { return { enabled: false }; }
 };
 
+const getAdminSettings = async () => {
+  try {
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('admin_username', 'admin_password')");
+    let username = '';
+    let password = '';
+    if (Array.isArray(rows)) {
+      rows.forEach(r => {
+        if (r.key === 'admin_username') username = r.value;
+        if (r.key === 'admin_password') password = r.value;
+      });
+    }
+    return { username, password };
+  } catch (e) { return { username: '', password: '' }; }
+};
+
 // Exported function for manual check
 export const checkPaymentForUser = async (bot, userId, config) => {
   const qrCache = getCache(qrKey(userId));
@@ -355,6 +377,7 @@ export const startAutoDepositWatcher = (bot, config) => {
 
       const sepayConfig = await getSepaySettings();
       const timoConfig = await getTimoSettings();
+      const admin = await getAdminSettings();
       const promotion = await getActivePromotion();
 
       // Check Sepay
@@ -408,7 +431,12 @@ export const startAutoDepositWatcher = (bot, config) => {
           // Actually, let's just do the fetching here inline or helper.
           // Actually, let's just do the fetching here inline or helper.
           try {
-            const response = await axios.get('http://localhost:4953/api/timo?action=history');
+            const response = await axios.get('http://localhost:4953/api/timo?action=history', {
+              params: {
+                username: admin.username,
+                password: admin.password
+              }
+            });
             const data = response.data;
             if (!data.success || !data.data) return;
             const timoData = data.data;

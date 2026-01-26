@@ -25,8 +25,12 @@ interface User {
     created_at: string;
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function UsersPage() {
+    const { t } = useLanguage();
     const [users, setUsers] = useState<User[]>([]);
+    // ... (state)
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -53,7 +57,7 @@ export default function UsersPage() {
 
     useEffect(() => {
         fetchUsers();
-    }, [page]); // Search logic could be debounced here
+    }, [page]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -76,13 +80,13 @@ export default function UsersPage() {
         });
 
         if (res.ok) {
-            alert('Balance updated successfully!');
+            alert(t('users.success'));
             setSelectedUser(null);
             setAmount('');
             setReason('');
             fetchUsers();
         } else {
-            alert('Error updating balance!');
+            alert(t('users.error'));
         }
     };
 
@@ -90,13 +94,13 @@ export default function UsersPage() {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Users</h2>
-                    <p className="text-muted-foreground">Manage user accounts and balances</p>
+                    <h2 className="text-3xl font-bold tracking-tight">{t('users.title')}</h2>
+                    <p className="text-muted-foreground">{t('users.subtitle')}</p>
                 </div>
                 <form onSubmit={handleSearch} className="flex items-center gap-2">
                     <Input
                         type="text"
-                        placeholder="Search users..."
+                        placeholder={t('users.search_placeholder')}
                         className="w-64"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -109,25 +113,25 @@ export default function UsersPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>User Directory</CardTitle>
+                    <CardTitle>{t('users.directory')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-md border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Username</TableHead>
-                                    <TableHead>Telegram ID</TableHead>
-                                    <TableHead>Balance</TableHead>
-                                    <TableHead>Joined Date</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead>{t('users.id')}</TableHead>
+                                    <TableHead>{t('users.username')}</TableHead>
+                                    <TableHead>{t('users.telegram_id')}</TableHead>
+                                    <TableHead>{t('users.balance')}</TableHead>
+                                    <TableHead>{t('users.joined_date')}</TableHead>
+                                    <TableHead className="text-right">{t('common.actions')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
+                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
                                     </TableRow>
                                 ) : (
                                     users.map((user) => (
@@ -146,7 +150,7 @@ export default function UsersPage() {
                                                     onClick={() => setSelectedUser(user)}
                                                 >
                                                     <UserCog className="w-4 h-4 mr-2" />
-                                                    Manage
+                                                    {t('users.manage')}
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -183,7 +187,7 @@ export default function UsersPage() {
             <Dialog
                 open={!!selectedUser}
                 onOpenChange={(open) => !open && setSelectedUser(null)}
-                title={`Manage Balance: ${selectedUser?.username}`}
+                title={`${t('users.manage_balance')}: ${selectedUser?.username}`}
             >
                 <div className="space-y-4 pt-4">
                     <div className="flex gap-2">
@@ -193,7 +197,7 @@ export default function UsersPage() {
                             variant={actionType === 'add' ? 'default' : 'outline'}
                             onClick={() => setActionType('add')}
                         >
-                            Add (+ )
+                            {t('users.add')}
                         </Button>
                         <Button
                             type="button"
@@ -201,35 +205,35 @@ export default function UsersPage() {
                             variant={actionType === 'subtract' ? 'destructive' : 'outline'}
                             onClick={() => setActionType('subtract')}
                         >
-                            Subtract (-)
+                            {t('users.subtract')}
                         </Button>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Amount (VND)</label>
+                        <label className="text-sm font-medium">{t('users.amount')}</label>
                         <Input
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            placeholder="Enter amount..."
+                            placeholder={t('users.enter_amount')}
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Reason</label>
+                        <label className="text-sm font-medium">{t('users.reason')}</label>
                         <Textarea
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            placeholder="Optional reason..."
+                            placeholder={t('users.reason_placeholder')}
                         />
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" onClick={() => setSelectedUser(null)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setSelectedUser(null)}>{t('common.cancel')}</Button>
                         <Button
                             onClick={handleBalanceUpdate}
                             variant={actionType === 'add' ? 'default' : 'destructive'}
                         >
-                            Confirm {actionType === 'add' ? 'Credit' : 'Debit'}
+                            {t('users.confirm')} {actionType === 'add' ? t('users.credit') : t('users.debit')}
                         </Button>
                     </div>
                 </div>

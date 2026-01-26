@@ -27,8 +27,12 @@ interface Account {
     created_at: string;
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function ProductsPage() {
+    const { t } = useLanguage();
     const [products, setProducts] = useState<Product[]>([]);
+    // ... (state)
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
@@ -54,7 +58,7 @@ export default function ProductsPage() {
     }, []);
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this product?')) return;
+        if (!confirm(t('products.delete_confirm'))) return;
         await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
         fetchProducts();
     };
@@ -85,13 +89,13 @@ export default function ProductsPage() {
 
         if (res.ok) {
             const result = await res.json();
-            alert(`Successfully added ${result.count} accounts!`);
+            alert(t('products.success_stock').replace('{count}', result.count));
             setIsStockModalOpen(false);
             setStockData('');
             setCurrentProductId(null);
             fetchProducts();
         } else {
-            alert('Error adding accounts!');
+            alert(t('products.error_stock'));
         }
     };
 
@@ -118,36 +122,36 @@ export default function ProductsPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Products</h2>
-                    <p className="text-muted-foreground">Manage digital products and inventory</p>
+                    <h2 className="text-3xl font-bold tracking-tight">{t('products.title')}</h2>
+                    <p className="text-muted-foreground">{t('products.subtitle')}</p>
                 </div>
                 <Button onClick={() => openModal()}>
                     <Plus className="w-4 h-4 mr-2" />
-                    New Product
+                    {t('products.new_product')}
                 </Button>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Product List</CardTitle>
+                    <CardTitle>{t('products.list')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-md border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Price</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Stock</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead>{t('users.id')}</TableHead>
+                                    <TableHead>{t('products.name')}</TableHead>
+                                    <TableHead>{t('products.price')}</TableHead>
+                                    <TableHead>{t('products.type')}</TableHead>
+                                    <TableHead>{t('products.stock')}</TableHead>
+                                    <TableHead className="text-right">{t('products.actions')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
+                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
                                     </TableRow>
                                 ) : (
                                     products.map((product) => (
@@ -157,15 +161,15 @@ export default function ProductsPage() {
                                             <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(product.price)}</TableCell>
                                             <TableCell>
                                                 <span className={`px-2 py-1 rounded text-xs ${product.type === 'auto' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'}`}>
-                                                    {product.type.toUpperCase()}
+                                                    {product.type === 'auto' ? t('products.auto') : t('products.manual')}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="font-bold">{product.stock}</TableCell>
                                             <TableCell className="text-right flex justify-end gap-2">
-                                                <Button size="icon" variant="ghost" onClick={() => openViewStockModal(product)} title="View Accounts">
+                                                <Button size="icon" variant="ghost" onClick={() => openViewStockModal(product)} title={t('products.view_accounts')}>
                                                     <List className="w-4 h-4" />
                                                 </Button>
-                                                <Button size="icon" variant="ghost" className="text-green-600" onClick={() => openStockModal(product)} title="Add Stock">
+                                                <Button size="icon" variant="ghost" className="text-green-600" onClick={() => openStockModal(product)} title={t('products.add_stock')}>
                                                     <Database className="w-4 h-4" />
                                                 </Button>
                                                 <Button size="icon" variant="ghost" className="text-blue-600" onClick={() => openModal(product)}>
@@ -188,18 +192,18 @@ export default function ProductsPage() {
             <Dialog
                 open={isModalOpen}
                 onOpenChange={setIsModalOpen}
-                title={editingProduct?.id ? 'Edit Product' : 'Add New Product'}
+                title={editingProduct?.id ? t('products.edit') : t('products.new_product')}
             >
                 <div className="space-y-4 pt-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Product Name</label>
+                        <label className="text-sm font-medium">{t('products.name')}</label>
                         <Input
                             value={editingProduct?.name || ''}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, name: e.target.value }))}
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Price (VND)</label>
+                        <label className="text-sm font-medium">{t('products.price')} (VND)</label>
                         <Input
                             type="number"
                             value={editingProduct?.price || ''}
@@ -207,26 +211,26 @@ export default function ProductsPage() {
                         />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Type</label>
+                        <label className="text-sm font-medium">{t('products.type')}</label>
                         <select
                             value={editingProduct?.type || 'auto'}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, type: e.target.value as 'auto' | 'manual' }))}
                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
-                            <option value="auto">Auto (Automatic Delivery)</option>
-                            <option value="manual">Manual (Hand Delivery)</option>
+                            <option value="auto">Auto ({t('products.auto')})</option>
+                            <option value="manual">Manual ({t('products.manual')})</option>
                         </select>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Description</label>
+                        <label className="text-sm font-medium">{t('products.description')}</label>
                         <Textarea
                             value={editingProduct?.description || ''}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, description: e.target.value }))}
                         />
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSave}>Save Changes</Button>
+                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
+                        <Button onClick={handleSave}>{t('products.save')}</Button>
                     </div>
                 </div>
             </Dialog>
@@ -235,8 +239,8 @@ export default function ProductsPage() {
             <Dialog
                 open={isStockModalOpen}
                 onOpenChange={setIsStockModalOpen}
-                title="Add Stock"
-                description="Enter accounts one per line (format: user|pass)"
+                title={t('products.add_stock_title')}
+                description={t('products.add_stock_desc')}
             >
                 <div className="space-y-4 pt-2">
                     <Textarea
@@ -249,8 +253,8 @@ export default function ProductsPage() {
                         {stockData.split('\n').filter(l => l.trim()).length} accounts
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleAddStock} disabled={!stockData.trim()}>Add to Inventory</Button>
+                        <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>{t('common.cancel')}</Button>
+                        <Button onClick={handleAddStock} disabled={!stockData.trim()}>{t('products.add_stock')}</Button>
                     </div>
                 </div>
             </Dialog>
@@ -259,12 +263,12 @@ export default function ProductsPage() {
             <Dialog
                 open={isViewStockModalOpen}
                 onOpenChange={setIsViewStockModalOpen}
-                title="Current Inventory"
+                title={t('products.current_inventory')}
                 className="max-w-2xl"
             >
                 <div className="max-h-[60vh] overflow-auto border rounded-md p-2 space-y-2 bg-muted/20">
                     {accounts.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">Empty Inventory</div>
+                        <div className="text-center py-8 text-muted-foreground">{t('products.empty_inventory')}</div>
                     ) : (
                         accounts.map((acc, i) => (
                             <div key={acc.id} className="flex items-center justify-between p-2 rounded border bg-card text-card-foreground">
@@ -281,7 +285,7 @@ export default function ProductsPage() {
                     )}
                 </div>
                 <div className="flex justify-end pt-2">
-                    <Button variant="outline" onClick={() => setIsViewStockModalOpen(false)}>Close</Button>
+                    <Button variant="outline" onClick={() => setIsViewStockModalOpen(false)}>{t('products.close')}</Button>
                 </div>
             </Dialog>
         </div>

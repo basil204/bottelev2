@@ -25,7 +25,7 @@ export async function GET(request: Request) {
                 page,
                 limit,
                 total,
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(Number(total) / limit)
             }
         });
     } catch (error) {

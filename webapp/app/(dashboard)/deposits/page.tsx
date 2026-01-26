@@ -26,7 +26,10 @@ interface Deposit {
     created_at: string;
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function DepositsPage() {
+    const { t } = useLanguage();
     const [deposits, setDeposits] = useState<Deposit[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -37,12 +40,22 @@ export default function DepositsPage() {
         fetch(`/api/deposits?page=${page}&limit=10`)
             .then((res) => res.json())
             .then((data) => {
+                if (data.error) {
+                    console.error("API Error:", data.error);
+                    setLoading(false);
+                    return;
+                }
+                if (!data.data || !data.pagination) {
+                    console.error("Invalid API response:", data);
+                    setLoading(false);
+                    return;
+                }
                 setDeposits(data.data);
                 setTotalPages(data.pagination.totalPages);
                 setLoading(false);
             })
             .catch(err => {
-                console.error(err);
+                console.error("Fetch error:", err);
                 setLoading(false);
             });
     }, [page]);
@@ -56,12 +69,21 @@ export default function DepositsPage() {
         }
     };
 
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case 'approved': return t('deposits.approved');
+            case 'pending': return t('deposits.pending');
+            case 'rejected': return t('deposits.rejected');
+            default: return status;
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Deposit History</h2>
-                    <p className="text-muted-foreground">Monitor all incoming transactions</p>
+                    <h2 className="text-3xl font-bold tracking-tight">{t('deposits.title')}</h2>
+                    <p className="text-muted-foreground">{t('deposits.subtitle')}</p>
                 </div>
             </div>
 
@@ -69,7 +91,7 @@ export default function DepositsPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Wallet className="w-5 h-5 text-primary" />
-                        Transactions
+                        {t('deposits.transactions')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -77,18 +99,18 @@ export default function DepositsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>TX Ref</TableHead>
-                                    <TableHead>Amount</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Date</TableHead>
+                                    <TableHead>{t('deposits.id')}</TableHead>
+                                    <TableHead>{t('deposits.user')}</TableHead>
+                                    <TableHead>{t('deposits.tx_ref')}</TableHead>
+                                    <TableHead>{t('deposits.amount')}</TableHead>
+                                    <TableHead>{t('deposits.status')}</TableHead>
+                                    <TableHead>{t('deposits.date')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
+                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
                                     </TableRow>
                                 ) : (
                                     deposits.map((deposit) => (
@@ -101,7 +123,7 @@ export default function DepositsPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <span className={clsx("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium", getStatusStyles(deposit.status))}>
-                                                    {deposit.status.toUpperCase()}
+                                                    {getStatusLabel(deposit.status)}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground text-sm">

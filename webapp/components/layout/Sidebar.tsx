@@ -16,18 +16,21 @@ import {
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Users", href: "/users", icon: Users },
-    { name: "Products", href: "/products", icon: Package },
-    { name: "Orders", href: "/orders", icon: ShoppingCart },
-    { name: "Deposits", href: "/deposits", icon: Wallet },
-    { name: "Settings", href: "/settings", icon: Settings },
-];
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export function Sidebar() {
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
+    const { t } = useLanguage();
+
+    const navItems = [
+        { name: t('sidebar.dashboard'), href: "/", icon: LayoutDashboard },
+        { name: t('sidebar.users'), href: "/users", icon: Users },
+        { name: t('sidebar.products'), href: "/products", icon: Package },
+        { name: t('sidebar.orders'), href: "/orders", icon: ShoppingCart },
+        { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
+        { name: t('sidebar.settings'), href: "/settings", icon: Settings },
+    ];
 
     return (
         <>
@@ -75,7 +78,7 @@ export function Sidebar() {
                     <div className="p-4 border-t">
                         <Button variant="ghost" className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
                             <LogOut className="h-5 w-5" />
-                            Sign Out
+                            {t('sidebar.logout')}
                         </Button>
                     </div>
                 </div>

@@ -17,8 +17,12 @@ interface Settings {
     sepay_bank_code: string;
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function SettingsPage() {
+    const { t } = useLanguage();
     const [settings, setSettings] = useState<Settings>({
+        // ... (initial state remains same)
         mb_auto_deposit: true,
         timo_auto_deposit: true,
         timo_username: '',
@@ -28,6 +32,7 @@ export default function SettingsPage() {
         sepay_account_no: '',
         sepay_bank_code: '',
     });
+    // ... (rest of state)
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -68,9 +73,9 @@ export default function SettingsPage() {
             });
 
             if (res.ok) {
-                setMessage({ type: 'success', text: 'Settings saved successfully!' });
+                setMessage({ type: 'success', text: t('settings.success') });
             } else {
-                setMessage({ type: 'error', text: 'Error saving settings.' });
+                setMessage({ type: 'error', text: t('settings.error') });
             }
         } catch (error) {
             setMessage({ type: 'error', text: 'Server connection error.' });
@@ -89,15 +94,15 @@ export default function SettingsPage() {
 
             if (data.needOTP) {
                 setNeedOtp(true);
-                setOtpMessage('Vui lòng nhập mã OTP gửi về điện thoại.');
+                setOtpMessage(t('settings.enter_otp'));
             } else if (data.success) {
-                setOtpMessage('✅ Kết nối Timo thành công!');
+                setOtpMessage('✅ ' + t('settings.success'));
                 setNeedOtp(false);
             } else {
-                setOtpMessage(`❌ Lỗi: ${data.error || 'Unknown error'}`);
+                setOtpMessage(`❌ Error: ${data.error || 'Unknown error'}`);
             }
         } catch (e) {
-            setOtpMessage('❌ Không thể kết nối tới Timo Server (localhost:6869).');
+            setOtpMessage('❌ Connection Error');
         } finally {
             setTimoLoading(false);
         }
@@ -113,14 +118,14 @@ export default function SettingsPage() {
             });
             const data = await res.json();
             if (data.success) {
-                setOtpMessage('✅ Xác thực OTP thành công!');
+                setOtpMessage('✅ Success');
                 setNeedOtp(false);
                 setOtpValue('');
             } else {
-                setOtpMessage(`❌ OTP không đúng hoặc lỗi: ${data.error}`);
+                setOtpMessage(`❌ Error: ${data.error}`);
             }
         } catch (e) {
-            setOtpMessage('❌ Lỗi kết nối.');
+            setOtpMessage('❌ Connection Error');
         } finally {
             setTimoLoading(false);
         }
@@ -135,32 +140,30 @@ export default function SettingsPage() {
     return (
         <div className="space-y-6 max-w-3xl mx-auto">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">System Settings</h2>
-                <p className="text-muted-foreground">Configure automated processes and system behavior</p>
+                <h2 className="text-3xl font-bold tracking-tight">{t('settings.title')}</h2>
+                <p className="text-muted-foreground">{t('settings.subtitle')}</p>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Banknote className="w-5 h-5 text-primary" />
-                        Deposit Configurations
+                        {t('settings.deposit_config')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
 
-
-
                     <div className="mb-6">
                         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                             <CreditCard className="w-5 h-5 text-purple-400" />
-                            Cấu hình Timo (Ngân hàng số)
+                            {t('settings.timo_config')}
                         </h3>
 
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white">Timo Integration</div>
-                                    <div className="text-sm text-slate-400">Sử dụng Timo để nhận và kiểm tra tiền gửi</div>
+                                    <div className="font-medium text-white">{t('settings.timo_integration')}</div>
+                                    <div className="text-sm text-slate-400">{t('settings.timo_desc')}</div>
                                 </div>
                                 <Switch
                                     checked={settings.timo_auto_deposit}
@@ -171,7 +174,7 @@ export default function SettingsPage() {
                             {settings.timo_auto_deposit && (
                                 <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Timo Username (SĐT)</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_username')}</label>
                                         <input
                                             type="text"
                                             value={settings.timo_username}
@@ -181,7 +184,7 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Timo Password</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_password')}</label>
                                         <input
                                             type="password"
                                             value={settings.timo_password}
@@ -200,7 +203,7 @@ export default function SettingsPage() {
                                                     onClick={handleTimoLogin}
                                                     disabled={timoLoading}
                                                 >
-                                                    {timoLoading ? 'Checking...' : 'Test Login / Refresh Connection'}
+                                                    {timoLoading ? t('settings.checking') : t('settings.test_login')}
                                                 </Button>
                                                 {otpMessage && <span className="text-sm text-slate-300">{otpMessage}</span>}
                                             </div>
@@ -213,12 +216,12 @@ export default function SettingsPage() {
                                                         value={otpValue}
                                                         onChange={(e) => setOtpValue(e.target.value)}
                                                         className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white w-40"
-                                                        placeholder="Enter OTP"
+                                                        placeholder={t('settings.enter_otp')}
                                                     />
                                                     <Button type="button" onClick={submitOtp} disabled={timoLoading}>
-                                                        Submit OTP
+                                                        {t('settings.submit_otp')}
                                                     </Button>
-                                                    <Button type="button" variant="ghost" onClick={() => setNeedOtp(false)}>Cancel</Button>
+                                                    <Button type="button" variant="ghost" onClick={() => setNeedOtp(false)}>{t('common.cancel')}</Button>
                                                 </div>
                                             </div>
                                         )}
@@ -231,14 +234,14 @@ export default function SettingsPage() {
                     <div>
                         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                             <CreditCard className="w-5 h-5 text-purple-400" />
-                            Cấu hình Sepay (Cổng thanh toán)
+                            {t('settings.sepay_config')}
                         </h3>
 
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white">Sepay Integration</div>
-                                    <div className="text-sm text-slate-400">Sử dụng Sepay để kiểm tra giao dịch tự động</div>
+                                    <div className="font-medium text-white">{t('settings.sepay_integration')}</div>
+                                    <div className="text-sm text-slate-400">{t('settings.sepay_desc')}</div>
                                 </div>
                                 <Switch
                                     checked={settings.sepay_enabled}
@@ -249,7 +252,7 @@ export default function SettingsPage() {
                             {settings.sepay_enabled && (
                                 <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Sepay API Token</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.sepay_token')}</label>
                                         <input
                                             type="text"
                                             value={settings.sepay_token}
@@ -260,7 +263,7 @@ export default function SettingsPage() {
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản</label>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.account_no')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.sepay_account_no}
@@ -270,7 +273,7 @@ export default function SettingsPage() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">Mã ngân hàng (Bank Code)</label>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.bank_code')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.sepay_bank_code}
@@ -299,7 +302,7 @@ export default function SettingsPage() {
                     <div className="flex justify-end pt-4">
                         <Button onClick={handleSave} disabled={saving}>
                             <Save className="w-4 h-4 mr-2" />
-                            {saving ? 'Saving...' : 'Save Settings'}
+                            {saving ? t('settings.saving') : t('settings.save_settings')}
                         </Button>
                     </div>
                 </CardContent >

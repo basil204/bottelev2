@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   description: 'Bot Ban Hang Telegram Admin Dashboard',
 };
 
+import { LanguageProvider } from '@/contexts/LanguageContext';
+
 export default function RootLayout({
   children,
 }: {
@@ -24,7 +26,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -25,8 +25,12 @@ interface Order {
     created_at: string;
 }
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function OrdersPage() {
+    const { t } = useLanguage();
     const [orders, setOrders] = useState<Order[]>([]);
+    // ... (state)
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -50,8 +54,8 @@ export default function OrdersPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Order History</h2>
-                    <p className="text-muted-foreground">Manage and view all customer orders</p>
+                    <h2 className="text-3xl font-bold tracking-tight">{t('orders.title')}</h2>
+                    <p className="text-muted-foreground">{t('orders.subtitle')}</p>
                 </div>
             </div>
 
@@ -59,7 +63,7 @@ export default function OrdersPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ShoppingCart className="w-5 h-5 text-primary" />
-                        Latest Orders
+                        {t('orders.latest')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -67,25 +71,25 @@ export default function OrdersPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[100px]">ID</TableHead>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Product</TableHead>
-                                    <TableHead>Price</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Date</TableHead>
+                                    <TableHead className="w-[100px]">{t('orders.id')}</TableHead>
+                                    <TableHead>{t('orders.user')}</TableHead>
+                                    <TableHead>{t('orders.product')}</TableHead>
+                                    <TableHead>{t('orders.price')}</TableHead>
+                                    <TableHead>{t('orders.status')}</TableHead>
+                                    <TableHead className="text-right">{t('orders.date')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
                                         <TableCell colSpan={6} className="h-24 text-center">
-                                            Loading orders...
+                                            {t('common.loading')}
                                         </TableCell>
                                     </TableRow>
                                 ) : orders.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                            No orders found.
+                                            {t('orders.no_orders')}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -106,7 +110,7 @@ export default function OrdersPage() {
                                                             : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                                     )}
                                                 >
-                                                    {order.status.toUpperCase()}
+                                                    {order.status === 'completed' ? t('orders.completed') : t('orders.pending')}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right text-muted-foreground">

@@ -4,26 +4,46 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function LoginPage() {
+    const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
+    const [error, setError] = useState('');
+
     const handleSubmit = async (e: React.FormEvent) => {
+        // ... (existing logic)
         e.preventDefault();
         setIsLoading(true);
+        setError('');
 
-        // Simulate login delay
-        setTimeout(() => {
-            // Set simple auth cookie (valid for 1 day)
-            const expires = new Date();
-            expires.setTime(expires.getTime() + 24 * 60 * 60 * 1000);
-            document.cookie = `auth_token=true; expires=${expires.toUTCString()}; path=/`;
+        try {
+            // Get form data
+            const form = e.target as HTMLFormElement;
+            const username = (form[0] as HTMLInputElement).value;
+            const password = (form[1] as HTMLInputElement).value;
 
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                // Redirect
+                window.location.href = '/';
+            } else {
+                setError(data.error || 'Invalid credentials');
+                setIsLoading(false);
+            }
+        } catch (err) {
+            setError('Something went wrong');
             setIsLoading(false);
-            // Force a hard refresh to ensure middleware picks up the cookie immediately or use router
-            window.location.href = '/';
-        }, 1500);
+        }
     };
 
     return (
@@ -43,12 +63,19 @@ export default function LoginPage() {
                     {/* Logo / Header */}
                     <div className="mb-8 text-center">
                         <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600 mb-2">
-                            Welcome Back
+                            {t('auth.login_title')}
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            Sign in to verify your account
+                            {t('auth.login_subtitle')}
                         </p>
                     </div>
+
+                    {/* Error Message */}
+                    {error && (
+                        <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center">
+                            {error}
+                        </div>
+                    )}
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="w-full space-y-6">
@@ -60,7 +87,7 @@ export default function LoginPage() {
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Username or Email"
+                                    placeholder={t('auth.username_placeholder')}
                                     className="w-full bg-background/50 dark:bg-white/5 border border-input rounded-xl py-3.5 pl-11 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all hover:bg-background/80 dark:hover:bg-white/10"
                                     required
                                 />
@@ -73,7 +100,7 @@ export default function LoginPage() {
                                 </div>
                                 <input
                                     type={showPassword ? 'text' : 'password'}
-                                    placeholder="Password"
+                                    placeholder={t('auth.password_placeholder')}
                                     className="w-full bg-background/50 dark:bg-white/5 border border-input rounded-xl py-3.5 pl-11 pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all hover:bg-background/80 dark:hover:bg-white/10"
                                     required
                                 />
@@ -91,10 +118,10 @@ export default function LoginPage() {
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
                             <label className="flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors">
                                 <input type="checkbox" className="w-4 h-4 rounded bg-background/50 border-input text-primary focus:ring-primary/50 focus:ring-offset-0" />
-                                <span>Remember me</span>
+                                <span>{t('auth.remember_me')}</span>
                             </label>
                             <Link href="/forgot-password" className="hover:text-primary transition-colors">
-                                Forgot password?
+                                {t('auth.forgot_password')}
                             </Link>
                         </div>
 
@@ -112,11 +139,11 @@ export default function LoginPage() {
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="h-5 w-5 animate-spin" />
-                                        <span>Signing in...</span>
+                                        <span>{t('auth.signing_in')}</span>
                                     </>
                                 ) : (
                                     <>
-                                        <span>Sign In</span>
+                                        <span>{t('auth.sign_in')}</span>
                                         <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                                     </>
                                 )}

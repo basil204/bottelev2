@@ -29,6 +29,7 @@ export const vi = {
         deposits: 'Nạp tiền',
         gmail: 'Gmail',
         proxies: 'Proxies',
+        notifications: 'Thông báo',
         logout: 'Đăng xuất',
     },
     dashboard: {
@@ -142,5 +143,18 @@ export const vi = {
         approved: 'Thành công',
         pending: 'Đang xử lý',
         rejected: 'Thất bại',
+    },
+    notifications: {
+        title: 'Thông báo',
+        subtitle: 'Gửi tin nhắn hàng loạt cho tất cả người dùng',
+        message_label: 'Nội dung tin nhắn',
+        placeholder: 'Nhập tin nhắn của bạn ở đây...',
+        send: 'Gửi thông báo',
+        sending: 'Đang gửi...',
+        success_title: 'Gửi thành công',
+        success_message: 'Đã gửi tin nhắn cho {sent}/{total} người dùng.',
+        error_title: 'Gửi thất bại',
+        error_message: 'Có lỗi xảy ra khi gửi tin nhắn.',
+        history: 'Lịch sử tin nhắn',
     }
 };

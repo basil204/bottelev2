@@ -11,7 +11,8 @@ import {
     Wallet,
     Settings,
     LogOut,
-    Menu
+    Menu,
+    Bell
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export function Sidebar() {
         { name: t('sidebar.products'), href: "/products", icon: Package },
         { name: t('sidebar.orders'), href: "/orders", icon: ShoppingCart },
         { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
+        { name: t('sidebar.notifications'), href: "/notifications", icon: Bell },
         { name: t('sidebar.settings'), href: "/settings", icon: Settings },
     ];
 

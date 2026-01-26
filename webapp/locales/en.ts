@@ -29,6 +29,7 @@ export const en = {
         deposits: 'Deposits',
         gmail: 'Gmail',
         proxies: 'Proxies',
+        notifications: 'Notifications',
         logout: 'Logout',
     },
     dashboard: {
@@ -142,5 +143,18 @@ export const en = {
         approved: 'Approved',
         pending: 'Pending',
         rejected: 'Rejected',
+    },
+    notifications: {
+        title: 'Notifications',
+        subtitle: 'Send broadcast messages to all users',
+        message_label: 'Message Content',
+        placeholder: 'Enter your message here...',
+        send: 'Send Broadcast',
+        sending: 'Sending...',
+        success_title: 'Send Successful',
+        success_message: 'Sent message to {sent}/{total} users.',
+        error_title: 'Send Failed',
+        error_message: 'An error occurred while sending message.',
+        history: 'Message History',
     }
 };

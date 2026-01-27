@@ -22,6 +22,14 @@ export function CardHeader({ className, children }: CardProps) {
     );
 }
 
+export function CardDescription({ className, children }: CardProps) {
+    return (
+        <p className={clsx("text-sm text-muted-foreground", className)}>
+            {children}
+        </p>
+    );
+}
+
 export function CardTitle({ className, children }: CardProps) {
     return (
         <h3 className={clsx("font-semibold leading-none tracking-tight", className)}>

@@ -132,7 +132,7 @@ export default function Dashboard() {
             <DollarSign className="w-24 h-24" />
           </div>
           <div className="relative z-10">
-            <h3 className="text-2xl font-bold mb-2">🎉 {t('dashboard.promotion_active', 'Def: Promotion Active!')}</h3>
+            <h3 className="text-2xl font-bold mb-2">🎉 {t('dashboard.promotion_active')}</h3>
             <p className="text-lg opacity-90 mb-4">
               Get <span className="font-bold text-yellow-100">{promotion.bonus_percentage}% bonus</span> on deposits over {formatCurrency(promotion.min_amount)}!
             </p>

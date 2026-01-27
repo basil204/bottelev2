@@ -67,6 +67,23 @@ export async function PUT(request: Request) {
         } finally {
             connection.release();
         }
+
+        // Notify User
+        try {
+            const [userRows] = await pool.query<any[]>('SELECT telegram_id FROM users WHERE id = ?', [id]);
+            const telegramId = userRows[0]?.telegram_id;
+            if (telegramId) {
+                const { sendMessage } = await import('@/lib/telegram');
+                const actionText = type === 'add' ? 'được cộng' : 'bị trừ';
+                const message = `💰 Tài khoản của bạn vừa ${actionText} ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}.\n📝 Lý do: ${reason || 'Admin thay đổi'}`;
+                await sendMessage(telegramId, message);
+            }
+        } catch (notifyError) {
+            console.error("Failed to notify user:", notifyError);
+        }
+
+        return NextResponse.json({ success: true });
+
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

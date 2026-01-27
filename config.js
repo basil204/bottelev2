@@ -20,7 +20,7 @@ export const config = {
     })(),
     NOTIFICATION_CHAT_ID: process.env.NOTIFICATION_CHAT_ID || fileConfig.NOTIFICATION_CHAT_ID || null,
     TELEGRAM_GROUP_LINKS: fileConfig.TELEGRAM_GROUP_LINKS || [
-        { name: 'Group thông báo và chat', url: 'https://t.me/+SFp6Gttq18VmYThl' }
+        { name: 'Group thông báo và chat', url: 'https://zalo.me/g/yhyssg106' }
     ],
     NOTIFY_MODE: process.env.NOTIFY_MODE || fileConfig.NOTIFY_MODE || 'all',
 

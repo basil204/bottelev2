@@ -14,7 +14,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Wallet, ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 
 interface Deposit {
     id: number;
@@ -105,12 +105,13 @@ export default function DepositsPage() {
                                     <TableHead>{t('deposits.amount')}</TableHead>
                                     <TableHead>{t('deposits.status')}</TableHead>
                                     <TableHead>{t('deposits.date')}</TableHead>
+                                    <TableHead className="text-right">{t('common.actions')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                        <TableCell colSpan={7} className="h-24 text-center">{t('common.loading')}</TableCell>
                                     </TableRow>
                                 ) : (
                                     deposits.map((deposit) => (
@@ -128,6 +129,56 @@ export default function DepositsPage() {
                                             </TableCell>
                                             <TableCell className="text-muted-foreground text-sm">
                                                 {new Date(deposit.created_at).toLocaleString()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {deposit.status === 'pending' && (
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="default" // Changed to default (usually primary color) or explicit green if possible, but default is fine.
+                                                            className="bg-green-600 hover:bg-green-700 text-white h-8 px-2"
+                                                            onClick={async () => {
+                                                                if (!confirm('Bạn có chắc chắn muốn DUYỆT yêu cầu này?')) return;
+                                                                try {
+                                                                    const res = await fetch('/api/deposits', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ depositId: deposit.id, action: 'approve' })
+                                                                    });
+                                                                    if (res.ok) {
+                                                                        setDeposits(prev => prev.map(d => d.id === deposit.id ? { ...d, status: 'approved' } : d));
+                                                                    } else {
+                                                                        alert('Failed to approve');
+                                                                    }
+                                                                } catch (e) { console.error(e); alert('Error'); }
+                                                            }}
+                                                        >
+                                                            <Check className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            className="h-8 px-2"
+                                                            onClick={async () => {
+                                                                if (!confirm('Bạn có chắc chắn muốn TỪ CHỐI yêu cầu này?')) return;
+                                                                try {
+                                                                    const res = await fetch('/api/deposits', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ depositId: deposit.id, action: 'reject' })
+                                                                    });
+                                                                    if (res.ok) {
+                                                                        setDeposits(prev => prev.map(d => d.id === deposit.id ? { ...d, status: 'rejected' } : d));
+                                                                    } else {
+                                                                        alert('Failed to reject');
+                                                                    }
+                                                                } catch (e) { console.error(e); alert('Error'); }
+                                                            }}
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))

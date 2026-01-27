@@ -210,6 +210,16 @@ export default function ProductsPage() {
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, price: Number(e.target.value) }))}
                         />
                     </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">{t('products.type')}</label>
+                        <select
+                            value="stock"
+                            disabled
+                            className="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm cursor-not-allowed opacity-70"
+                        >
+                            <option value="stock">Tự động (có kho)</option>
+                        </select>
+                    </div>
 
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t('products.description')}</label>

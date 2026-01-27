@@ -12,7 +12,8 @@ import {
     Settings,
     LogOut,
     Menu,
-    Bell
+    Bell,
+    Landmark
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function Sidebar() {
         { name: t('sidebar.products'), href: "/products", icon: Package },
         { name: t('sidebar.orders'), href: "/orders", icon: ShoppingCart },
         { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
+        { name: "Lịch sử Bank", href: "/bank-history", icon: Landmark },
         { name: t('sidebar.notifications'), href: "/notifications", icon: Bell },
         { name: t('sidebar.settings'), href: "/settings", icon: Settings },
     ];

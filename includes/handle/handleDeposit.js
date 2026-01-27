@@ -187,7 +187,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
 
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
   const expiresAt = Date.now() + 5 * 60 * 1000;
-  const depositId = await createDeposit(user.id, amount);
+  const depositId = await createDeposit(user.id, amount, content);
 
   // Use Sepay bank code as display name
   const bankDisplayName = selectedBank === 'timo' ? 'Timo (VPBank)' : bankCode;

@@ -380,6 +380,15 @@ export const startAutoDepositWatcher = (bot, config) => {
       const admin = await getAdminSettings();
       const promotion = await getActivePromotion();
 
+      // Define date range for today
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const transaction_date_min = `${dateStr} 00:00:00`;
+      const transaction_date_max = `${dateStr} 23:59:59`;
+
       // Check Sepay
       if (sepayConfig.enabled && sepayConfig.token) {
         // ... (existing Sepay logic)

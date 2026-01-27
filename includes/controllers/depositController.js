@@ -1,9 +1,9 @@
 import { query, getPool } from '../database/index.js';
 
-export const createDeposit = async (userId, amount) => {
+export const createDeposit = async (userId, amount, content = null) => {
   const [result] = await getPool().execute(
-    'INSERT INTO deposits (user_id, amount, status) VALUES (?, ?, "pending")',
-    [userId, amount]
+    'INSERT INTO deposits (user_id, amount, status, content) VALUES (?, ?, "pending", ?)',
+    [userId, amount, content]
   );
   return result.insertId;
 };
@@ -36,6 +36,11 @@ export const getDeposit = async (id) => {
 
 export const findDepositByRef = async (txRef) => {
   const rows = await query('SELECT * FROM deposits WHERE tx_ref = ?', [txRef]);
+  return rows[0];
+};
+
+export const findDepositByContent = async (content) => {
+  const rows = await query('SELECT * FROM deposits WHERE content = ? AND status = "pending" ORDER BY id DESC LIMIT 1', [content]);
   return rows[0];
 };
 

@@ -58,7 +58,7 @@ export const initDb = async (config) => {
         conn.release();
       }
     }
-    
+
     // Ensure columns exist (migration for existing tables)
     try {
       // Check and add telegram_id to users table if it doesn't exist
@@ -70,20 +70,28 @@ export const initDb = async (config) => {
     } catch (e) {
       // Table might not exist yet, which is fine
     }
-    
+
     // ensure tx_ref column exists for auto deposit
     try {
       await pool.execute('ALTER TABLE deposits ADD COLUMN tx_ref VARCHAR(64)');
     } catch (e) {
       // ignore if already exists
     }
-    
+
+    // ensure content column exists for persistent token matching
+    try {
+      await pool.execute('ALTER TABLE deposits ADD COLUMN content VARCHAR(64)');
+      await pool.execute('ALTER TABLE deposits ADD INDEX idx_content (content)');
+    } catch (e) {
+      // ignore if already exists
+    }
+
     // ensure delete_at column exists for gmail_accounts table
     try {
       // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)
       await pool.execute('ALTER TABLE gmail_accounts ADD COLUMN delete_at TIMESTAMP NULL DEFAULT NULL');
       console.log('✅ Added delete_at column to gmail_accounts table');
-      
+
       // Thử thêm index
       try {
         await pool.execute('ALTER TABLE gmail_accounts ADD INDEX idx_delete_at (delete_at)');
@@ -104,13 +112,13 @@ export const initDb = async (config) => {
         console.error('Migration error for gmail_accounts.delete_at:', e.message);
       }
     }
-    
+
     // ensure delete_at column exists for accounts table
     try {
       // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)
       await pool.execute('ALTER TABLE accounts ADD COLUMN delete_at TIMESTAMP NULL DEFAULT NULL');
       console.log('✅ Added delete_at column to accounts table');
-      
+
       // Thử thêm index
       try {
         await pool.execute('ALTER TABLE accounts ADD INDEX idx_delete_at (delete_at)');
@@ -131,7 +139,7 @@ export const initDb = async (config) => {
         console.error('Migration error for accounts.delete_at:', e.message);
       }
     }
-    
+
     // ensure settings table exists
     try {
       await pool.execute(`

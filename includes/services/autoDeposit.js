@@ -404,12 +404,32 @@ export const startAutoDepositWatcher = (bot, config) => {
             const note = tx.transaction_content || '';
             const token = extractToken(note);
             if (!token) continue;
-            const cached = getCache(contentKey(token));
+
+            let cached = getCache(contentKey(token));
+            let fromDb = false;
+
             if (!cached) {
-              console.log(`[AUTO_WATCHER] Orphaned Tx found: ${token} - Cache expired or not found. TxId: ${tx.id}`);
-              continue;
+              // Fallback: Check DB
+              const { findDepositByContent } = await import('../controllers/depositController.js');
+              const deposit = await findDepositByContent(token);
+
+              if (deposit) {
+                console.log(`[AUTO_WATCHER] Recovered transaction from DB: ${token} for user ${deposit.user_id}`);
+                cached = {
+                  userId: deposit.user_id,
+                  depositId: deposit.id,
+                  amount: deposit.amount,
+                  bank: 'sepay', // Assume SePay for recovery or generic
+                  token: token
+                };
+                fromDb = true;
+              } else {
+                console.log(`[AUTO_WATCHER] Orphaned Tx found: ${token} - Cache expired and not found in DB. TxId: ${tx.id}`);
+                continue;
+              }
             }
-            if (cached.bank !== 'sepay') continue; // Only process if bank matches
+
+            if (cached.bank !== 'sepay' && !fromDb) continue; // Only process if bank matches (skip check if recovered)
 
             const user = await getUserById(cached.userId);
             if (!user) continue;

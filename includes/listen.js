@@ -258,6 +258,10 @@ export const registerListeners = (bot, config) => {
   bot.on('message', async (msg) => {
     if (!msg.text) return;
     const text = msg.text.trim();
+
+    // Ignore commands handled by onText
+    if (text.startsWith('/')) return;
+
     const user = await ensureUser(bot, msg);
 
     if (text === '➕ Nạp tiền') return startDepositFlow(bot, msg, user, config);

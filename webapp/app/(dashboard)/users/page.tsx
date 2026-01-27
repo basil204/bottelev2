@@ -56,14 +56,18 @@ export default function UsersPage() {
     };
 
     useEffect(() => {
-        fetchUsers();
-    }, [page]);
+        const timer = setTimeout(() => {
+            fetchUsers();
+        }, 500);
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        fetchUsers();
-    }
+        return () => clearTimeout(timer);
+    }, [page, searchQuery]);
+
+    // Handle search input change directly
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchQuery(e.target.value);
+        setPage(1); // Reset to page 1 on search
+    };
 
     const handleBalanceUpdate = async () => {
         if (!selectedUser || !amount) return;
@@ -97,18 +101,18 @@ export default function UsersPage() {
                     <h2 className="text-3xl font-bold tracking-tight">{t('users.title')}</h2>
                     <p className="text-muted-foreground">{t('users.subtitle')}</p>
                 </div>
-                <form onSubmit={handleSearch} className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <Input
                         type="text"
                         placeholder={t('users.search_placeholder')}
                         className="w-64"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={handleSearchChange}
                     />
-                    <Button type="submit" variant="secondary">
+                    <Button variant="secondary" onClick={() => fetchUsers()}>
                         <Search className="w-4 h-4" />
                     </Button>
-                </form>
+                </div>
             </div>
 
             <Card>

@@ -6,15 +6,25 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
+        const search = searchParams.get('search') || '';
         const offset = (page - 1) * limit;
 
-        const [rows] = await pool.query(`
-      SELECT * FROM users
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, [limit, offset]);
+        let query = 'SELECT * FROM users';
+        let countQuery = 'SELECT COUNT(*) as total FROM users';
+        let params: any[] = [];
 
-        const [countResult] = await pool.query<any[]>('SELECT COUNT(*) as total FROM users');
+        if (search) {
+            const searchClause = ' WHERE username LIKE ? OR telegram_id LIKE ?';
+            query += searchClause;
+            countQuery += searchClause;
+            params = [`%${search}%`, `%${search}%`];
+        }
+
+        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+        params.push(limit, offset);
+
+        const [rows] = await pool.query(query, params);
+        const [countResult] = await pool.query<any[]>(countQuery, search ? [`%${search}%`, `%${search}%`] : []);
         const total = countResult[0].total;
 
         return NextResponse.json({

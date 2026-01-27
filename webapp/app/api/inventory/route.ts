@@ -51,13 +51,19 @@ export async function POST(request: Request) {
             }
 
             // Update product stock
+            const [stockResult] = await connection.query<RowDataPacket[]>(
+                'SELECT COUNT(*) as cnt FROM accounts WHERE product_id = ? AND status = "available"',
+                [productId]
+            );
+            const totalStock = stockResult[0]?.cnt || 0;
+
             await connection.query(
-                'UPDATE products SET stock = (SELECT COUNT(*) FROM accounts WHERE product_id = ? AND status = "available") WHERE id = ?',
-                [productId, productId]
+                'UPDATE products SET stock = ? WHERE id = ?',
+                [totalStock, productId]
             );
 
             await connection.commit();
-            return NextResponse.json({ success: true, count: addedAccounts.length });
+            return NextResponse.json({ success: true, count: addedAccounts.length, totalStock });
         } catch (error) {
             await connection.rollback();
             throw error;

@@ -1,41 +1,61 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-
-const TELEGRAM_API_URL = 'https://api.telegram.org/bot';
+import { RowDataPacket } from 'mysql2';
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { message } = body;
+        const { type, productName, productPrice, addedCount, totalStock } = body;
 
-        if (!message) {
-            return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+        // Get shop name and bot token from settings
+        const [settings] = await pool.query<RowDataPacket[]>(
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('shop_name', 'telegram_bot_token')"
+        );
+
+        let shopName = 'SHOP';
+        let botToken = '';
+
+        settings.forEach((row: any) => {
+            if (row.key === 'shop_name') shopName = row.value || 'SHOP';
+            if (row.key === 'telegram_bot_token') botToken = row.value;
+        });
+
+        if (!botToken) {
+            return NextResponse.json({ error: 'Bot token not configured' }, { status: 400 });
         }
 
-        const token = process.env.TELEGRAM_BOT_TOKEN;
-        if (!token) {
-            return NextResponse.json({ error: 'Telegram Bot Token not configured' }, { status: 500 });
+        // Get all users
+        const [users] = await pool.query<RowDataPacket[]>('SELECT telegram_id FROM users WHERE telegram_id IS NOT NULL');
+
+        if (!users || users.length === 0) {
+            return NextResponse.json({ success: true, sent: 0, message: 'No users to notify' });
         }
 
-        // 1. Get all users with telegram_id
-        const [users] = await pool.query<any[]>('SELECT telegram_id FROM users WHERE telegram_id IS NOT NULL');
+        // Build message based on type
+        let message = '';
 
-        if (users.length === 0) {
-            return NextResponse.json({ success: true, sent: 0, failed: 0, message: 'No users found to send message.' });
+        if (type === 'new_product') {
+            message = `📢 ${shopName} thông báo có sản phẩm mới!\n\n` +
+                `🎁 Sản phẩm: ${productName}\n` +
+                `💰 Giá: ${Number(productPrice).toLocaleString('vi-VN')}đ\n\n` +
+                `👉 Gõ /start để vào bot mua ngay nhé!`;
+        } else if (type === 'stock_added') {
+            message = `📢 ${shopName} thông báo có hàng mới!\n\n` +
+                `🎁 Sản phẩm: ${productName}\n` +
+                `➕ Vừa thêm: ${addedCount} tài khoản\n` +
+                `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
+                `👉 Gõ /start để vào bot mua ngay nhé!`;
+        } else {
+            return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
 
+        // Send to all users
         let sentCount = 0;
-        let failedCount = 0;
+        let failCount = 0;
 
-        // 2. Send message to each user
-        // We use Promise.all to send in parallel, but maybe chunking is better to avoid rate limits?
-        // Telegram limits: 30 messages per second.
-        // For simplicity, we'll just await sequentially or in small batches. 
-        // Let's do parallel for now as user base assumed small, but with catch.
-
-        const promises = users.map(async (user) => {
+        for (const user of users) {
             try {
-                const res = await fetch(`${TELEGRAM_API_URL}${token}/sendMessage`, {
+                const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -45,24 +65,20 @@ export async function POST(request: Request) {
                     })
                 });
 
-                if (res.ok) {
+                if (response.ok) {
                     sentCount++;
                 } else {
-                    console.error(`Failed to send to ${user.telegram_id}:`, await res.text());
-                    failedCount++;
+                    failCount++;
                 }
             } catch (err) {
-                console.error(`Error sending to ${user.telegram_id}:`, err);
-                failedCount++;
+                failCount++;
             }
-        });
-
-        await Promise.all(promises);
+        }
 
         return NextResponse.json({
             success: true,
             sent: sentCount,
-            failed: failedCount,
+            failed: failCount,
             total: users.length
         });
 

@@ -80,6 +80,7 @@ export const registerListeners = (bot, config) => {
     };
 
     await bot.sendMessage(msg.chat.id, messageText, opts);
+    await sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {

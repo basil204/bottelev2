@@ -27,6 +27,8 @@ interface Settings {
     mb_auto_deposit: boolean;
     viettel_token: string;
     min_deposit: number;
+    telegram_bot_token: string;
+    shop_name: string;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -37,6 +39,8 @@ export default function SettingsPage() {
         mb_auto_deposit: true,
         viettel_token: '',
         min_deposit: 50000,
+        telegram_bot_token: '',
+        shop_name: 'SHOP',
     });
 
     const [loading, setLoading] = useState(true);
@@ -340,20 +344,54 @@ export default function SettingsPage() {
                                     </Button>
                                 </div>
                             </div>
+
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">🤖 Telegram Bot Token</div>
+                                    <div className="text-sm text-slate-400 mb-4">Token của Telegram Bot (lấy từ @BotFather)</div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Bot Token</label>
+                                    <input
+                                        type="password"
+                                        value={settings.telegram_bot_token}
+                                        onChange={(e) => handleChange('telegram_bot_token', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">🏪 Tên Shop</div>
+                                    <div className="text-sm text-slate-400 mb-4">Tên hiển thị trong thông báo sản phẩm mới</div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Shop Name</label>
+                                    <input
+                                        type="text"
+                                        value={settings.shop_name}
+                                        onChange={(e) => handleChange('shop_name', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="DUCVIETSTORE"
+                                    />
+                                </div>
+                            </div>
                         </TabsContent>
 
                         <TabsContent value="promotions">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Deposit Promotions</CardTitle>
-                                    <CardDescription>Manage automated deposit bonuses.</CardDescription>
+                                    <CardTitle>Khuyến mãi nạp tiền</CardTitle>
+                                    <CardDescription>Quản lý khuyến mãi tự động khi nạp tiền.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
-                                        <h3 className="font-semibold">Create New Promotion</h3>
+                                        <h3 className="font-semibold">Tạo khuyến mãi mới</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <Label>Start Time</Label>
+                                                <Label>Thời gian bắt đầu</Label>
                                                 <Input
                                                     type="datetime-local"
                                                     value={newPromo.start_time}
@@ -361,7 +399,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>End Time</Label>
+                                                <Label>Thời gian kết thúc</Label>
                                                 <Input
                                                     type="datetime-local"
                                                     value={newPromo.end_time}
@@ -369,7 +407,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Bonus Percentage (%)</Label>
+                                                <Label>Phần trăm thưởng (%)</Label>
                                                 <Input
                                                     type="number"
                                                     value={newPromo.bonus_percentage}
@@ -377,7 +415,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Min Deposit Amount</Label>
+                                                <Label>Nạp tối thiểu</Label>
                                                 <Input
                                                     type="number"
                                                     value={newPromo.min_amount}
@@ -386,7 +424,7 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <Button onClick={handleCreatePromotion} disabled={promoLoading}>
-                                            Create Promotion
+                                            Tạo khuyến mãi
                                         </Button>
                                     </div>
 
@@ -394,12 +432,12 @@ export default function SettingsPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>Start</TableHead>
-                                                    <TableHead>End</TableHead>
-                                                    <TableHead>Bonus</TableHead>
-                                                    <TableHead>Min Amount</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead>Action</TableHead>
+                                                    <TableHead>Bắt đầu</TableHead>
+                                                    <TableHead>Kết thúc</TableHead>
+                                                    <TableHead>Thưởng</TableHead>
+                                                    <TableHead>Nạp tối thiểu</TableHead>
+                                                    <TableHead>Trạng thái</TableHead>
+                                                    <TableHead>Thao tác</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -420,7 +458,7 @@ export default function SettingsPage() {
                                                 {promotions.length === 0 && (
                                                     <TableRow>
                                                         <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                            No promotions found.
+                                                            Chưa có khuyến mãi nào.
                                                         </TableCell>
                                                     </TableRow>
                                                 )}

@@ -40,7 +40,10 @@ export default function ProductsPage() {
     const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
     const [stockData, setStockData] = useState('');
     const [currentProductId, setCurrentProductId] = useState<number | null>(null);
+    const [currentProductName, setCurrentProductName] = useState<string>('');
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [notifyUsers, setNotifyUsers] = useState(true);
+    const [notifyNewProduct, setNotifyNewProduct] = useState(true);
 
     const fetchProducts = () => {
         setLoading(true);
@@ -66,15 +69,35 @@ export default function ProductsPage() {
     const handleSave = async () => {
         if (!editingProduct?.name || !editingProduct?.price) return;
 
-        const method = editingProduct.id ? 'PUT' : 'POST';
-        await fetch('/api/products', {
+        const isNewProduct = !editingProduct.id;
+        const method = isNewProduct ? 'POST' : 'PUT';
+
+        const res = await fetch('/api/products', {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(editingProduct),
         });
 
+        if (res.ok) {
+            // Fire and forget - don't wait for broadcast
+            if (isNewProduct && notifyNewProduct) {
+                fetch('/api/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'new_product',
+                        productName: editingProduct.name,
+                        productPrice: editingProduct.price
+                    })
+                }).catch(e => console.error('Broadcast error:', e));
+            }
+
+            alert(isNewProduct ? 'Thêm sản phẩm thành công!' : 'Cập nhật sản phẩm thành công!');
+        }
+
         setIsModalOpen(false);
         setEditingProduct(null);
+        setNotifyNewProduct(true);
         fetchProducts();
     };
 
@@ -89,10 +112,27 @@ export default function ProductsPage() {
 
         if (res.ok) {
             const result = await res.json();
+
+            // Fire and forget - don't wait for broadcast
+            if (notifyUsers && currentProductName) {
+                fetch('/api/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'stock_added',
+                        productName: currentProductName,
+                        addedCount: result.count,
+                        totalStock: result.totalStock || result.count
+                    })
+                }).catch(e => console.error('Broadcast error:', e));
+            }
+
             alert(t('products.success_stock').replace('{count}', result.count));
             setIsStockModalOpen(false);
             setStockData('');
             setCurrentProductId(null);
+            setCurrentProductName('');
+            setNotifyUsers(true);
             fetchProducts();
         } else {
             alert(t('products.error_stock'));
@@ -106,7 +146,9 @@ export default function ProductsPage() {
 
     const openStockModal = (product: Product) => {
         setCurrentProductId(product.id);
+        setCurrentProductName(`${product.name} ${Number(product.price).toLocaleString('vi-VN')}đ`);
         setStockData('');
+        setNotifyUsers(true);
         setIsStockModalOpen(true);
     };
 
@@ -228,6 +270,20 @@ export default function ProductsPage() {
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, description: e.target.value }))}
                         />
                     </div>
+                    {!editingProduct?.id && (
+                        <div className="flex items-center gap-2 py-2">
+                            <input
+                                type="checkbox"
+                                id="notifyNewProduct"
+                                checked={notifyNewProduct}
+                                onChange={(e) => setNotifyNewProduct(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-600"
+                            />
+                            <label htmlFor="notifyNewProduct" className="text-sm">
+                                📢 Thông báo sản phẩm mới tới tất cả users
+                            </label>
+                        </div>
+                    )}
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
                         <Button onClick={handleSave}>{t('products.save')}</Button>
@@ -270,6 +326,18 @@ export default function ProductsPage() {
                     />
                     <div className="text-right text-xs text-muted-foreground">
                         {stockData.split('\n').filter(l => l.trim()).length} accounts
+                    </div>
+                    <div className="flex items-center gap-2 py-2">
+                        <input
+                            type="checkbox"
+                            id="notifyUsers"
+                            checked={notifyUsers}
+                            onChange={(e) => setNotifyUsers(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-600"
+                        />
+                        <label htmlFor="notifyUsers" className="text-sm">
+                            📢 Thông báo tới tất cả users
+                        </label>
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>{t('common.cancel')}</Button>

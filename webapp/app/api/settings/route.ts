@@ -11,6 +11,8 @@ export async function GET() {
             mb_auto_deposit: true,
             viettel_token: '',
             min_deposit: 50000,
+            telegram_bot_token: '',
+            shop_name: 'SHOP',
         };
 
         rows.forEach((row) => {
@@ -37,7 +39,9 @@ export async function POST(request: Request) {
         const {
             mb_auto_deposit,
             viettel_token,
-            min_deposit
+            min_deposit,
+            telegram_bot_token,
+            shop_name
         } = body;
 
         const connection = await pool.getConnection();
@@ -54,6 +58,8 @@ export async function POST(request: Request) {
             if (mb_auto_deposit !== undefined) await upsertSetting('mb_auto_deposit', mb_auto_deposit);
             if (viettel_token !== undefined) await upsertSetting('viettel_token', viettel_token);
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
+            if (telegram_bot_token !== undefined) await upsertSetting('telegram_bot_token', telegram_bot_token);
+            if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
 
             await connection.commit();
             return NextResponse.json({ success: true });

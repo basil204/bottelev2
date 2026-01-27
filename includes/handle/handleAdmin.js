@@ -7,13 +7,30 @@ import { listBalanceLogs } from '../controllers/balanceLogController.js';
 import { createDepositPromotion, getAllPromotions, deletePromotion } from '../controllers/depositPromotionController.js';
 import { notifyUsersAboutProductStock } from './handleNotify.js';
 
-export const requireAdmin = (adminIds, telegramId) => isAdmin(telegramId, adminIds);
+import { query } from '../database/index.js';
+
+export const requireAdmin = async (adminIds, telegramId) => {
+  // Merge DB admin_ids with static adminIds
+  let dbAdminIds = [];
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'admin_ids'");
+    if (rows && rows.length > 0) {
+      dbAdminIds = JSON.parse(rows[0].value);
+    }
+  } catch (e) {
+    console.error('Error fetching admin_ids from DB:', e);
+  }
+
+  // Ensure both are arrays and filter valid IDs
+  const allAdmins = [...(adminIds || []), ...(dbAdminIds || [])].map(id => Number(id));
+  return allAdmins.includes(Number(telegramId));
+};
 
 export const adminMenu = async (bot, chatId) => {
   const inline_keyboard = [
     [{ text: '📊 Quản lý sản phẩm', callback_data: createCallbackData({ action: 'admin_products', page: 1 }) }],
     [{ text: '📦 Quản lý tài khoản', callback_data: createCallbackData({ action: 'admin_accounts_pick', page: 1 }) }],
-    [{ text: '📧 Quản lý Gmail', callback_data: createCallbackData({ action: 'admin_gmail_menu' }) }],
+
     [{ text: '💰 Quản lý nạp tiền', callback_data: createCallbackData({ action: 'admin_deposits', page: 1 }) }],
     [{ text: '📝 Đơn hàng cần xử lý', callback_data: createCallbackData({ action: 'admin_manual_orders', page: 1 }) }],
     [{ text: '👤 Quản lý user', callback_data: createCallbackData({ action: 'admin_users', page: 1 }) }]
@@ -49,44 +66,44 @@ export const adminAddProduct = async (bot, chatId) => {
 export const adminParseAddProduct = async (bot, msg) => {
   const parts = msg.text.split('|').map((x) => x.trim());
   const [name, price, description, type] = parts;
-  
+
   // Validation
   if (!name || !price) {
     return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả|type\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro|order\n- Tài khoản Netflix|100000|Tài khoản Premium|stock');
   }
-  
+
   // Kiểm tra giá phải là số hợp lệ
   const priceNum = Number(price);
   if (isNaN(priceNum) || priceNum < 0) {
     return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
   }
-  
+
   // Kiểm tra type
   const productType = (type && (type.toLowerCase() === 'order' || type.toLowerCase() === 'stock')) ? type.toLowerCase() : 'stock';
-  
+
   await createProduct({ name, price: priceNum, description: description || '', type: productType });
-  
+
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n📦 Loại: ${productType === 'order' ? 'Order (yêu cầu nhập email/note)' : 'Stock (tự động giao, cần stock > 0)'}`);
 };
 
 export const adminUpdateProduct = async (bot, msg, productId) => {
   const parts = msg.text.split('|').map((x) => x.trim());
   const [name, price, description, type] = parts;
-  
+
   // Validation
   if (!name || !price) {
     return bot.sendMessage(msg.chat.id, '❌ Sai định dạng!\n\n📝 Định dạng: tên|giá|mô tả|type\n\n💡 Ví dụ:\n- Nâng cấp Gmail|50000|Nâng cấp lên Pro|order\n- Tài khoản Netflix|100000|Tài khoản Premium|stock');
   }
-  
+
   // Kiểm tra giá phải là số hợp lệ
   const priceNum = Number(price);
   if (isNaN(priceNum) || priceNum < 0) {
     return bot.sendMessage(msg.chat.id, `❌ Giá không hợp lệ!\n\n💰 Giá phải là số và >= 0\n\n📝 Bạn đã nhập: "${price}"\n\n💡 Ví dụ: 50000, 100000, 200000`);
   }
-  
+
   // Kiểm tra type (nếu có)
   const productType = (type && (type.toLowerCase() === 'order' || type.toLowerCase() === 'stock')) ? type.toLowerCase() : undefined;
-  
+
   await updateProduct(productId, { name, price: priceNum, description: description || '', type: productType });
   await bot.sendMessage(msg.chat.id, `✅ Đã cập nhật sản phẩm.`);
 };
@@ -114,34 +131,34 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
   const { rows, total } = await listAccounts(productId, offset, fixedPageSize, status);
   const hasPrev = page > 1;
   const hasNext = offset + rows.length < total;
-  
+
   const product = await getProduct(productId);
   const productName = product ? product.name : `Sản phẩm #${productId}`;
-  
+
   // Đếm theo status
   const { rows: allAvailable } = await listAccounts(productId, 0, 999999, 'available');
   const { rows: allSold } = await listAccounts(productId, 0, 999999, 'sold');
   const availableCount = allAvailable.length;
   const soldCount = allSold.length;
-  
+
   const statusText = status ? ` (${status})` : '';
   const lines = rows.map((a) => {
     const statusEmoji = a.status === 'available' ? '✅' : '💰';
     return `${statusEmoji} #${a.id} | ${a.username} | ${a.status}`;
   });
-  
+
   const message = `📦 **Tài khoản: ${productName}${statusText}**\n\n` +
-                 `📊 Tổng quan:\n` +
-                 `✅ Available: ${availableCount}\n` +
-                 `💰 Sold: ${soldCount}\n\n` +
-                 `${lines.join('\n') || 'Chưa có tài khoản.'}\n\n` +
-                 `📄 Trang ${page}/${Math.ceil(total / fixedPageSize)} | Tổng: ${total} tài khoản`;
-  
+    `📊 Tổng quan:\n` +
+    `✅ Available: ${availableCount}\n` +
+    `💰 Sold: ${soldCount}\n\n` +
+    `${lines.join('\n') || 'Chưa có tài khoản.'}\n\n` +
+    `📄 Trang ${page}/${Math.ceil(total / fixedPageSize)} | Tổng: ${total} tài khoản`;
+
   // Helper function để tạo callback_data không chứa null và đảm bảo <= 64 bytes
   const createCallbackData = (data) => {
     // Rút ngắn tên các field để tiết kiệm bytes
     const shortData = {};
-    
+
     // Map action names
     const actionMap = {
       'admin_accounts': 'acc',
@@ -150,16 +167,16 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       'admin_add_account': 'add_acc',
       'admin_upload_account': 'up_acc'
     };
-    
+
     // Rút ngắn data
     if (data.action) shortData.a = actionMap[data.action] || data.action;
     if (data.productId !== undefined) shortData.p = data.productId;
     if (data.accountId !== undefined) shortData.ac = data.accountId;
     if (data.page !== undefined) shortData.pg = data.page;
     if (data.status !== undefined && data.status !== null) shortData.s = data.status;
-    
+
     const jsonStr = JSON.stringify(shortData);
-    
+
     // Telegram giới hạn callback_data là 64 bytes
     const byteLength = Buffer.byteLength(jsonStr, 'utf8');
     if (byteLength > 64) {
@@ -169,10 +186,10 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       if (shortData.p !== undefined) minimalData.p = shortData.p;
       return JSON.stringify(minimalData);
     }
-    
+
     return jsonStr;
   };
-  
+
   const inline_keyboard = [
     [
       { text: '📋 Tất cả', callback_data: createCallbackData({ action: 'admin_accounts', productId, page: 1 }) },
@@ -183,16 +200,12 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       { text: '➕ Thêm', callback_data: createCallbackData({ action: 'admin_add_account', productId }) },
       { text: '📂 Upload', callback_data: createCallbackData({ action: 'admin_upload_account', productId }) }
     ],
-    ...(productId ? [
-      [
-        { text: '📧 Thêm Gmail Edu', callback_data: createCallbackData({ action: 'admin_add_gmail_edu_stock', productId }) }
-      ]
-    ] : []),
+
     ...(status ? [
       [
-        { 
-          text: `🗑️ Xóa tất cả ${status}`, 
-          callback_data: createCallbackData({ action: 'admin_delete_accounts_by_status', productId, status, page }) 
+        {
+          text: `🗑️ Xóa tất cả ${status}`,
+          callback_data: createCallbackData({ action: 'admin_delete_accounts_by_status', productId, status, page })
         }
       ]
     ] : []),
@@ -200,8 +213,8 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       const deleteData = { action: 'admin_delete_account', accountId: a.id, productId, page };
       if (status) deleteData.status = status;
       return [
-        { 
-          text: `❌ #${a.id}`, 
+        {
+          text: `❌ #${a.id}`,
           callback_data: createCallbackData(deleteData)
         }
       ];
@@ -212,7 +225,7 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
       return buildPaginationKeyboard(paginationData, page, hasPrev, hasNext);
     })()
   ];
-  
+
   await bot.sendMessage(chatId, message, {
     parse_mode: 'Markdown',
     reply_markup: { inline_keyboard }
@@ -229,10 +242,10 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
   if (!username || !password) return bot.sendMessage(msg.chat.id, 'Sai định dạng. Định dạng: username|password hoặc username|password|2fa');
   await addAccounts(productId, [{ username, password, twofa: twofa || null }]);
   await bot.sendMessage(msg.chat.id, `Đã thêm 1 account.${twofa ? ' (có 2FA)' : ''}`);
-  
+
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, 1);
-  
+
   // Thông báo vào nhóm
   const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
   const { globalConfig } = await import('../listen.js');
@@ -245,7 +258,7 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
 export const adminParseUploadAccounts = async (bot, msg, productId) => {
   // Lấy text từ msg.text hoặc msg.caption (nếu gửi kèm caption)
   let textContent = msg.text || msg.caption || '';
-  
+
   // Nếu có file document, cần download và đọc nội dung
   if (msg.document && !textContent) {
     try {
@@ -258,22 +271,22 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
       return bot.sendMessage(msg.chat.id, '❌ Không thể đọc file. Vui lòng gửi lại file hoặc dán nội dung.');
     }
   }
-  
+
   if (!textContent || !textContent.trim()) {
     return bot.sendMessage(msg.chat.id, '❌ Không tìm thấy nội dung. Vui lòng gửi file .txt hoặc dán nội dung username|password hoặc username|password|2fa mỗi dòng.');
   }
-  
+
   const accounts = parseUploadText(textContent);
   if (!accounts.length) {
     return bot.sendMessage(msg.chat.id, '❌ File rỗng hoặc sai định dạng. Định dạng: username|password hoặc username|password|2fa (mỗi dòng một account).');
   }
-  
+
   await addAccounts(productId, accounts);
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm ${accounts.length} account.`);
-  
+
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, accounts.length);
-  
+
   // Thông báo vào nhóm
   const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
   const { globalConfig } = await import('../listen.js');
@@ -393,7 +406,7 @@ export const handleUserCommand = async (bot, msg, args) => {
   // Kiểm tra số dư có đủ để trừ không
   const currentBalance = Number(user.balance);
   const newBalance = currentBalance + amount;
-  
+
   if (newBalance < 0) {
     return bot.sendMessage(
       msg.chat.id,
@@ -407,40 +420,40 @@ export const handleUserCommand = async (bot, msg, args) => {
 
   // Cập nhật số dư
   await changeBalance(user.id, amount);
-  
+
   // Lấy lại user để có số dư chính xác
   const updatedUser = await getUserByTelegram(telegramId);
   const finalBalance = Number(updatedUser.balance);
-  
+
   // Ghi log
   const action = isSubtract ? 'Trừ' : 'Cộng';
-  const reason = isSubtract 
-    ? `Admin trừ tiền (Admin ID: ${msg.from.id})` 
+  const reason = isSubtract
+    ? `Admin trừ tiền (Admin ID: ${msg.from.id})`
     : `Admin cộng tiền (Admin ID: ${msg.from.id})`;
-  await addBalanceLog({ 
-    userId: user.id, 
-    amount, 
-    reason, 
-    adminId: msg.from.id 
+  await addBalanceLog({
+    userId: user.id,
+    amount,
+    reason,
+    adminId: msg.from.id
   });
-  
+
   // Thông báo cho admin
   const adminMessage = `✅ **${action} tiền thành công!**\n\n` +
-                      `👤 User ID: \`${telegramId}\`\n` +
-                      `👤 Username: ${user.username ? `@${user.username}` : 'N/A'}\n` +
-                      `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
-                      `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
-                      `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
-  
+    `👤 User ID: \`${telegramId}\`\n` +
+    `👤 Username: ${user.username ? `@${user.username}` : 'N/A'}\n` +
+    `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
+    `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
+    `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+
   await bot.sendMessage(msg.chat.id, adminMessage, { parse_mode: 'Markdown' });
-  
+
   // Thông báo cho user
   try {
     const userMessage = `✅ **${action === 'Cộng' ? 'Nạp' : 'Trừ'} tiền thành công!**\n\n` +
-                       `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
-                       `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
-                       `💵 Số dư mới: ${formatCurrency(finalBalance)}\n` +
-                       `📝 Lý do: ${reason}`;
+      `💰 ${action}: ${formatCurrency(Math.abs(amount))}\n` +
+      `💵 Số dư cũ: ${formatCurrency(currentBalance)}\n` +
+      `💵 Số dư mới: ${formatCurrency(finalBalance)}\n` +
+      `📝 Lý do: ${reason}`;
     await bot.sendMessage(Number(telegramId), userMessage, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error(`[HANDLE_USER] Không thể gửi thông báo cho user ${telegramId}:`, error.message);
@@ -477,36 +490,36 @@ export const adminUserBalances = async (bot, chatId, userId, page, pageSize) => 
 export const adminListManualOrders = async (bot, chatId, page, pageSize) => {
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listPendingManualOrders(offset, pageSize);
-  
+
   if (!rows.length) {
     return bot.sendMessage(chatId, '✅ Không có đơn hàng nào cần xử lý.');
   }
-  
+
   const hasPrev = page > 1;
   const hasNext = offset + rows.length < total;
-  
+
   const message = rows.map((order, index) => {
     return `📝 **#${order.id}** - ${order.product_name}\n` +
-           `👤 User: ${order.username || order.telegram_id}\n` +
-           `📧 Email: ${order.email || 'N/A'}\n` +
-           `📝 Note: ${order.note || 'Không có'}\n` +
-           `💰 Giá: ${formatCurrency(order.price)}\n` +
-           `🕐 ${order.created_at}\n`;
+      `👤 User: ${order.username || order.telegram_id}\n` +
+      `📧 Email: ${order.email || 'N/A'}\n` +
+      `📝 Note: ${order.note || 'Không có'}\n` +
+      `💰 Giá: ${formatCurrency(order.price)}\n` +
+      `🕐 ${order.created_at}\n`;
   }).join('\n---\n');
-  
+
   const inline_keyboard = [
     ...rows.map((order) => [
-      { 
-        text: `✅ Hoàn thành #${order.id}`, 
-        callback_data: createCallbackData({ action: 'admin_complete_order', orderId: order.id }) 
+      {
+        text: `✅ Hoàn thành #${order.id}`,
+        callback_data: createCallbackData({ action: 'admin_complete_order', orderId: order.id })
       }
     ]),
     ...buildPaginationKeyboard({ action: 'admin_manual_orders', page }, page, hasPrev, hasNext)
   ];
-  
-  await bot.sendMessage(chatId, message, { 
+
+  await bot.sendMessage(chatId, message, {
     parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard } 
+    reply_markup: { inline_keyboard }
   });
 };
 
@@ -514,37 +527,37 @@ export const adminListManualOrders = async (bot, chatId, page, pageSize) => {
 export const adminCompleteManualOrder = async (bot, chatId, orderId, admin) => {
   try {
     const order = await getOrderById(orderId);
-    
+
     if (!order) {
       return bot.sendMessage(chatId, '❌ Không tìm thấy đơn hàng.');
     }
-    
+
     if (order.status !== 'pending') {
       return bot.sendMessage(chatId, `❌ Đơn hàng #${orderId} đã được xử lý rồi (status: ${order.status}).`);
     }
-    
+
     // Cập nhật status thành completed
     await completeOrder(orderId);
-    
+
     // Thông báo cho admin
     await bot.sendMessage(chatId, `✅ Đã hoàn thành đơn hàng #${orderId}.\n📧 Email: ${order.email || 'N/A'}\n📝 Note: ${order.note || 'Không có'}`);
-    
+
     // Thông báo cho user
     try {
       const user = await getUserById(order.user_id);
       if (user && user.telegram_id) {
         const userMessage = `✅ **Đơn hàng đã hoàn thành!**\n\n` +
-                           `🎁 Sản phẩm: ${order.product_name}\n` +
-                           `📧 Email: ${order.email || 'N/A'}\n` +
-                           `📝 Note: ${order.note || 'Không có'}\n` +
-                           `🆔 Mã đơn: #${orderId}\n\n` +
-                           `Cảm ơn bạn đã sử dụng dịch vụ!`;
+          `🎁 Sản phẩm: ${order.product_name}\n` +
+          `📧 Email: ${order.email || 'N/A'}\n` +
+          `📝 Note: ${order.note || 'Không có'}\n` +
+          `🆔 Mã đơn: #${orderId}\n\n` +
+          `Cảm ơn bạn đã sử dụng dịch vụ!`;
         await bot.sendMessage(Number(user.telegram_id), userMessage, { parse_mode: 'Markdown' });
       }
     } catch (error) {
       console.error(`[COMPLETE_ORDER] Không thể gửi thông báo cho user:`, error.message);
     }
-    
+
   } catch (error) {
     console.error(`[COMPLETE_ORDER] Lỗi:`, error);
     await bot.sendMessage(chatId, `❌ Lỗi khi hoàn thành đơn hàng: ${error.message}`);
@@ -554,14 +567,14 @@ export const adminCompleteManualOrder = async (bot, chatId, orderId, admin) => {
 export const adminDeleteAccount = async (bot, chatId, accountId, productId, page, status = null) => {
   try {
     const result = await deleteAccount(accountId);
-    
+
     if (!result.success) {
       return bot.sendMessage(chatId, `❌ ${result.error || 'Không thể xóa tài khoản'}`);
     }
-    
+
     // Refresh danh sách accounts
     await adminListAccounts(bot, chatId, productId, page, 10, status);
-    
+
   } catch (error) {
     console.error('[ADMIN_DELETE_ACCOUNT] Lỗi:', error);
     await bot.sendMessage(chatId, `❌ Lỗi khi xóa tài khoản: ${error.message}`);
@@ -572,16 +585,16 @@ export const adminDeleteAccount = async (bot, chatId, accountId, productId, page
 export const adminDeleteAccountsByStatus = async (bot, chatId, productId, status, page) => {
   try {
     const result = await deleteAccountsByStatus(productId, status);
-    
+
     if (!result.success) {
       return bot.sendMessage(chatId, `❌ ${result.error || 'Không thể xóa tài khoản'}`);
     }
-    
+
     await bot.sendMessage(chatId, `✅ Đã xóa ${result.deletedCount} tài khoản (status: ${status}).`);
-    
+
     // Refresh danh sách accounts
     await adminListAccounts(bot, chatId, productId, 1, 10, status);
-    
+
   } catch (error) {
     console.error('[ADMIN_DELETE_ACCOUNTS_BY_STATUS] Lỗi:', error);
     await bot.sendMessage(chatId, `❌ Lỗi khi xóa tài khoản: ${error.message}`);
@@ -598,7 +611,7 @@ export const logAdminCommand = (adminId, command) => {
 export const adminParseKmnap = async (bot, msg) => {
   try {
     const parts = msg.text.trim().split(/\s+/);
-    
+
     if (parts.length < 5) {
       return bot.sendMessage(
         msg.chat.id,
@@ -614,44 +627,44 @@ export const adminParseKmnap = async (bot, msg) => {
         '- Số tiền tối thiểu: số tiền nạp tối thiểu để được khuyến mại (VNĐ)'
       );
     }
-    
+
     // Parse các tham số
     const startDateStr = `${parts[1]} ${parts[2]}`; // YYYY-MM-DD HH:MM:SS
     const endDateStr = `${parts[3]} ${parts[4]}`;   // YYYY-MM-DD HH:MM:SS
     const bonusPercentage = parseFloat(parts[5]);
     const minAmount = parseFloat(parts[6]);
-    
+
     // Validate
     if (isNaN(bonusPercentage) || bonusPercentage <= 0 || bonusPercentage > 100) {
       return bot.sendMessage(msg.chat.id, '❌ Phần trăm khuyến mại phải là số từ 0.01 đến 100');
     }
-    
+
     if (isNaN(minAmount) || minAmount <= 0) {
       return bot.sendMessage(msg.chat.id, '❌ Số tiền tối thiểu phải là số lớn hơn 0');
     }
-    
+
     // Validate datetime format - giả sử user nhập thời gian theo VN time (UTC+7)
     // Parse như VN time, convert sang UTC để lưu vào DB
     const startTimeVN = new Date(startDateStr.replace(' ', 'T') + '+07:00');
     const endTimeVN = new Date(endDateStr.replace(' ', 'T') + '+07:00');
-    
+
     if (isNaN(startTimeVN.getTime())) {
       return bot.sendMessage(msg.chat.id, '❌ Thời gian bắt đầu không hợp lệ. Format: YYYY-MM-DD HH:MM:SS');
     }
-    
+
     if (isNaN(endTimeVN.getTime())) {
       return bot.sendMessage(msg.chat.id, '❌ Thời gian kết thúc không hợp lệ. Format: YYYY-MM-DD HH:MM:SS');
     }
-    
+
     if (startTimeVN >= endTimeVN) {
       return bot.sendMessage(msg.chat.id, '❌ Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc');
     }
-    
+
     // startTimeVN và endTimeVN đã là UTC time (khi parse với +07:00)
     // Lấy UTC string để lưu vào DB
     const startTimeUTC = startTimeVN.toISOString().slice(0, 19).replace('T', ' ');
     const endTimeUTC = endTimeVN.toISOString().slice(0, 19).replace('T', ' ');
-    
+
     // Tạo khuyến mại - lưu thời gian UTC vào DB
     const promotionId = await createDepositPromotion(
       startTimeUTC,
@@ -659,7 +672,7 @@ export const adminParseKmnap = async (bot, msg) => {
       bonusPercentage,
       minAmount
     );
-    
+
     await bot.sendMessage(
       msg.chat.id,
       `✅ Đã tạo khuyến mại nạp tiền!\n\n` +
@@ -668,7 +681,7 @@ export const adminParseKmnap = async (bot, msg) => {
       `💰 Nạp tối thiểu: ${formatCurrency(minAmount)}\n\n` +
       `📝 ID: #${promotionId}`
     );
-    
+
   } catch (error) {
     console.error('[ADMIN_KMMAP] Lỗi:', error);
     await bot.sendMessage(msg.chat.id, `❌ Lỗi khi tạo khuyến mại: ${error.message}`);
@@ -678,14 +691,14 @@ export const adminParseKmnap = async (bot, msg) => {
 // Convert UTC datetime string từ DB sang VN time để hiển thị
 const formatDateTimeVN = (utcDateInput) => {
   let utcDateStr = utcDateInput;
-  
+
   // Nếu là Date object, convert sang string
   if (utcDateInput instanceof Date) {
     utcDateStr = utcDateInput.toISOString().slice(0, 19).replace('T', ' ');
   } else if (typeof utcDateInput !== 'string') {
     utcDateStr = String(utcDateInput);
   }
-  
+
   // Parse UTC datetime string (YYYY-MM-DD HH:MM:SS) từ DB
   const utcDate = new Date(utcDateStr.replace(' ', 'T') + 'Z');
   // Convert sang VN time (UTC+7)
@@ -704,17 +717,17 @@ const formatDateTimeVN = (utcDateInput) => {
 export const adminListPromotions = async (bot, chatId) => {
   try {
     const promotions = await getAllPromotions();
-    
+
     if (!promotions || promotions.length === 0) {
       return bot.sendMessage(chatId, '📋 Chưa có khuyến mại nạp tiền nào.');
     }
-    
+
     const now = new Date();
     const lines = promotions.map((promo) => {
       // Parse thời gian từ DB - có thể là Date object hoặc string
       let startTimeStr = promo.start_time;
       let endTimeStr = promo.end_time;
-      
+
       // Nếu là Date object, convert sang string
       if (startTimeStr instanceof Date) {
         startTimeStr = startTimeStr.toISOString().slice(0, 19).replace('T', ' ');
@@ -723,7 +736,7 @@ export const adminListPromotions = async (bot, chatId) => {
       } else {
         startTimeStr = String(startTimeStr);
       }
-      
+
       if (endTimeStr instanceof Date) {
         endTimeStr = endTimeStr.toISOString().slice(0, 19).replace('T', ' ');
       } else if (typeof endTimeStr === 'string') {
@@ -731,14 +744,14 @@ export const adminListPromotions = async (bot, chatId) => {
       } else {
         endTimeStr = String(endTimeStr);
       }
-      
+
       // Parse thời gian từ DB (UTC datetime string)
       const startTimeUTC = new Date(startTimeStr.replace(' ', 'T') + 'Z');
       const endTimeUTC = new Date(endTimeStr.replace(' ', 'T') + 'Z');
-      
+
       let statusText = '';
       let statusIcon = '';
-      
+
       if (promo.status !== 'active') {
         statusText = 'Tắt';
         statusIcon = '⚫';
@@ -752,28 +765,28 @@ export const adminListPromotions = async (bot, chatId) => {
         statusText = 'Kích hoạt';
         statusIcon = '🟢';
       }
-      
+
       return `${statusIcon} #${promo.id}\n` +
-             `📅 ${formatDateTimeVN(startTimeStr)} → ${formatDateTimeVN(endTimeStr)}\n` +
-             `🎁 ${promo.bonus_percentage}% | 💰 Tối thiểu: ${formatCurrency(promo.min_amount)}\n` +
-             `📊 Trạng thái: ${statusText}\n`;
+        `📅 ${formatDateTimeVN(startTimeStr)} → ${formatDateTimeVN(endTimeStr)}\n` +
+        `🎁 ${promo.bonus_percentage}% | 💰 Tối thiểu: ${formatCurrency(promo.min_amount)}\n` +
+        `📊 Trạng thái: ${statusText}\n`;
     });
-    
+
     // Tạo inline keyboard với nút xóa cho mỗi promotion
     const inline_keyboard = promotions.map((promo) => [
-      { 
-        text: `❌ Xóa #${promo.id}`, 
-        callback_data: createCallbackData({ action: 'admin_delete_promotion', id: promo.id }) 
+      {
+        text: `❌ Xóa #${promo.id}`,
+        callback_data: createCallbackData({ action: 'admin_delete_promotion', id: promo.id })
       }
     ]);
-    
+
     await bot.sendMessage(chatId, `📋 **Danh sách khuyến mại nạp tiền:**\n\n${lines.join('\n')}`, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard
       }
     });
-    
+
   } catch (error) {
     console.error('[ADMIN_LIST_PROMOTIONS] Lỗi:', error);
     await bot.sendMessage(chatId, `❌ Lỗi khi lấy danh sách khuyến mại: ${error.message}`);
@@ -790,6 +803,105 @@ export const adminDeletePromotion = async (bot, chatId, promotionId) => {
   } catch (error) {
     console.error('[ADMIN_DELETE_PROMOTION] Lỗi:', error);
     await bot.sendMessage(chatId, `❌ Lỗi khi xóa khuyến mại: ${error.message}`);
+  }
+};
+
+// Settings Menu
+export const adminSettings = async (bot, chatId) => {
+  try {
+    // Fetch settings
+    const settingsRows = await query("SELECT `key`, `value` FROM settings");
+    const settings = {};
+    if (Array.isArray(settingsRows)) {
+      settingsRows.forEach(r => settings[r.key] = r.value);
+    }
+
+    // Default values
+    const minDeposit = settings.min_deposit ? Number(settings.min_deposit) : 50000;
+    const buyGmailEdu = settings.buy_gmail_edu !== 'false'; // Default true
+    const buyGmailNon = settings.buy_gmail_non !== 'false'; // Default true
+
+    // Fetch products summary
+    const { rows: products } = await listProducts(0, 100);
+    const productSummary = products.map(p => {
+      const statusIcon = p.stock > 0 ? '✅' : '❌';
+      const typeIcon = p.type === 'order' ? '📝' : '📦';
+      return `${statusIcon} ${p.name} (${typeIcon} ${p.type}): ${p.stock}`;
+    }).join('\n');
+
+    let message = `⚙️ **Cài đặt hệ thống**\n\n`;
+    message += `💰 **Nạp tối thiểu:** ${formatCurrency(minDeposit)}\n`;
+    message += `🎓 **Mua Gmail Edu:** ${buyGmailEdu ? '✅ Bật' : '❌ Tắt'}\n`;
+    message += `📧 **Mua Gmail Thường:** ${buyGmailNon ? '✅ Bật' : '❌ Tắt'}\n\n`;
+
+    message += `📦 **Danh sách sản phẩm (${products.length}):**\n${productSummary || 'Chưa có sản phẩm'}\n\n`;
+    message += `💡 Bấm vào nút bên dưới để thay đổi.`;
+
+    const inline_keyboard = [
+      [
+        { text: `${buyGmailEdu ? '❌ Tắt' : '✅ Bật'} Gmail Edu`, callback_data: createCallbackData({ action: 'toggle_setting', key: 'buy_gmail_edu' }) },
+        { text: `${buyGmailNon ? '❌ Tắt' : '✅ Bật'} Gmail Non`, callback_data: createCallbackData({ action: 'toggle_setting', key: 'buy_gmail_non' }) }
+      ],
+      [
+        { text: '✏️ Sửa mức nạp tối thiểu', callback_data: createCallbackData({ action: 'edit_setting', key: 'min_deposit' }) }
+      ]
+    ];
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard }
+    });
+  } catch (error) {
+    console.error('Error in adminSettings:', error);
+    await bot.sendMessage(chatId, '❌ Lỗi khi tải cài đặt.');
+  }
+};
+
+export const adminToggleSetting = async (bot, chatId, key) => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = ?", [key]);
+    let currentValue = true; // Default true
+    if (rows && rows.length > 0) {
+      currentValue = rows[0].value !== 'false';
+    }
+
+    const newValue = !currentValue;
+    if (rows && rows.length > 0) {
+      await query("UPDATE settings SET `value` = ? WHERE `key` = ?", [String(newValue), key]);
+    } else {
+      await query("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", [key, String(newValue)]);
+    }
+
+    await bot.sendMessage(chatId, `✅ Đã thay đổi cài đặt ${key} thành: ${newValue}`);
+    // Refresh settings menu
+    await adminSettings(bot, chatId);
+  } catch (error) {
+    console.error('Error toggling setting:', error);
+    await bot.sendMessage(chatId, '❌ Lỗi khi thay đổi cài đặt.');
+  }
+};
+
+export const adminEditSettingPrompt = async (bot, chatId, key) => {
+  await bot.sendMessage(chatId, `Nhập giá trị mới cho **${key}** (chỉ nhập số):`, { parse_mode: 'Markdown' });
+};
+
+export const adminUpdateSetting = async (bot, msg, key) => {
+  const value = msg.text.trim();
+  if (!value || isNaN(Number(value))) {
+    return bot.sendMessage(msg.chat.id, '❌ Giá trị không hợp lệ. Vui lòng nhập số.');
+  }
+
+  try {
+    const rows = await query("SELECT `id` FROM settings WHERE `key` = ?", [key]);
+    if (rows && rows.length > 0) {
+      await query("UPDATE settings SET `value` = ? WHERE `key` = ?", [value, key]);
+    } else {
+      await query("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", [key, value]);
+    }
+    await bot.sendMessage(msg.chat.id, `✅ Đã cập nhật ${key} thành ${value}`);
+  } catch (error) {
+    console.error('Error updating setting:', error);
+    await bot.sendMessage(msg.chat.id, '❌ Lỗi khi cập nhật.');
   }
 };
 

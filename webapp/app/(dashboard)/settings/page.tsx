@@ -25,13 +25,8 @@ import {
 
 interface Settings {
     mb_auto_deposit: boolean;
-    timo_auto_deposit: boolean;
-    timo_username: string;
-    timo_password: string;
-    sepay_enabled: boolean;
-    sepay_token: string;
-    sepay_account_no: string;
-    sepay_bank_code: string;
+    viettel_token: string;
+    min_deposit: number;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -39,27 +34,15 @@ import { useLanguage } from '@/contexts/LanguageContext';
 export default function SettingsPage() {
     const { t } = useLanguage();
     const [settings, setSettings] = useState<Settings>({
-        // ... (initial state remains same)
         mb_auto_deposit: true,
-        timo_auto_deposit: true,
-        timo_username: '',
-        timo_password: '',
-        sepay_enabled: false,
-        sepay_token: '',
-        sepay_account_no: '',
-        sepay_bank_code: '',
+        viettel_token: '',
+        min_deposit: 50000,
     });
-    // ... (rest of state)
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-    // Timo OTP State
-    const [timoLoading, setTimoLoading] = useState(false);
-    const [needOtp, setNeedOtp] = useState(false);
-    const [otpValue, setOtpValue] = useState('');
-    const [otpMessage, setOtpMessage] = useState('');
 
     // Promotion states
     const [promotions, setPromotions] = useState<any[]>([]);
@@ -118,14 +101,6 @@ export default function SettingsPage() {
 
     const handleCreatePromotion = async () => {
         if (!newPromo.start_time || !newPromo.end_time) {
-            // Assuming 'toast' is available, if not, this would cause an error.
-            // For this response, I'll assume it's imported or handled elsewhere.
-            // If not, a simple console.error or alert would be needed.
-            // toast({
-            //     title: "Error",
-            //     description: "Please select start and end time",
-            //     variant: "destructive"
-            // });
             console.error("Please select start and end time");
             return;
         }
@@ -138,18 +113,15 @@ export default function SettingsPage() {
             });
 
             if (res.ok) {
-                // toast({ title: "Success", description: "Promotion created" });
                 console.log("Promotion created successfully");
                 loadPromotions();
                 // Reset form slightly but keep useful defaults
                 setNewPromo(prev => ({ ...prev, start_time: '', end_time: '' }));
             } else {
                 const err = await res.json();
-                // toast({ title: "Error", description: err.error || "Failed to create", variant: "destructive" });
                 console.error("Failed to create promotion:", err.error || "Unknown error");
             }
         } catch (e) {
-            // toast({ title: "Error", description: "Network error", variant: "destructive" });
             console.error("Network error:", e);
         }
     };
@@ -160,14 +132,12 @@ export default function SettingsPage() {
         try {
             const res = await fetch(`/api/promotions?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
-                // toast({ title: "Success", description: "Promotion deleted" });
                 console.log("Promotion deleted successfully");
                 loadPromotions();
             } else {
                 console.error("Failed to delete promotion");
             }
         } catch (e) {
-            // toast({ title: "Error", description: "Failed to delete", variant: "destructive" });
             console.error("Failed to delete promotion:", e);
         }
     };
@@ -202,52 +172,6 @@ export default function SettingsPage() {
         }
     };
 
-    const handleTimoLogin = async () => {
-        setTimoLoading(true);
-        setOtpMessage('');
-        try {
-            // Call Timo Server (Internal API)
-            const res = await fetch('/api/timo');
-            const data = await res.json();
-
-            if (data.needOTP) {
-                setNeedOtp(true);
-                setOtpMessage(t('settings.enter_otp'));
-            } else if (data.success) {
-                setOtpMessage('✅ ' + t('settings.success'));
-                setNeedOtp(false);
-            } else {
-                setOtpMessage(`❌ Error: ${data.error || 'Unknown error'}`);
-            }
-        } catch (e) {
-            setOtpMessage('❌ Connection Error');
-        } finally {
-            setTimoLoading(false);
-        }
-    };
-
-    const submitOtp = async () => {
-        if (!otpValue) return;
-        setTimoLoading(true);
-        try {
-            const res = await fetch('/api/timo', {
-                method: 'POST',
-                body: JSON.stringify({ otp: otpValue })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setOtpMessage('✅ Success');
-                setNeedOtp(false);
-                setOtpValue('');
-            } else {
-                setOtpMessage(`❌ Error: ${data.error}`);
-            }
-        } catch (e) {
-            setOtpMessage('❌ Connection Error');
-        } finally {
-            setTimoLoading(false);
-        }
-    };
 
     if (loading) return (
         <div className="flex h-[50vh] items-center justify-center">
@@ -263,7 +187,7 @@ export default function SettingsPage() {
             </div>
 
             <Card>
-                <Tabs defaultValue="general" className="w-full">
+                <Tabs defaultValue="payment" className="w-full">
                     <CardHeader>
                         <TabsList className="grid w-full grid-cols-4">
                             <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
@@ -275,8 +199,21 @@ export default function SettingsPage() {
 
                     <CardContent>
                         <TabsContent value="general" className="space-y-4">
-                            <div className="text-sm text-muted-foreground p-4 text-center">
-                                General settings will appear here.
+                            <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <Banknote className="w-5 h-5 text-green-400" />
+                                    {t('settings.deposit_config')}
+                                </h3>
+                                <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                    <div>
+                                        <div className="font-medium text-white">Auto Deposit (MBBank/Viettel)</div>
+                                        <div className="text-sm text-slate-400">Enable automatic deposit checking via API</div>
+                                    </div>
+                                    <Switch
+                                        checked={settings.mb_auto_deposit}
+                                        onCheckedChange={() => handleToggle('mb_auto_deposit')}
+                                    />
+                                </div>
                             </div>
                         </TabsContent>
 
@@ -284,142 +221,124 @@ export default function SettingsPage() {
                             <div className="mb-6">
                                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                                     <CreditCard className="w-5 h-5 text-purple-400" />
-                                    {t('settings.timo_config')}
+                                    {t('settings.viettel_config')}
                                 </h3>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                         <div>
-                                            <div className="font-medium text-white">{t('settings.timo_integration')}</div>
-                                            <div className="text-sm text-slate-400">{t('settings.timo_desc')}</div>
+                                            <div className="font-medium text-white mb-2">{t('settings.viettel_integration')}</div>
+                                            <div className="text-sm text-slate-400 mb-4">{t('settings.viettel_desc')}</div>
                                         </div>
-                                        <Switch
-                                            checked={settings.timo_auto_deposit}
-                                            onCheckedChange={() => handleToggle('timo_auto_deposit')}
-                                        />
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.viettel_token')}</label>
+                                            <input
+                                                type="text"
+                                                value={settings.viettel_token}
+                                                onChange={(e) => handleChange('viettel_token', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="Token Sieuthicode..."
+                                            />
+                                        </div>
                                     </div>
 
-                                    {settings.timo_auto_deposit && (
-                                        <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_username')}</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.timo_username}
-                                                    onChange={(e) => handleChange('timo_username', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                    placeholder="e.g. 0901234567"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_password')}</label>
-                                                <input
-                                                    type="password"
-                                                    value={settings.timo_password}
-                                                    onChange={(e) => handleChange('timo_password', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                    placeholder="••••••••"
-                                                />
-                                            </div>
-
-                                            <div className="pt-2 border-t border-slate-700 mt-2">
-                                                {!needOtp ? (
-                                                    <div className="flex items-center gap-4">
-                                                        <Button
-                                                            type="button"
-                                                            variant="secondary"
-                                                            onClick={handleTimoLogin}
-                                                            disabled={timoLoading}
-                                                        >
-                                                            {timoLoading ? t('settings.checking') : t('settings.test_login')}
-                                                        </Button>
-                                                        {otpMessage && <span className="text-sm text-slate-300">{otpMessage}</span>}
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        <div className="text-sm text-yellow-500 font-medium">⚠️ {otpMessage}</div>
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={otpValue}
-                                                                onChange={(e) => setOtpValue(e.target.value)}
-                                                                className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white w-40"
-                                                                placeholder={t('settings.enter_otp')}
-                                                            />
-                                                            <Button type="button" onClick={submitOtp} disabled={timoLoading}>
-                                                                {t('settings.submit_otp')}
-                                                            </Button>
-                                                            <Button type="button" variant="ghost" onClick={() => setNeedOtp(false)}>{t('common.cancel')}</Button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                    <CreditCard className="w-5 h-5 text-purple-400" />
-                                    {t('settings.sepay_config')}
-                                </h3>
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                         <div>
-                                            <div className="font-medium text-white">{t('settings.sepay_integration')}</div>
-                                            <div className="text-sm text-slate-400">{t('settings.sepay_desc')}</div>
+                                            <div className="font-medium text-white mb-2">Deposit Configuration</div>
+                                            <div className="text-sm text-slate-400 mb-4">Set minimum deposit amount.</div>
                                         </div>
-                                        <Switch
-                                            checked={settings.sepay_enabled}
-                                            onCheckedChange={() => handleToggle('sepay_enabled')}
-                                        />
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Minimum Deposit Amount (VNĐ)</label>
+                                            <input
+                                                type="number"
+                                                value={settings.min_deposit}
+                                                onChange={(e) => handleChange('min_deposit', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="50000"
+                                            />
+                                        </div>
                                     </div>
-
-                                    {settings.sepay_enabled && (
-                                        <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.sepay_token')}</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.sepay_token}
-                                                    onChange={(e) => handleChange('sepay_token', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                    placeholder="e.g. AUIYQTXX..."
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.account_no')}</label>
-                                                    <input
-                                                        type="text"
-                                                        value={settings.sepay_account_no}
-                                                        onChange={(e) => handleChange('sepay_account_no', e.target.value)}
-                                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                        placeholder="e.g. 334218"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.bank_code')}</label>
-                                                    <input
-                                                        type="text"
-                                                        value={settings.sepay_bank_code}
-                                                        onChange={(e) => handleChange('sepay_bank_code', e.target.value)}
-                                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                        placeholder="e.g. MB, VCB..."
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="admin">
-                            <div className="text-sm text-muted-foreground p-4 text-center">
-                                Admin settings will appear here.
+                        <TabsContent value="admin" className="space-y-6">
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">🔐 Đổi mật khẩu Admin</div>
+                                    <div className="text-sm text-slate-400 mb-4">Thay đổi mật khẩu đăng nhập trang quản trị.</div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu hiện tại</label>
+                                        <input
+                                            type="password"
+                                            id="currentPassword"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="Nhập mật khẩu hiện tại..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu mới</label>
+                                        <input
+                                            type="password"
+                                            id="newPassword"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="Nhập mật khẩu mới..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Xác nhận mật khẩu mới</label>
+                                        <input
+                                            type="password"
+                                            id="confirmPassword"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="Nhập lại mật khẩu mới..."
+                                        />
+                                    </div>
+                                    <Button
+                                        onClick={async () => {
+                                            const currentPassword = (document.getElementById('currentPassword') as HTMLInputElement)?.value;
+                                            const newPassword = (document.getElementById('newPassword') as HTMLInputElement)?.value;
+                                            const confirmPassword = (document.getElementById('confirmPassword') as HTMLInputElement)?.value;
+
+                                            if (!currentPassword || !newPassword || !confirmPassword) {
+                                                setMessage({ type: 'error', text: 'Vui lòng điền đầy đủ thông tin!' });
+                                                return;
+                                            }
+                                            if (newPassword !== confirmPassword) {
+                                                setMessage({ type: 'error', text: 'Mật khẩu mới không khớp!' });
+                                                return;
+                                            }
+                                            if (newPassword.length < 6) {
+                                                setMessage({ type: 'error', text: 'Mật khẩu mới phải có ít nhất 6 ký tự!' });
+                                                return;
+                                            }
+
+                                            try {
+                                                const res = await fetch('/api/admin/change-password', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ currentPassword, newPassword })
+                                                });
+                                                const data = await res.json();
+                                                if (res.ok) {
+                                                    setMessage({ type: 'success', text: 'Đổi mật khẩu thành công!' });
+                                                    (document.getElementById('currentPassword') as HTMLInputElement).value = '';
+                                                    (document.getElementById('newPassword') as HTMLInputElement).value = '';
+                                                    (document.getElementById('confirmPassword') as HTMLInputElement).value = '';
+                                                } else {
+                                                    setMessage({ type: 'error', text: data.error || 'Lỗi đổi mật khẩu!' });
+                                                }
+                                            } catch (e) {
+                                                setMessage({ type: 'error', text: 'Lỗi kết nối server!' });
+                                            }
+                                        }}
+                                        className="w-full"
+                                    >
+                                        Đổi mật khẩu
+                                    </Button>
+                                </div>
                             </div>
                         </TabsContent>
 

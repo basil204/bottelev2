@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
         const [result] = await pool.query<ResultSetHeader>(
             'INSERT INTO products (name, price, description, type) VALUES (?, ?, ?, ?)',
-            [name, price, description, type || 'auto']
+            [name, price, description, type || 'stock']
         );
 
         return NextResponse.json({ id: result.insertId, message: 'Product created' });

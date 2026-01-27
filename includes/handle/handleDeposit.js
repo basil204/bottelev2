@@ -24,34 +24,31 @@ const buildQrUrl = (bankCode, accountNo, amount, content, accountName = null) =>
   return url;
 };
 
-// Helper to get settings
-const getSepayFullConfig = async () => {
+// Helper to get Bank Settings for QR
+const getBankConfig = async (defaultConfig) => {
   try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('sepay_account_no', 'sepay_bank_code')");
-    const config = { accountNo: '', bankCode: '' };
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('vietqr_bank_code', 'vietqr_account_no', 'vietqr_account_name')");
+    const dbConfig = {};
     if (Array.isArray(rows)) {
       rows.forEach(r => {
-        if (r.key === 'sepay_account_no') config.accountNo = r.value;
-        if (r.key === 'sepay_bank_code') config.bankCode = r.value;
+        if (r.key === 'vietqr_bank_code') dbConfig.bankCode = r.value;
+        if (r.key === 'vietqr_account_no') dbConfig.accountNo = r.value;
+        if (r.key === 'vietqr_account_name') dbConfig.accountName = r.value;
       });
     }
-    return config;
-  } catch (e) { return {}; }
+    return {
+      bankCode: dbConfig.bankCode || defaultConfig.VIETQR_BANK_CODE || 'MB',
+      accountNo: dbConfig.accountNo || defaultConfig.VIETQR_ACCOUNT_NO,
+      accountName: dbConfig.accountName || defaultConfig.VIETQR_ACCOUNT_NAME
+    };
+  } catch (e) {
+    return {
+      bankCode: defaultConfig.VIETQR_BANK_CODE || 'MB',
+      accountNo: defaultConfig.VIETQR_ACCOUNT_NO,
+      accountName: defaultConfig.VIETQR_ACCOUNT_NAME
+    };
+  }
 }
-
-// Helper to get Timo settings
-const getTimoConfig = async () => {
-  try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('timo_auto_deposit', 'timo_username')");
-    const config = { enabled: false };
-    if (Array.isArray(rows)) {
-      rows.forEach(r => {
-        if (r.key === 'timo_auto_deposit') config.enabled = r.value === 'true';
-      });
-    }
-    return config;
-  } catch (e) { return { enabled: false }; }
-};
 
 export const startDepositFlow = async (bot, msg, user, config) => {
   // Check existing QR
@@ -71,43 +68,21 @@ export const startDepositFlow = async (bot, msg, user, config) => {
     }
   }
 
-  const sepayConfig = await getSepayFullConfig();
-  const headers = await query("SELECT `value` FROM settings WHERE `key`='sepay_enabled'"); // quick check
-  const sepayEnabled = headers?.[0]?.value === 'true';
-  const timoConfig = await getTimoConfig();
-
-  if (sepayEnabled && timoConfig.enabled) {
-    return bot.sendMessage(msg.chat.id, 'Chọn phương thức nạp:', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: `🏦 Ngân hàng ${sepayConfig.bankCode || 'MB'} (Auto)`, callback_data: createCallbackData({ action: 'select_bank', code: 'sepay' }) }],
-          [{ text: '🏦 Ngân hàng Timo (Auto)', callback_data: createCallbackData({ action: 'select_bank', code: 'timo' }) }]
-        ]
-      }
-    });
-  }
-
-  // Default fallbacks
-  let selectedBank = 'sepay';
-  if (timoConfig.enabled && !sepayEnabled) selectedBank = 'timo';
-
-  setCache(`bank_selection_${msg.from.id}`, selectedBank, 30000);
+  // Ask for amount directly
   await bot.sendMessage(msg.chat.id, 'Nhập số tiền cần nạp (VNĐ).');
 };
 
-export const handleBankSelection = async (bot, msg, actionData) => {
-  const bankCode = actionData.code;
-  setCache(`bank_selection_${msg.chat.id}`, bankCode, 30000); // Use chat.id or user.id? callback query from.id
-
-  // Deleting the selection message or editing it
-  try {
-    await bot.deleteMessage(msg.chat.id, msg.message_id);
-  } catch (e) { }
-
-  await bot.sendMessage(msg.chat.id, `Đã chọn: ${bankCode === 'timo' ? 'Timo' : 'Ngân hàng'}.\nVui lòng nhập số tiền cần nạp (VNĐ).`);
-};
-
 // No longer needs handleBankSelection as we skip it
+
+// Helper to get Min Deposit
+const getMinDepositAmount = async () => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'min_deposit'");
+    return rows?.[0]?.value ? Number(rows[0].value) : 50000;
+  } catch (e) {
+    return 50000;
+  }
+};
 
 export const handleDepositAmount = async (bot, msg, user, config) => {
   const existing = getCache(qrKey(msg.from.id));
@@ -126,7 +101,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const purchaseKey = `purchase_${msg.from.id}`;
   const pendingPurchase = getCache(purchaseKey);
 
-  const MIN_DEPOSIT_AMOUNT = 50000;
+  const MIN_DEPOSIT_AMOUNT = await getMinDepositAmount();
   if (!pendingPurchase && amount < MIN_DEPOSIT_AMOUNT) {
     return bot.sendMessage(
       msg.chat.id,
@@ -159,38 +134,19 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const token = `${randomLetters}${randomDigits}`;
   const content = token;
 
-  // Timo vs Sepay Logic
-  let bankCode, accountNo, accountName;
-
-  if (selectedBank === 'timo') {
-    bankCode = 'TIMO'; // OR VPBank / TIMO
-    // Need to get Timo Account No from settings or config
-    // Assuming it's in settings. If not, fallback to config
-    // Timo often uses VPBank (970432) or Timo specific bin? Usually VPBank. 
-    // If transferring from other bank to Timo, choose VPBank.
-    // Let's use config.TIMO_BANK_CODE (which might be 'VPB' or 'TIMO'). 
-
-    // !!! IMPORTANT: If using VietQR, we need valid Bin. Timo runs on VPBank (Bin 970432).
-    // So BankCode should be 'VPB' if we want it to work universally, or 'TIMO' if supported.
-    // The user config has TIMO_BANK_CODE: "TIMO". Let's stick to what we have or try 'VPB'.
-
-    bankCode = config.TIMO_BANK_CODE || 'VPB';
-    accountNo = config.TIMO_ACCOUNT_NO || '0338739954'; // Fallback
-    accountName = config.TIMO_ACCOUNT_NAME;
-  } else {
-    // Sepay Logic
-    const sepayConfig = await getSepayFullConfig();
-    bankCode = sepayConfig.bankCode || config.VIETQR_BANK_CODE || 'MB';
-    accountNo = sepayConfig.accountNo || config.VIETQR_ACCOUNT_NO;
-    accountName = null;
-  }
+  // Create VietQR
+  const bankConfig = await getBankConfig(config);
+  const bankCode = bankConfig.bankCode;
+  const accountNo = bankConfig.accountNo;
+  const accountName = bankConfig.accountName;
 
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
   const expiresAt = Date.now() + 5 * 60 * 1000;
   const depositId = await createDeposit(user.id, amount, content);
 
   // Use Sepay bank code as display name
-  const bankDisplayName = selectedBank === 'timo' ? 'Timo (VPBank)' : bankCode;
+  // Use bank code as display name
+  const bankDisplayName = bankCode;
 
   let caption = `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n` +
     `🏦 Ngân hàng: **${bankDisplayName}**\n` +

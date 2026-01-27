@@ -34,14 +34,6 @@ export const config = {
     VIETQR_ACCOUNT_NO: process.env.VIETQR_ACCOUNT_NO || fileConfig.VIETQR_ACCOUNT_NO,
     VIETQR_BANK_CODE: process.env.VIETQR_BANK_CODE || fileConfig.VIETQR_BANK_CODE,
 
-    MB_API_URL: process.env.MB_API_URL || fileConfig.MB_API_URL,
-    MB_CHECK_INTERVAL: Number(process.env.MB_CHECK_INTERVAL || fileConfig.MB_CHECK_INTERVAL || 20000),
-
-    TIMO_API_URL: process.env.TIMO_API_URL || fileConfig.TIMO_API_URL,
-    TIMO_BANK_CODE: process.env.TIMO_BANK_CODE || fileConfig.TIMO_BANK_CODE,
-    TIMO_ACCOUNT_NO: process.env.TIMO_ACCOUNT_NO || fileConfig.TIMO_ACCOUNT_NO,
-    TIMO_ACCOUNT_NAME: process.env.TIMO_ACCOUNT_NAME || fileConfig.TIMO_ACCOUNT_NAME,
-
     // External Services
     MAIL_API_KEY: process.env.MAIL_API_KEY || fileConfig.MAIL_API_KEY,
     MAIL_API_BASE: process.env.MAIL_API_BASE || 'https://api.dongvanfb.net',

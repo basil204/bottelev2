@@ -12,145 +12,57 @@ import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
 import { deleteQrMessage } from '../handle/handleDeposit.js';
 import { notifyAdminAboutDeposit } from '../handle/handleNotify.js';
-import { globalConfig } from '../listen.js';
-import { getTransactions } from './sepayService.js';
+
+
 import { query } from '../database/index.js';
 
 const processedKey = (ref) => `tx_${ref}`;
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const contentKey = (token) => `content_${token}`;
 
-// Helper: Check Sepay transaction
-const checkSepayTransaction = async (bot, sepayConfig, cached, user, promotion) => {
+// Check Viettel Transaction
+const checkViettelTransaction = async (bot, token, cached, user, promotion) => {
   try {
-    if (!sepayConfig.enabled || !sepayConfig.token) return false;
+    if (!token) return false;
 
-    // Filter for transactions today
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-    const transaction_date_min = `${dateStr} 00:00:00`;
-    const transaction_date_max = `${dateStr} 23:59:59`;
-
-    const data = await getTransactions(sepayConfig.token, {
-      account_number: sepayConfig.account_no,
-      transaction_date_min,
-      transaction_date_max,
-      limit: 50
-    });
-
-    if (!data || !data.transactions) return false;
-
-    for (const tx of data.transactions) {
-      const note = tx.transaction_content || '';
-      const token = extractToken(note);
-      if (!token) continue;
-
-      if (token === cached.token) {
-        const success = await processSepayTransaction(bot, tx, cached, user, promotion);
-        if (success) return true;
-      }
-    }
-  } catch (err) {
-    console.error('[CHECK_PAYMENT] Sepay Error:', err.message);
-  }
-  return false;
-}
-
-// Helper: Check Timo transaction
-const checkTimoTransaction = async (bot, cached, user, promotion) => {
-  try {
-    const admin = await getAdminSettings();
-    // Call Next.js API (assuming port 3000)
-    // Adjust URL if needed
-    const response = await axios.get('http://localhost:4953/api/timo?action=history', {
-      params: {
-        username: admin.username,
-        password: admin.password
-      }
-    });
-
+    // Call Viettel API
+    const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${token}`);
     const data = response.data;
 
-    // Response format { success: true, data: { ...TimoResponse... } }
-    if (data && data.success && data.data) {
-      const timoData = data.data;
-      // data.data is the transactions structure.
-      // Example structure depends on Timo API, but based on script:
-      /*
-       {
-        "data": {
-          "groups": [
-             { "label": "Today", "transactions": [...] }
-          ]
+    if (!data || data.status.code !== '00' || !data.data || !data.data.content) return false;
+
+    const transactions = data.data.content;
+
+    for (const tx of transactions) {
+      // Check for CREDIT (income) transactions
+      if (tx.paymentType !== 'CREDIT') continue;
+
+      const note = tx.msgContent || tx.description || '';
+      const amount = Number(tx.amount) || 0;
+      const txToken = extractToken(note);
+
+      if (!txToken) continue;
+
+      if (txToken === cached.token) {
+        // Verify Amount
+        const requestedAmount = Number(cached.amount);
+        if (amount < requestedAmount) {
+          console.log(`[VIETTEL] Underpayment ${tx.bankTransId}: ${amount} < ${requestedAmount}`);
+          return false;
         }
-       }
-      */
-      // Or flat list if we flattened it? timoServer returns raw from Timo API usually.
-      // Let's assume flattened or loop deep.
 
-      // Based on `timoServer.js`:
-      /*
-       const result = { ..., data: transactions };
-       transactions comes from getTransactionList which returns Timo response.
-       Timo response usually: { data: { items: [...] } } or groups.
-      */
+        await processDepositTransaction(bot, {
+          amount_in: amount,
+          id: tx.bankTransId, // Unique ID
+          transaction_content: note,
+          ref_prefix: 'VIETTEL'
+        }, cached, user, promotion);
 
-      // We'll iterate aggressively.
-      // Parse nested structure: data.data.items -> each is a group (date) -> has 'item' array
-      // Parse nested structure: data.data.items -> each is a group (date) -> has 'item' array
-      let transactions = [];
-      if (timoData.data && timoData.data.items && Array.isArray(timoData.data.items)) {
-        timoData.data.items.forEach(group => {
-          if (group.item && Array.isArray(group.item)) {
-            transactions.push(...group.item);
-          }
-        });
-      }
-
-      for (const tx of transactions) {
-        // Filter Incoming Transfers
-        // txnType: "IncomingTransfer" or drcr implied?
-        // JSON shows "txnType": "IncomingTransfer"
-        // Also check txnAmount > 0
-
-        const isIncoming = tx.txnType === 'IncomingTransfer' || (tx.txnAmount > 0 && !tx.txnType.includes('Outgoing'));
-        if (!isIncoming) continue;
-
-        const note = tx.txnDesc || tx.txnNarrative || '';
-        const credit = tx.txnAmount || 0;
-
-        if (credit <= 0) continue;
-
-        const token = extractToken(note);
-        if (!token) continue;
-
-        if (token === cached.token) {
-          // Found it!
-          const ref = `TIMO-${tx.refNo}`;
-
-          // Verify Amount
-          const requestedAmount = Number(cached.amount);
-          if (credit < requestedAmount) {
-            console.log(`[TIMO] Underpayment ${ref}: ${credit} < ${requestedAmount}`);
-            return false;
-          }
-
-          await processDepositTransaction(bot, {
-            amount_in: credit,
-            id: tx.refNo,
-            transaction_content: note,
-            ref_prefix: 'TIMO'
-          }, cached, user, promotion);
-
-          return true;
-        }
+        return true;
       }
     }
   } catch (err) {
-    // console.error('[CHECK_PAYMENT] Timo Error:', err.message);
+    console.error('[CHECK_PAYMENT] Viettel Error:', err.message);
   }
   return false;
 };
@@ -162,7 +74,6 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
 
   if (getCache(processedKey(ref))) return false;
 
-  // ... (Rest of logic similar to processSepayTransaction)
   if (!cached || !user) {
     setCache(processedKey(ref), true, 86400000);
     return false;
@@ -244,30 +155,15 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   return true;
 };
 
-// Get Sepay settings from DB
-const getSepaySettings = async () => {
+// Get Viettel settings from DB
+const getViettelSettings = async () => {
   try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('sepay_enabled', 'sepay_token', 'sepay_account_no')");
-    const settings = { enabled: false, token: '', account_no: '' };
-    if (Array.isArray(rows)) {
-      rows.forEach(r => {
-        if (r.key === 'sepay_enabled') settings.enabled = r.value === 'true';
-        if (r.key === 'sepay_token') settings.token = r.value;
-        if (r.key === 'sepay_account_no') settings.account_no = r.value;
-      });
-    }
-    return settings;
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'viettel_token'");
+    return { token: rows?.[0]?.value || '' };
   } catch (error) {
-    console.error('Error fetching Sepay settings:', error);
-    return { enabled: false, token: '', account_no: '' };
+    console.error('Error fetching Viettel settings:', error);
+    return { token: '' };
   }
-};
-
-const getTimoSettings = async () => {
-  try {
-    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'timo_auto_deposit'");
-    return { enabled: rows?.[0]?.value === 'true' };
-  } catch (e) { return { enabled: false }; }
 };
 
 const getAdminSettings = async () => {
@@ -298,26 +194,17 @@ export const checkPaymentForUser = async (bot, userId, config) => {
   if (!user) return { success: false, message: 'Lỗi thông tin user.' };
 
   const promotion = await getActivePromotion();
-  const sepayConfig = await getSepaySettings();
 
-  // Check Sepay
+  // Check Viettel
   let success = false;
-  if (sepayConfig.enabled && cached.bank === 'sepay') {
-    success = await checkSepayTransaction(bot, sepayConfig, cached, user, promotion);
-  } else if (cached.bank === 'timo') {
-    const timoConfig = await getTimoSettings();
-    if (timoConfig.enabled) {
-      success = await checkTimoTransaction(bot, cached, user, promotion);
-    }
-  } else {
-    // If bank not specified (legacy), try both? or just Sepay
-    if (sepayConfig.enabled) success = await checkSepayTransaction(bot, sepayConfig, cached, user, promotion);
+  const viettelConfig = await getViettelSettings();
+  if (viettelConfig.token) {
+    success = await checkViettelTransaction(bot, viettelConfig.token, cached, user, promotion);
   }
 
   if (success) {
     return { success: true, message: 'Đã nhận được tiền! Cảm ơn bạn.' };
   } else {
-    // Fallback message if Sepay not enabled or transaction not found
     return { success: false, message: 'Chưa nhận được tiền. Vui lòng chờ thêm chút nhé!' };
   }
 };
@@ -326,7 +213,9 @@ export const checkPaymentForUser = async (bot, userId, config) => {
 // Extract token from content like "ABCD1234" (4 chữ + 4 số)
 const extractToken = (text) => {
   if (!text) return null;
-  const match = text.toUpperCase().match(/([A-Z]{4}[0-9]{4})/);
+  // Clean text: remove " mb" suffix commonly found in VTLMONEY transactions
+  const cleanText = text.replace(/\s+mb$/i, '').trim();
+  const match = cleanText.toUpperCase().match(/([A-Z]{4}[0-9]{4})/);
   return match ? match[1] : null;
 };
 
@@ -355,167 +244,70 @@ export const startQrExpirationChecker = (bot) => {
   checkExpiredQrs(bot); // Initial check
 };
 
-// Process Sepay Transaction
-// Process Sepay Transaction (Legacy Wrapper)
-const processSepayTransaction = async (bot, tx, cached, user, promotion) => {
-  return processDepositTransaction(bot, {
-    amount_in: tx.amount_in,
-    id: tx.id,
-    transaction_content: tx.transaction_content,
-    ref_prefix: 'SEPAY'
-  }, cached, user, promotion);
-};
-
 export const startAutoDepositWatcher = (bot, config) => {
-  const CHECK_INTERVAL = 3000; // Check every 3 seconds
+  const CHECK_INTERVAL = 5000; // Check every 5 seconds
 
   const tick = async () => {
     try {
-      // Optimization: Only check Sepay if there are pending QRs waiting for payment
+      // Only check if there are pending QRs waiting for payment
       const pendingKeys = getAllKeys('qr_');
       if (!pendingKeys || pendingKeys.length === 0) return;
 
-      const sepayConfig = await getSepaySettings();
-      const timoConfig = await getTimoSettings();
-      const admin = await getAdminSettings();
+      const viettelConfig = await getViettelSettings();
+      if (!viettelConfig.token) return;
+
       const promotion = await getActivePromotion();
 
-      // Define date range for today
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-      const transaction_date_min = `${dateStr} 00:00:00`;
-      const transaction_date_max = `${dateStr} 23:59:59`;
+      // Call Viettel API
+      const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${viettelConfig.token}`);
+      const data = response.data;
 
-      // Check Sepay
-      if (sepayConfig.enabled && sepayConfig.token) {
-        // ... (existing Sepay logic)
-        const data = await getTransactions(sepayConfig.token, {
-          account_number: sepayConfig.account_no,
-          transaction_date_min,
-          transaction_date_max,
-          limit: 20
-        });
+      if (!data || data.status.code !== '00' || !data.data || !data.data.content) return;
 
-        if (data && data.transactions) {
-          for (const tx of data.transactions) {
-            const note = tx.transaction_content || '';
-            const token = extractToken(note);
-            if (!token) continue;
+      const transactions = data.data.content;
 
-            let cached = getCache(contentKey(token));
-            let fromDb = false;
+      for (const tx of transactions) {
+        // Only process CREDIT (incoming) transactions
+        if (tx.paymentType !== 'CREDIT') continue;
 
-            if (!cached) {
-              // Fallback: Check DB
-              const { findDepositByContent } = await import('../controllers/depositController.js');
-              const deposit = await findDepositByContent(token);
+        const note = tx.msgContent || tx.description || '';
+        const amount = Number(tx.amount) || 0;
+        const txToken = extractToken(note);
 
-              if (deposit) {
-                console.log(`[AUTO_WATCHER] Recovered transaction from DB: ${token} for user ${deposit.user_id}`);
-                cached = {
-                  userId: deposit.user_id,
-                  depositId: deposit.id,
-                  amount: deposit.amount,
-                  bank: 'sepay', // Assume SePay for recovery or generic
-                  token: token
-                };
-                fromDb = true;
-              } else {
-                console.log(`[AUTO_WATCHER] Orphaned Tx found: ${token} - Cache expired and not found in DB. TxId: ${tx.id}`);
-                continue;
-              }
-            }
+        if (!txToken) continue;
 
-            if (cached.bank !== 'sepay' && !fromDb) continue; // Only process if bank matches (skip check if recovered)
+        // Check if this token matches any pending deposit
+        const cached = getCache(contentKey(txToken));
+        if (!cached) continue;
 
-            const user = await getUserById(cached.userId);
-            if (!user) continue;
+        const user = await getUserById(cached.userId);
+        if (!user) continue;
 
-            await processSepayTransaction(bot, tx, cached, user, promotion);
-          }
+        // Verify amount (must be >= requested amount)
+        const requestedAmount = Number(cached.amount);
+        if (amount < requestedAmount) {
+          console.log(`[AUTO_VIETTEL] Underpayment for ${txToken}: ${amount} < ${requestedAmount}`);
+          continue;
         }
-      }
 
-      // Check Timo
-      if (timoConfig.enabled) {
-        // Iterate over pending QR to see if any is Timo?
-        // No, we just poll Timo and check against cache.
-        // But optimization: check if any pending QR is for Timo.
-        const anyTimo = pendingKeys.some(k => {
-          const c = getCache(k);
-          return c && c.bank === 'timo';
-        });
-
-        if (anyTimo) {
-          // Poll Timo
-          // To iterate through transactions, we need to iterate pending tokens?
-          // "checkTimoTransaction" does polling internally? 
-          // My implementation of checkTimoTransaction iterates transactions and checks cache.
-          // But it needs 'cached' passed in? NO. 
-
-          // Wait, my previous `checkTimoTransaction` implementation above took 'cached' as arg.
-          // That means it checks ONE specific cached token.
-          // That is inefficient for polling.
-          // I should refactor `checkTimoTransaction` to be "pollTimoAndMatch" or similar.
-
-          // Actually, let's just do the fetching here inline or helper.
-          // Actually, let's just do the fetching here inline or helper.
-          try {
-            const response = await axios.get('http://localhost:4953/api/timo?action=history', {
-              params: {
-                username: admin.username,
-                password: admin.password
-              }
-            });
-            const data = response.data;
-            if (!data.success || !data.data) return;
-            const timoData = data.data;
-
-            let transactions = [];
-            if (timoData.data && timoData.data.items && Array.isArray(timoData.data.items)) {
-              timoData.data.items.forEach(g => {
-                if (g.item) transactions.push(...g.item);
-              });
-            }
-
-            for (const tx of transactions) {
-              const isCredit = tx.cd === '+' || (tx.amount > 0 && tx.drcr === 'CR');
-              if (!isCredit) continue;
-
-              const note = tx.txnDesc || tx.description || '';
-              const token = extractToken(note);
-              if (!token) continue;
-
-              const cached = getCache(contentKey(token));
-              if (!cached || cached.bank !== 'timo') continue;
-
-              const user = await getUserById(cached.userId);
-              if (!user) continue;
-
-              // Verify Amount
-              const credit = tx.amount || 0;
-              const ref = `TIMO-${tx.refNo || tx.txnId}`;
-              const requestedAmount = Number(cached.amount);
-              if (credit < requestedAmount) continue;
-
-              await processDepositTransaction(bot, {
-                amount_in: credit,
-                id: tx.refNo || tx.txnId,
-                transaction_content: note,
-                ref_prefix: 'TIMO'
-              }, cached, user, promotion);
-            }
-          } catch (e) { }
-        }
+        // Process deposit
+        console.log(`[AUTO_VIETTEL] Found matching transaction: Token=${txToken}, Amount=${amount}`);
+        await processDepositTransaction(bot, {
+          amount_in: amount,
+          id: tx.bankTransId,
+          transaction_content: note,
+          ref_prefix: 'VIETTEL'
+        }, cached, user, promotion);
       }
     } catch (err) {
-      console.error('[AUTO_WATCHER] Error:', err.message);
+      console.error('[AUTO_VIETTEL] Error:', err.message);
     }
   };
 
+  // Start polling
   setInterval(tick, CHECK_INTERVAL);
   tick(); // Initial run
+
+  // Also start QR expiration checker
+  startQrExpirationChecker(bot);
 };

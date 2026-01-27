@@ -17,7 +17,7 @@ interface Product {
     price: number;
     description: string;
     stock: number;
-    type: 'auto' | 'manual';
+    type: 'stock' | 'order';
 }
 
 interface Account {
@@ -100,7 +100,7 @@ export default function ProductsPage() {
     };
 
     const openModal = (product?: Product) => {
-        setEditingProduct(product || { type: 'auto' });
+        setEditingProduct(product || { type: 'stock' });
         setIsModalOpen(true);
     };
 
@@ -160,8 +160,8 @@ export default function ProductsPage() {
                                             <TableCell className="font-medium">{product.name}</TableCell>
                                             <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(product.price)}</TableCell>
                                             <TableCell>
-                                                <span className={`px-2 py-1 rounded text-xs ${product.type === 'auto' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'}`}>
-                                                    {product.type === 'auto' ? t('products.auto') : t('products.manual')}
+                                                <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                                    {product.type === 'order' ? t('products.manual') : t('products.auto')}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="font-bold">{product.stock}</TableCell>
@@ -210,17 +210,7 @@ export default function ProductsPage() {
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, price: Number(e.target.value) }))}
                         />
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">{t('products.type')}</label>
-                        <select
-                            value={editingProduct?.type || 'auto'}
-                            onChange={(e) => setEditingProduct(prev => ({ ...prev!, type: e.target.value as 'auto' | 'manual' }))}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                            <option value="auto">Auto ({t('products.auto')})</option>
-                            <option value="manual">Manual ({t('products.manual')})</option>
-                        </select>
-                    </div>
+
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t('products.description')}</label>
                         <Textarea
@@ -243,6 +233,25 @@ export default function ProductsPage() {
                 description={t('products.add_stock_desc')}
             >
                 <div className="space-y-4 pt-2">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="file"
+                            accept=".txt"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        const content = event.target?.result as string;
+                                        setStockData(prev => prev ? prev + '\n' + content : content);
+                                    };
+                                    reader.readAsText(file);
+                                }
+                                e.target.value = ''; // Reset input
+                            }}
+                            className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                        />
+                    </div>
                     <Textarea
                         value={stockData}
                         onChange={(e) => setStockData(e.target.value)}

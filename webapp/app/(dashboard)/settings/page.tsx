@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Banknote, CreditCard, Trash2 } from 'lucide-react';
+import { Save, Banknote, CreditCard, Trash2, Power } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -143,6 +143,24 @@ export default function SettingsPage() {
             }
         } catch (e) {
             console.error("Failed to delete promotion:", e);
+        }
+    };
+
+    const handleRestart = async () => {
+        if (!confirm('Bạn có chắc chắn muốn khởi động lại Bot không?')) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/restart', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'Đã gửi lệnh khởi động lại Bot.' });
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Lỗi khi khởi động lại Bot.' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Lỗi kết nối server.' });
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -359,6 +377,24 @@ export default function SettingsPage() {
                                         className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
                                         placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
                                     />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">⚠️ Danger Zone</div>
+                                    <div className="text-sm text-slate-400 mb-4">Các tác vụ quản trị nâng cao.</div>
+                                </div>
+                                <div>
+                                    <Button
+                                        onClick={handleRestart}
+                                        variant="destructive"
+                                        className="w-full sm:w-auto"
+                                        disabled={saving}
+                                    >
+                                        <Power className="w-4 h-4 mr-2" />
+                                        Khởi động lại Bot
+                                    </Button>
                                 </div>
                             </div>
 

@@ -72,29 +72,48 @@ export default function SettingsPage() {
     });
 
     useEffect(() => {
+        let mounted = true;
         setLoading(true);
-        fetch('/api/settings')
-            .then((res) => res.json())
-            .then((data) => {
-                setSettings(data);
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.error(err);
-                setLoading(false);
-            });
 
+        const fetchData = async () => {
+            try {
+                const res = await fetch('/api/settings');
+                if (!res.ok) throw new Error('Failed to fetch settings');
+                const data = await res.json();
+                if (mounted) {
+                    setSettings(data);
+                }
+            } catch (err) {
+                console.error("Error loading settings:", err);
+                // Optional: show error to user
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        fetchData();
         loadPromotions();
+
+        return () => { mounted = false; };
     }, []);
 
-    const loadPromotions = () => {
+    const loadPromotions = async () => {
         setPromoLoading(true);
-        fetch('/api/promotions')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setPromotions(data);
-            })
-            .finally(() => setPromoLoading(false));
+        try {
+            const res = await fetch('/api/promotions');
+            if (!res.ok) throw new Error('Failed to fetch promotions');
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setPromotions(data);
+            } else {
+                setPromotions([]);
+            }
+        } catch (error) {
+            console.error("Error loading promotions:", error);
+            setPromotions([]);
+        } finally {
+            setPromoLoading(false);
+        }
     };
 
     const handleCreatePromotion = async () => {
@@ -244,258 +263,275 @@ export default function SettingsPage() {
             </div>
 
             <Card>
-                <CardHeader>
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
-                        <TabsTrigger value="payment">{t('settings.payment')}</TabsTrigger>
-                        <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
-                        <TabsTrigger value="promotions">Promotions</TabsTrigger>
-                    </TabsList>
-                </CardHeader>
-                <TabsContent value="promotions">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Deposit Promotions</CardTitle>
-                            <CardDescription>Manage automated deposit bonuses.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
-                                <h3 className="font-semibold">Create New Promotion</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Start Time</Label>
-                                        <Input
-                                            type="datetime-local"
-                                            value={newPromo.start_time}
-                                            onChange={(e) => setNewPromo({ ...newPromo, start_time: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>End Time</Label>
-                                        <Input
-                                            type="datetime-local"
-                                            value={newPromo.end_time}
-                                            onChange={(e) => setNewPromo({ ...newPromo, end_time: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Bonus Percentage (%)</Label>
-                                        <Input
-                                            type="number"
-                                            value={newPromo.bonus_percentage}
-                                            onChange={(e) => setNewPromo({ ...newPromo, bonus_percentage: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Min Deposit Amount</Label>
-                                        <Input
-                                            type="number"
-                                            value={newPromo.min_amount}
-                                            onChange={(e) => setNewPromo({ ...newPromo, min_amount: Number(e.target.value) })}
-                                        />
-                                    </div>
-                                </div>
-                                <Button onClick={handleCreatePromotion} disabled={promoLoading}>
-                                    Create Promotion
-                                </Button>
+                <Tabs defaultValue="general" className="w-full">
+                    <CardHeader>
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
+                            <TabsTrigger value="payment">{t('settings.payment')}</TabsTrigger>
+                            <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
+                            <TabsTrigger value="promotions">Promotions</TabsTrigger>
+                        </TabsList>
+                    </CardHeader>
+
+                    <CardContent>
+                        <TabsContent value="general" className="space-y-4">
+                            <div className="text-sm text-muted-foreground p-4 text-center">
+                                General settings will appear here.
                             </div>
+                        </TabsContent>
 
-                            <div className="border rounded-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Start</TableHead>
-                                            <TableHead>End</TableHead>
-                                            <TableHead>Bonus</TableHead>
-                                            <TableHead>Min Amount</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {promotions.map((p) => (
-                                            <TableRow key={p.id}>
-                                                <TableCell>{new Date(p.start_time).toLocaleString()}</TableCell>
-                                                <TableCell>{new Date(p.end_time).toLocaleString()}</TableCell>
-                                                <TableCell className="font-bold text-green-500">+{p.bonus_percentage}%</TableCell>
-                                                <TableCell>{formatCurrency(p.min_amount)}</TableCell>
-                                                <TableCell>{p.status}</TableCell>
-                                                <TableCell>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeletePromotion(p.id)}>
-                                                        <Trash2 className="w-4 h-4 text-destructive" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {promotions.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                    No promotions found.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                <CardContent className="space-y-6">
+                        <TabsContent value="payment" className="space-y-6">
+                            <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <CreditCard className="w-5 h-5 text-purple-400" />
+                                    {t('settings.timo_config')}
+                                </h3>
 
-                    <div className="mb-6">
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <CreditCard className="w-5 h-5 text-purple-400" />
-                            {t('settings.timo_config')}
-                        </h3>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white">{t('settings.timo_integration')}</div>
-                                    <div className="text-sm text-slate-400">{t('settings.timo_desc')}</div>
-                                </div>
-                                <Switch
-                                    checked={settings.timo_auto_deposit}
-                                    onCheckedChange={() => handleToggle('timo_auto_deposit')}
-                                />
-                            </div>
-
-                            {settings.timo_auto_deposit && (
-                                <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_username')}</label>
-                                        <input
-                                            type="text"
-                                            value={settings.timo_username}
-                                            onChange={(e) => handleChange('timo_username', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="e.g. 0901234567"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_password')}</label>
-                                        <input
-                                            type="password"
-                                            value={settings.timo_password}
-                                            onChange={(e) => handleChange('timo_password', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="••••••••"
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                        <div>
+                                            <div className="font-medium text-white">{t('settings.timo_integration')}</div>
+                                            <div className="text-sm text-slate-400">{t('settings.timo_desc')}</div>
+                                        </div>
+                                        <Switch
+                                            checked={settings.timo_auto_deposit}
+                                            onCheckedChange={() => handleToggle('timo_auto_deposit')}
                                         />
                                     </div>
 
-                                    <div className="pt-2 border-t border-slate-700 mt-2">
-                                        {!needOtp ? (
-                                            <div className="flex items-center gap-4">
-                                                <Button
-                                                    type="button"
-                                                    variant="secondary"
-                                                    onClick={handleTimoLogin}
-                                                    disabled={timoLoading}
-                                                >
-                                                    {timoLoading ? t('settings.checking') : t('settings.test_login')}
-                                                </Button>
-                                                {otpMessage && <span className="text-sm text-slate-300">{otpMessage}</span>}
+                                    {settings.timo_auto_deposit && (
+                                        <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_username')}</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.timo_username}
+                                                    onChange={(e) => handleChange('timo_username', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="e.g. 0901234567"
+                                                />
                                             </div>
-                                        ) : (
-                                            <div className="space-y-3">
-                                                <div className="text-sm text-yellow-500 font-medium">⚠️ {otpMessage}</div>
-                                                <div className="flex gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.timo_password')}</label>
+                                                <input
+                                                    type="password"
+                                                    value={settings.timo_password}
+                                                    onChange={(e) => handleChange('timo_password', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="••••••••"
+                                                />
+                                            </div>
+
+                                            <div className="pt-2 border-t border-slate-700 mt-2">
+                                                {!needOtp ? (
+                                                    <div className="flex items-center gap-4">
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            onClick={handleTimoLogin}
+                                                            disabled={timoLoading}
+                                                        >
+                                                            {timoLoading ? t('settings.checking') : t('settings.test_login')}
+                                                        </Button>
+                                                        {otpMessage && <span className="text-sm text-slate-300">{otpMessage}</span>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        <div className="text-sm text-yellow-500 font-medium">⚠️ {otpMessage}</div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={otpValue}
+                                                                onChange={(e) => setOtpValue(e.target.value)}
+                                                                className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white w-40"
+                                                                placeholder={t('settings.enter_otp')}
+                                                            />
+                                                            <Button type="button" onClick={submitOtp} disabled={timoLoading}>
+                                                                {t('settings.submit_otp')}
+                                                            </Button>
+                                                            <Button type="button" variant="ghost" onClick={() => setNeedOtp(false)}>{t('common.cancel')}</Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <CreditCard className="w-5 h-5 text-purple-400" />
+                                    {t('settings.sepay_config')}
+                                </h3>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                        <div>
+                                            <div className="font-medium text-white">{t('settings.sepay_integration')}</div>
+                                            <div className="text-sm text-slate-400">{t('settings.sepay_desc')}</div>
+                                        </div>
+                                        <Switch
+                                            checked={settings.sepay_enabled}
+                                            onCheckedChange={() => handleToggle('sepay_enabled')}
+                                        />
+                                    </div>
+
+                                    {settings.sepay_enabled && (
+                                        <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.sepay_token')}</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.sepay_token}
+                                                    onChange={(e) => handleChange('sepay_token', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="e.g. AUIYQTXX..."
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.account_no')}</label>
                                                     <input
                                                         type="text"
-                                                        value={otpValue}
-                                                        onChange={(e) => setOtpValue(e.target.value)}
-                                                        className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white w-40"
-                                                        placeholder={t('settings.enter_otp')}
+                                                        value={settings.sepay_account_no}
+                                                        onChange={(e) => handleChange('sepay_account_no', e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        placeholder="e.g. 334218"
                                                     />
-                                                    <Button type="button" onClick={submitOtp} disabled={timoLoading}>
-                                                        {t('settings.submit_otp')}
-                                                    </Button>
-                                                    <Button type="button" variant="ghost" onClick={() => setNeedOtp(false)}>{t('common.cancel')}</Button>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.bank_code')}</label>
+                                                    <input
+                                                        type="text"
+                                                        value={settings.sepay_bank_code}
+                                                        onChange={(e) => handleChange('sepay_bank_code', e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        placeholder="e.g. MB, VCB..."
+                                                    />
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                            <CreditCard className="w-5 h-5 text-purple-400" />
-                            {t('settings.sepay_config')}
-                        </h3>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white">{t('settings.sepay_integration')}</div>
-                                    <div className="text-sm text-slate-400">{t('settings.sepay_desc')}</div>
-                                </div>
-                                <Switch
-                                    checked={settings.sepay_enabled}
-                                    onCheckedChange={() => handleToggle('sepay_enabled')}
-                                />
-                            </div>
-
-                            {settings.sepay_enabled && (
-                                <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.sepay_token')}</label>
-                                        <input
-                                            type="text"
-                                            value={settings.sepay_token}
-                                            onChange={(e) => handleChange('sepay_token', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="e.g. AUIYQTXX..."
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.account_no')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.sepay_account_no}
-                                                onChange={(e) => handleChange('sepay_account_no', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                placeholder="e.g. 334218"
-                                            />
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.bank_code')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.sepay_bank_code}
-                                                onChange={(e) => handleChange('sepay_bank_code', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                placeholder="e.g. MB, VCB..."
-                                            />
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {
-                        message && (
-                            <div className={`p-4 rounded-lg text-sm border ${message.type === 'success'
-                                ? 'bg-green-100 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
-                                : 'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'
-                                }`}>
-                                {message.text}
                             </div>
-                        )
-                    }
+                        </TabsContent>
 
-                    <div className="flex justify-end pt-4">
-                        <Button onClick={handleSave} disabled={saving}>
-                            <Save className="w-4 h-4 mr-2" />
-                            {saving ? t('settings.saving') : t('settings.save_settings')}
-                        </Button>
-                    </div>
-                </CardContent >
-            </Card >
+                        <TabsContent value="admin">
+                            <div className="text-sm text-muted-foreground p-4 text-center">
+                                Admin settings will appear here.
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="promotions">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Deposit Promotions</CardTitle>
+                                    <CardDescription>Manage automated deposit bonuses.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
+                                        <h3 className="font-semibold">Create New Promotion</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>Start Time</Label>
+                                                <Input
+                                                    type="datetime-local"
+                                                    value={newPromo.start_time}
+                                                    onChange={(e) => setNewPromo({ ...newPromo, start_time: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>End Time</Label>
+                                                <Input
+                                                    type="datetime-local"
+                                                    value={newPromo.end_time}
+                                                    onChange={(e) => setNewPromo({ ...newPromo, end_time: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Bonus Percentage (%)</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={newPromo.bonus_percentage}
+                                                    onChange={(e) => setNewPromo({ ...newPromo, bonus_percentage: Number(e.target.value) })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Min Deposit Amount</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={newPromo.min_amount}
+                                                    onChange={(e) => setNewPromo({ ...newPromo, min_amount: Number(e.target.value) })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <Button onClick={handleCreatePromotion} disabled={promoLoading}>
+                                            Create Promotion
+                                        </Button>
+                                    </div>
+
+                                    <div className="border rounded-md">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Start</TableHead>
+                                                    <TableHead>End</TableHead>
+                                                    <TableHead>Bonus</TableHead>
+                                                    <TableHead>Min Amount</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead>Action</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {promotions.map((p) => (
+                                                    <TableRow key={p.id}>
+                                                        <TableCell>{new Date(p.start_time).toLocaleString()}</TableCell>
+                                                        <TableCell>{new Date(p.end_time).toLocaleString()}</TableCell>
+                                                        <TableCell className="font-bold text-green-500">+{p.bonus_percentage}%</TableCell>
+                                                        <TableCell>{formatCurrency(p.min_amount)}</TableCell>
+                                                        <TableCell>{p.status}</TableCell>
+                                                        <TableCell>
+                                                            <Button variant="ghost" size="sm" onClick={() => handleDeletePromotion(p.id)}>
+                                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {promotions.length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                                                            No promotions found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {
+                            message && (
+                                <div className={`p-4 rounded-lg text-sm border ${message.type === 'success'
+                                    ? 'bg-green-100 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
+                                    : 'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'
+                                    }`}>
+                                    {message.text}
+                                </div>
+                            )
+                        }
+
+                        <div className="flex justify-end pt-4">
+                            <Button onClick={handleSave} disabled={saving}>
+                                <Save className="w-4 h-4 mr-2" />
+                                {saving ? t('settings.saving') : t('settings.save_settings')}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Tabs>
+            </Card>
         </div >
     );
 }

@@ -396,7 +396,11 @@ export const startAutoDepositWatcher = (bot, config) => {
             const token = extractToken(note);
             if (!token) continue;
             const cached = getCache(contentKey(token));
-            if (!cached || cached.bank !== 'sepay') continue; // Only process if bank matches
+            if (!cached) {
+              console.log(`[AUTO_WATCHER] Orphaned Tx found: ${token} - Cache expired or not found. TxId: ${tx.id}`);
+              continue;
+            }
+            if (cached.bank !== 'sepay') continue; // Only process if bank matches
 
             const user = await getUserById(cached.userId);
             if (!user) continue;

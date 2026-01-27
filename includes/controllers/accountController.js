@@ -2,25 +2,40 @@ import { query } from '../database/index.js';
 
 export const addAccounts = async (productId, accounts = []) => {
   if (!accounts.length) return;
-  // Kiểm tra xem có cột twofa không
-  const [columns] = await query("SHOW COLUMNS FROM accounts WHERE Field = 'twofa'");
-  const hasTwofa = columns && columns.length > 0;
-  
-  if (hasTwofa) {
-    const values = accounts.map(() => '(?, ?, ?, ?, "available")').join(',');
-    const params = [];
-    accounts.forEach(({ username, password, twofa }) => {
-      params.push(productId, username, password, twofa || null);
-    });
-    await query(`INSERT INTO accounts (product_id, username, password, twofa, status) VALUES ${values}`, params);
-  } else {
-    const values = accounts.map(() => '(?, ?, ?, "available")').join(',');
-    const params = [];
-    accounts.forEach(({ username, password }) => {
-      params.push(productId, username, password);
-    });
-    await query(`INSERT INTO accounts (product_id, username, password, status) VALUES ${values}`, params);
-  }
+  // Kiểm tra xem có cột twofa, extra_data không
+  const [columns] = await query("SHOW COLUMNS FROM accounts");
+  const hasTwofa = columns.some(c => c.Field === 'twofa');
+  const hasExtraData = columns.some(c => c.Field === 'extra_data');
+
+  const values = [];
+  const params = [];
+
+  let sql = 'INSERT INTO accounts (product_id, username, password';
+  if (hasTwofa) sql += ', twofa';
+  if (hasExtraData) sql += ', extra_data';
+  sql += ', status) VALUES ';
+
+  accounts.forEach(({ username, password, twofa, extra_data }) => {
+    let placeholder = '(?, ?, ?';
+    params.push(productId, username, password);
+
+    if (hasTwofa) {
+      placeholder += ', ?';
+      params.push(twofa || null);
+    }
+
+    if (hasExtraData) {
+      placeholder += ', ?';
+      params.push(extra_data || null);
+    }
+
+    placeholder += ', "available")';
+    values.push(placeholder);
+  });
+
+  sql += values.join(',');
+
+  await query(sql, params);
   await syncStock(productId);
 };
 
@@ -64,18 +79,18 @@ export const listAccounts = async (productId, offset, limit, status = null) => {
   let countSql = 'SELECT COUNT(*) as total FROM accounts WHERE product_id = ?';
   const params = [productId];
   const countParams = [productId];
-  
+
   if (status) {
     sql += ' AND status = ?';
     countSql += ' AND status = ?';
     params.push(status);
     countParams.push(status);
   }
-  
+
   sql += ' ORDER BY id DESC LIMIT ? OFFSET ?';
   // Đảm bảo limit và offset là số nguyên
   params.push(parseInt(limit), parseInt(offset));
-  
+
   const rows = await query(sql, params);
   const [{ total }] = await query(countSql, countParams);
   return { rows, total };
@@ -103,15 +118,15 @@ export const deleteAccount = async (accountId) => {
   if (accountRows.length === 0) {
     return { success: false, error: 'Account not found' };
   }
-  
+
   const productId = accountRows[0].product_id;
-  
+
   // Xóa account
   await query('DELETE FROM accounts WHERE id = ?', [accountId]);
-  
+
   // Sync stock
   await syncStock(productId);
-  
+
   return { success: true, productId };
 };
 
@@ -122,17 +137,17 @@ export const deleteAccountsByStatus = async (productId, status) => {
     'SELECT COUNT(*) as count FROM accounts WHERE product_id = ? AND status = ?',
     [productId, status]
   );
-  
+
   if (count === 0) {
     return { success: false, error: 'Không có tài khoản nào để xóa', deletedCount: 0 };
   }
-  
+
   // Xóa accounts
   await query('DELETE FROM accounts WHERE product_id = ? AND status = ?', [productId, status]);
-  
+
   // Sync stock
   await syncStock(productId);
-  
+
   return { success: true, deletedCount: count, productId };
 };
 

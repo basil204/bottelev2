@@ -13,6 +13,14 @@ const bootstrap = async () => {
   // Initialize DB first
   await initDb(config);
 
+  // Auto-migrate database schema
+  try {
+    const { default: migrate } = await import('./scripts/migration_add_columns.js');
+    await migrate();
+  } catch (error) {
+    console.error('❌ Auto-migration failed:', error);
+  }
+
   // Get token from DB, fallback to config/env
   let botToken = config.TELEGRAM_BOT_TOKEN;
   try {

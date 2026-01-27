@@ -236,7 +236,7 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
     `🎁 Sản phẩm: ${product.name}\n` +
     `💰 Giá: ${formatCurrency(productPrice)}\n` +
     `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
-    `📧 Tài khoản: \`${account.username}\` | \`${account.password}\`${account.twofa ? ` | 2FA: \`${account.twofa}\`` : ''}`;
+    `📧 Tài khoản: \`${account.username}\` | \`${account.password}\`${account.extra_data ? ` | Extra: \`${account.extra_data}\`` : ''}${account.twofa ? ` | 2FA: \`${account.twofa}\`` : ''}`;
   await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
 
   // Notify admins
@@ -566,10 +566,10 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
     // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
     const fileContent = purchasedAccounts.map(acc => {
-      if (acc.twofa) {
-        return `${acc.username}|${acc.password}|${acc.twofa}`;
-      }
-      return `${acc.username}|${acc.password}`;
+      let line = `${acc.username}|${acc.password}`;
+      if (acc.extra_data) line += `|${acc.extra_data}`;
+      if (acc.twofa) line += `|${acc.twofa}`;
+      return line;
     }).join('\n');
     const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);
@@ -732,10 +732,10 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
 
     // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
     const fileContent = purchasedAccounts.map(acc => {
-      if (acc.twofa) {
-        return `${acc.username}|${acc.password}|${acc.twofa}`;
-      }
-      return `${acc.username}|${acc.password}`;
+      let line = `${acc.username}|${acc.password}`;
+      if (acc.extra_data) line += `|${acc.extra_data}`;
+      if (acc.twofa) line += `|${acc.twofa}`;
+      return line;
     }).join('\n');
     const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
     const tempFilePath = path.join(__dirname, '../../temp', fileName);

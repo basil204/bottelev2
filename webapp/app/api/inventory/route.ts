@@ -40,11 +40,42 @@ export async function POST(request: Request) {
             await connection.beginTransaction();
 
             for (const line of lines) {
-                const [username, password] = line.split('|').map((s: string) => s.trim());
+                const parts = line.split('|').map((s: string) => s.trim());
+                let username, password, twofa, extra_data;
+
+                // 1 part: key
+                if (parts.length === 1) {
+                    username = parts[0];
+                    password = parts[0];
+                }
+                // 2 parts: user|pass
+                else if (parts.length === 2) {
+                    username = parts[0];
+                    password = parts[1];
+                }
+                // 3 parts: user|pass|twofa OR user|pass|extra
+                else if (parts.length === 3) {
+                    username = parts[0];
+                    password = parts[1];
+                    const part3 = parts[2];
+                    if (part3.includes('@')) {
+                        extra_data = part3;
+                    } else {
+                        twofa = part3;
+                    }
+                }
+                // 4 parts: user|pass|extra|twofa
+                else if (parts.length >= 4) {
+                    username = parts[0];
+                    password = parts[1];
+                    extra_data = parts[2];
+                    twofa = parts[3];
+                }
+
                 if (username && password) {
                     await connection.query(
-                        'INSERT INTO accounts (product_id, username, password, status) VALUES (?, ?, ?, "available")',
-                        [productId, username, password]
+                        'INSERT INTO accounts (product_id, username, password, twofa, extra_data, status) VALUES (?, ?, ?, ?, ?, "available")',
+                        [productId, username, password, twofa || null, extra_data || null]
                     );
                     addedAccounts.push(username);
                 }

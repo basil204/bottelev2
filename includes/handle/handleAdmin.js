@@ -233,15 +233,20 @@ export const adminListAccounts = async (bot, chatId, productId, page, pageSize, 
 };
 
 export const adminAddAccount = async (bot, chatId, productId) => {
-  await bot.sendMessage(chatId, `Nhập tài khoản cho sản phẩm #${productId} theo dạng:\n- username|password\n- username|password|2fa`);
+  await bot.sendMessage(chatId, `Nhập tài khoản cho sản phẩm #${productId} theo dạng:\n- username|password\n- username|password|2fa\n- username|password|mail_kp|2fa\n- key (sẽ lưu user=key, pass=key)`);
 };
 
 export const adminParseAddAccount = async (bot, msg, productId) => {
-  const parts = msg.text.split('|').map((x) => x.trim());
-  const [username, password, twofa] = parts;
-  if (!username || !password) return bot.sendMessage(msg.chat.id, 'Sai định dạng. Định dạng: username|password hoặc username|password|2fa');
-  await addAccounts(productId, [{ username, password, twofa: twofa || null }]);
-  await bot.sendMessage(msg.chat.id, `Đã thêm 1 account.${twofa ? ' (có 2FA)' : ''}`);
+  const account = parseUploadText(msg.text)[0];
+  if (!account) return bot.sendMessage(msg.chat.id, 'Sai định dạng. Xem hướng dẫn ở trên.');
+
+  await addAccounts(productId, [account]);
+
+  let msgText = `Đã thêm 1 account.`;
+  if (account.twofa) msgText += ' (có 2FA)';
+  if (account.extra_data) msgText += ' (có Mail KP/Extra)';
+
+  await bot.sendMessage(msg.chat.id, msgText);
 
   // Thông báo cho users về tài khoản mới
   await notifyUsersAboutProductStock(bot, productId, 1);

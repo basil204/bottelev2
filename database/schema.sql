@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   password VARCHAR(255) NOT NULL,
   status ENUM('available','sold') DEFAULT 'available',
   delete_at TIMESTAMP NULL DEFAULT NULL,
+  twofa VARCHAR(255) DEFAULT NULL,
+  extra_data TEXT DEFAULT NULL,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
   INDEX idx_delete_at (delete_at)
 );

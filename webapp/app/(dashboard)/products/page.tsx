@@ -322,7 +322,7 @@ export default function ProductsPage() {
                         value={stockData}
                         onChange={(e) => setStockData(e.target.value)}
                         className="h-64 font-mono text-sm"
-                        placeholder={'username|password\nuser2|pass2'}
+                        placeholder={'username|password\nusername|password|2fa\nusername|password|mail_kp|2fa\nkey'}
                     />
                     <div className="text-right text-xs text-muted-foreground">
                         {stockData.split('\n').filter(l => l.trim()).length} accounts

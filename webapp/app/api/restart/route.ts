@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 
 export async function POST() {
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
         exec('pm2 restart 1', (error, stdout, stderr) => {
             if (error) {
                 console.error(`exec error: ${error}`);

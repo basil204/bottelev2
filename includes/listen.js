@@ -157,6 +157,7 @@ export const registerListeners = (bot, config) => {
 
     if (text === '➕ Nạp tiền') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE);
+    if (text === '🧾 Lịch sử mua') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Thử xử lý như quantity input cho Mail
 

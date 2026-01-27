@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
+import { exec } from 'child_process';
+
+const restartCoba = () => {
+    exec('pm2 restart all', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`exec error: ${error}`);
+            return;
+        }
+        console.log(`stdout: ${stdout}`);
+        console.error(`stderr: ${stderr}`);
+    });
+};
 
 export async function GET() {
     try {
@@ -45,6 +57,8 @@ export async function POST(request: Request) {
         } = body;
 
         const connection = await pool.getConnection();
+        let shouldRestart = false;
+
         try {
             await connection.beginTransaction();
 
@@ -58,10 +72,18 @@ export async function POST(request: Request) {
             if (mb_auto_deposit !== undefined) await upsertSetting('mb_auto_deposit', mb_auto_deposit);
             if (viettel_token !== undefined) await upsertSetting('viettel_token', viettel_token);
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
-            if (telegram_bot_token !== undefined) await upsertSetting('telegram_bot_token', telegram_bot_token);
+            if (telegram_bot_token !== undefined) {
+                await upsertSetting('telegram_bot_token', telegram_bot_token);
+                shouldRestart = true;
+            }
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
 
             await connection.commit();
+
+            if (shouldRestart) {
+                restartCoba();
+            }
+
             return NextResponse.json({ success: true });
         } catch (error) {
             await connection.rollback();

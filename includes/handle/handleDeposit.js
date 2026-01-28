@@ -51,25 +51,527 @@ const getBankConfig = async (defaultConfig) => {
 }
 
 export const startDepositFlow = async (bot, msg, user, config) => {
+  const inline_keyboard = [
+    [{ text: '🏦 Ngân hàng (Bank)', callback_data: createCallbackData({ action: 'deposit_select_bank' }) }],
+    [{ text: '💲 USDT', callback_data: createCallbackData({ action: 'deposit_select_usdt' }) }]
+  ];
+  await bot.sendMessage(msg.chat.id, '💰 **Chọn phương thức nạp tiền:**', {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard }
+  });
+};
+
+export const promptForBankDeposit = async (bot, chatId, userId, config) => {
   // Check existing QR
-  const existing = getCache(qrKey(msg.from.id));
+  const existing = getCache(qrKey(userId));
   if (existing) {
     if (existing.expiresAt && existing.expiresAt < Date.now()) {
       await deleteQrMessage(bot, existing);
-      delCache(qrKey(msg.from.id));
+      delCache(qrKey(userId));
       if (existing.token) delCache(contentKey(existing.token));
-      await bot.sendMessage(msg.chat.id, 'QR cũ đã hết hạn. Bạn có thể tạo nạp mới.');
+      await bot.sendMessage(chatId, 'QR cũ đã hết hạn. Bạn có thể tạo nạp mới.');
     } else {
       const ttlSec = Math.ceil((existing.expiresAt - Date.now()) / 1000);
       return bot.sendMessage(
-        msg.chat.id,
+        chatId,
         `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`
       );
     }
   }
 
-  // Ask for amount directly
-  await bot.sendMessage(msg.chat.id, 'Nhập số tiền cần nạp (VNĐ).');
+  // Set default selection to sepay (or whatever bank integration is used)
+  setCache(`bank_selection_${userId}`, 'sepay', 5 * 60 * 1000);
+
+  // Ask for amount
+  await bot.sendMessage(chatId, 'Nhập số tiền cần nạp (VNĐ).');
+};
+
+const getUsdtConfig = async (defaultConfig) => {
+  try {
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('usdt_wallet_address', 'usdt_network')");
+    const dbConfig = {};
+    if (Array.isArray(rows)) {
+      rows.forEach(r => {
+        if (r.key === 'usdt_wallet_address') dbConfig.walletAddress = r.value;
+        if (r.key === 'usdt_network') dbConfig.network = r.value;
+      });
+    }
+    return {
+      walletAddress: dbConfig.walletAddress || 'Chưa cập nhật',
+      network: dbConfig.network || 'BEP20'
+    };
+  } catch (e) {
+    return {
+      walletAddress: 'Chưa cập nhật',
+      network: 'BEP20'
+    };
+  }
+};
+
+export const showUsdtOptions = async (bot, chatId, config) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  // Fetch user language, assuming chatId is telegramId for 1-1 chats
+  const user = await getUserByTelegram(chatId);
+  const lang = user ? user.language : 'vi';
+
+  // Only TRC20 option now
+  const inline_keyboard = [
+    [{ text: '💎 Ví TRC20 (Tự động)', callback_data: createCallbackData({ action: 'deposit_usdt_trc20' }) }]
+  ];
+
+  const menuTitle = lang === 'en'
+    ? '💲 **USDT Deposit**\n\nChoose deposit method:'
+    : '💲 **Nạp tiền USDT**\n\nChọn phương thức:';
+
+  await bot.sendMessage(chatId, menuTitle, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard }
+  });
+};
+
+export const showUsdtBybitInfo = async (bot, chatId, userId, config) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const { query } = await import('../database/index.js');
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId);
+  const lang = user ? user.language : 'vi';
+
+  if (user) {
+    const pending = await query(
+      "SELECT count(*) as count FROM deposits WHERE user_id = ? AND status = 'pending' AND type = 'usdt'",
+      [user.id]
+    );
+    if (pending[0].count > 0) {
+      return bot.sendMessage(chatId, await t('pending_warning', lang));
+    }
+  }
+
+  // Step 1: Ask for USDT amount
+  setCache(`waiting_usdt_amount_${userId}`, true, 5 * 60 * 1000);
+
+  const promptMsg = lang === 'en'
+    ? '💲 **Enter USDT amount** (minimum 1$):'
+    : '💲 **Nhập số tiền USDT** (tối thiểu 1$):';
+
+  await bot.sendMessage(chatId, promptMsg, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      resize_keyboard: true,
+      keyboard: [
+        [{ text: await t('cancel', lang) }]
+      ]
+    }
+  });
+};
+
+// Handler for USDT amount input (called from listen.js message handler)
+export const handleUsdtAmountInput = async (bot, msg, user, config) => {
+  const userId = msg.from.id;
+  const isWaiting = getCache(`waiting_usdt_amount_${userId}`);
+  if (!isWaiting) return false;
+
+  const { t } = await import('../helpers/langHelper.js');
+  const lang = user.language || 'vi';
+
+  const text = msg.text.trim();
+  const amount = parseFloat(text.replace(',', '.'));
+
+  if (isNaN(amount) || amount < 1) {
+    const errorMsg = lang === 'en'
+      ? '❌ Invalid amount. Please enter at least 1 USDT.'
+      : '❌ Số tiền không hợp lệ. Vui lòng nhập ít nhất 1 USDT.';
+    await bot.sendMessage(msg.chat.id, errorMsg);
+    return true;
+  }
+
+  delCache(`waiting_usdt_amount_${userId}`);
+
+  // Step 2: Show Bybit info with note
+  const link = 'https://i.bybit.com/ab186yqr';
+  const today = new Date();
+  const dd = String(today.getDate()).padStart(2, '0');
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const yyyy = today.getFullYear();
+  const note = `${userId}_${dd}${mm}${yyyy}`;
+
+  // Store amount in cache for photo handler
+  setCache(`usdt_amount_${userId}`, amount, 15 * 60 * 1000);
+  setCache(`waiting_payment_proof_${userId}`, true, 15 * 60 * 1000);
+
+  const message = `📈 **Bybit**\n\n` +
+    `💵 **Số tiền:** ${amount} USDT\n\n` +
+    await t('bybit_link', lang, { link }) + `\n\n` +
+    await t('bybit_note_label', lang, { note }) + `\n\n` +
+    await t('bybit_upload_guide', lang);
+
+  await bot.sendMessage(msg.chat.id, message, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      resize_keyboard: true,
+      keyboard: [
+        [{ text: await t('cancel', lang) }]
+      ]
+    }
+  });
+
+  return true;
+};
+
+export const cancelUploadState = async (bot, chatId, userId, config) => {
+  delCache(`waiting_payment_proof_${userId}`);
+  const { t } = await import('../helpers/langHelper.js');
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId); // Assuming userId here is telegram id based on usage
+
+  try {
+    const { sendMenu } = await import('../handle/handleUser.js');
+    await bot.sendMessage(chatId, await t('canceled', user?.language), { reply_markup: { remove_keyboard: true } });
+    await sendMenu(bot, chatId, { telegram_id: userId, language: user?.language }, config.TELEGRAM_GROUP_LINKS);
+  } catch (e) {
+    await bot.sendMessage(chatId, '❌ Canceled.', { reply_markup: { remove_keyboard: true } });
+  }
+};
+
+export const showUsdtInfo = async (bot, chatId, config) => {
+  const usdtConfig = await getUsdtConfig(config);
+
+  const width = '<code>';
+  const widthEnd = '</code>';
+
+  const message = `💲 **Nạp tiền qua Ví USDT**\n\n` +
+    `🌐 Mạng lưới (Network): **${usdtConfig.network}**\n` +
+    `💼 Địa chỉ ví:\n\`${usdtConfig.walletAddress}\`\n(Click để copy)\n\n` +
+    `⚠️ **Lưu ý:**\n` +
+    `• Vui lòng chuyển đúng mạng lưới **${usdtConfig.network}**.\n` +
+    `• Sau khi chuyển xong, vui lòng chụp ảnh hoá đơn và liên hệ Admin để được cộng tiền.`;
+
+  await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+};
+
+// ========== TRC20 USDT DEPOSIT FLOW ==========
+
+// Get TRC20 wallet address from settings
+const getTrc20WalletAddress = async () => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'usdt_trc20_wallet'");
+    return rows?.[0]?.value || '';
+  } catch (e) {
+    return '';
+  }
+};
+
+// Get exchange rate from settings
+const getExchangeRate = async () => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
+    return Number(rows?.[0]?.value) || 26000;
+  } catch (e) {
+    return 26000;
+  }
+};
+
+// Start TRC20 deposit flow - show wallet and ask for amount
+export const showTrc20DepositFlow = async (bot, chatId, userId, config) => {
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+
+  const walletAddress = await getTrc20WalletAddress();
+
+  if (!walletAddress) {
+    const errorMsg = lang === 'en'
+      ? '❌ TRC20 wallet address not configured. Please contact admin.'
+      : '❌ Chưa cấu hình địa chỉ ví TRC20. Vui lòng liên hệ Admin.';
+    return bot.sendMessage(chatId, errorMsg);
+  }
+
+  // Store state: waiting for amount
+  setCache(`waiting_trc20_amount_${userId}`, true, 10 * 60 * 1000);
+
+  const message = lang === 'en'
+    ? `💎 **USDT TRC20 Deposit**\n\n` +
+    `📍 **Wallet Address:**\n\`${walletAddress}\`\n(Click to copy)\n\n` +
+    `🌐 **Network:** TRC20 (TRON)\n\n` +
+    `💲 **Enter USDT amount** (minimum 1 USDT):`
+    : `💎 **Nạp tiền USDT TRC20**\n\n` +
+    `📍 **Địa chỉ ví:**\n\`${walletAddress}\`\n(Click để copy)\n\n` +
+    `🌐 **Mạng:** TRC20 (TRON)\n\n` +
+    `💲 **Nhập số tiền USDT** (tối thiểu 1 USDT):`;
+
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      resize_keyboard: true,
+      keyboard: [[{ text: lang === 'en' ? '❌ Cancel' : '❌ Hủy' }]]
+    }
+  });
+};
+
+// Handle TRC20 amount input
+export const handleTrc20AmountInput = async (bot, msg, user) => {
+  const userId = msg.from.id;
+  const isWaiting = getCache(`waiting_trc20_amount_${userId}`);
+  if (!isWaiting) return false;
+
+  const lang = user?.language || 'vi';
+  const text = msg.text.trim();
+
+  // Check cancel
+  if (text === '❌ Hủy' || text === '❌ Cancel') {
+    delCache(`waiting_trc20_amount_${userId}`);
+    await bot.sendMessage(msg.chat.id, lang === 'en' ? '❌ Cancelled.' : '❌ Đã hủy.', {
+      reply_markup: { remove_keyboard: true }
+    });
+    return true;
+  }
+
+  const amount = parseFloat(text.replace(',', '.'));
+
+  if (isNaN(amount) || amount < 1) {
+    const errorMsg = lang === 'en'
+      ? '❌ Invalid amount. Please enter at least 1 USDT.'
+      : '❌ Số tiền không hợp lệ. Vui lòng nhập ít nhất 1 USDT.';
+    await bot.sendMessage(msg.chat.id, errorMsg);
+    return true;
+  }
+
+  delCache(`waiting_trc20_amount_${userId}`);
+
+  // Store amount and wait for hash
+  setCache(`trc20_amount_${userId}`, amount, 15 * 60 * 1000);
+  setCache(`waiting_trc20_hash_${userId}`, true, 15 * 60 * 1000);
+
+  const promptMsg = lang === 'en'
+    ? `💵 **Amount:** ${amount} USDT\n\n` +
+    `📝 **Enter your transaction hash (TxID):**\n\n` +
+    `⚠️ **Important:** Enter the EXACT amount received (after network fees).\n` +
+    `See the image below for how to find your TxID.`
+    : `💵 **Số tiền:** ${amount} USDT\n\n` +
+    `📝 **Nhập mã giao dịch (Hash/TxID):**\n\n` +
+    `⚠️ **Lưu ý:** Nhập ĐÚNG số tiền thực nhận (sau khi trừ phí mạng).\n` +
+    `Xem ảnh bên dưới để biết cách tìm TxID.`;
+
+  // Send text message first
+  await bot.sendMessage(msg.chat.id, promptMsg, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      resize_keyboard: true,
+      keyboard: [[{ text: lang === 'en' ? '❌ Cancel' : '❌ Hủy' }]]
+    }
+  });
+
+  // Send guide image
+  try {
+    const path = await import('path');
+    const fs = await import('fs');
+    const imagePath = path.join(process.cwd(), 'img', '0a08ecfdf6045f969d46dc695ce902c9.png');
+    if (fs.existsSync(imagePath)) {
+      await bot.sendPhoto(msg.chat.id, imagePath, {
+        caption: lang === 'en' ? '👆 How to find your TxID' : '👆 Cách tìm mã TxID'
+      });
+    }
+  } catch (e) {
+    console.error('[TRC20] Error sending guide image:', e);
+  }
+
+  return true;
+};
+
+// Handle TRC20 hash input and verify via Tronscan API
+export const handleTrc20HashInput = async (bot, msg, user) => {
+  const userId = msg.from.id;
+  const isWaiting = getCache(`waiting_trc20_hash_${userId}`);
+  if (!isWaiting) return false;
+
+  const lang = user?.language || 'vi';
+  const text = msg.text.trim();
+
+  // Check cancel
+  if (text === '❌ Hủy' || text === '❌ Cancel') {
+    delCache(`waiting_trc20_hash_${userId}`);
+    delCache(`trc20_amount_${userId}`);
+    await bot.sendMessage(msg.chat.id, lang === 'en' ? '❌ Cancelled.' : '❌ Đã hủy.', {
+      reply_markup: { remove_keyboard: true }
+    });
+    return true;
+  }
+
+  const txHash = text;
+  const expectedAmount = getCache(`trc20_amount_${userId}`);
+
+  if (!expectedAmount) {
+    delCache(`waiting_trc20_hash_${userId}`);
+    const errorMsg = lang === 'en' ? '❌ Session expired. Please start again.' : '❌ Phiên đã hết hạn. Vui lòng thực hiện lại.';
+    await bot.sendMessage(msg.chat.id, errorMsg, { reply_markup: { remove_keyboard: true } });
+    return true;
+  }
+
+  // Show processing message
+  const processingMsg = await bot.sendMessage(msg.chat.id, lang === 'en' ? '⏳ Verifying transaction...' : '⏳ Đang xác minh giao dịch...');
+
+  try {
+    // Check if hash already used
+    const { findDepositByTxHash, createTrc20Deposit } = await import('../controllers/depositController.js');
+    const existingDeposit = await findDepositByTxHash(txHash);
+
+    if (existingDeposit) {
+      delCache(`waiting_trc20_hash_${userId}`);
+      delCache(`trc20_amount_${userId}`);
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      const errorMsg = lang === 'en'
+        ? '❌ This transaction hash has already been used.'
+        : '❌ Mã giao dịch này đã được sử dụng.';
+      await bot.sendMessage(msg.chat.id, errorMsg, { reply_markup: { remove_keyboard: true } });
+      return true;
+    }
+
+    // Verify via Tronscan API
+    const response = await fetch(`https://apilist.tronscan.org/api/transaction-info?hash=${txHash}`);
+    const data = await response.json();
+
+    // Check if transaction exists and is confirmed
+    if (!data || !data.confirmed) {
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      const errorMsg = lang === 'en'
+        ? '❌ Transaction not found or not confirmed yet. Please wait and try again.'
+        : '❌ Không tìm thấy giao dịch hoặc chưa được xác nhận. Vui lòng đợi và thử lại.';
+      await bot.sendMessage(msg.chat.id, errorMsg);
+      return true;
+    }
+
+    // Check TRC20 transfer info
+    const trc20Info = data.trc20TransferInfo?.[0];
+    if (!trc20Info || trc20Info.symbol !== 'USDT') {
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      const errorMsg = lang === 'en'
+        ? '❌ This is not a USDT TRC20 transaction.'
+        : '❌ Đây không phải là giao dịch USDT TRC20.';
+      await bot.sendMessage(msg.chat.id, errorMsg);
+      return true;
+    }
+
+    // Verify recipient address matches our wallet
+    const ourWallet = await getTrc20WalletAddress();
+    if (trc20Info.to_address.toLowerCase() !== ourWallet.toLowerCase()) {
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      const errorMsg = lang === 'en'
+        ? '❌ The recipient address does not match our wallet.'
+        : '❌ Địa chỉ nhận không khớp với ví của chúng tôi.';
+      await bot.sendMessage(msg.chat.id, errorMsg);
+      return true;
+    }
+
+    // Calculate USDT amount (divide by 10^6 for 6 decimals)
+    const usdtAmount = Number(trc20Info.amount_str) / 1000000;
+
+    // Verify amount matches expected amount exactly (user should enter amount after fees)
+    if (Math.abs(usdtAmount - expectedAmount) > 0.01) {
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      const errorMsg = lang === 'en'
+        ? `❌ Amount mismatch!\n\n` +
+        `📝 You entered: ${expectedAmount} USDT\n` +
+        `💰 Actual received: ${usdtAmount} USDT\n\n` +
+        `⚠️ Please enter the EXACT amount shown in your transaction (after network fees).`
+        : `❌ Số tiền không khớp!\n\n` +
+        `📝 Bạn đã nhập: ${expectedAmount} USDT\n` +
+        `💰 Thực nhận: ${usdtAmount} USDT\n\n` +
+        `⚠️ Vui lòng nhập ĐÚNG số tiền hiển thị trong giao dịch (số tiền sau khi trừ phí mạng).`;
+      await bot.sendMessage(msg.chat.id, errorMsg);
+      return true;
+    }
+
+    // Convert to VND
+    const exchangeRate = await getExchangeRate();
+    const amountVnd = Math.round(usdtAmount * exchangeRate);
+
+    // Clear waiting states
+    delCache(`waiting_trc20_hash_${userId}`);
+    delCache(`trc20_amount_${userId}`);
+
+    // Create deposit and credit balance
+    const { updateBalance, getUserByTelegram } = await import('../controllers/userController.js');
+    const { addBalanceLog } = await import('../controllers/balanceLogController.js');
+
+    const dbUser = await getUserByTelegram(userId);
+    if (!dbUser) {
+      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+      await bot.sendMessage(msg.chat.id, lang === 'en' ? '❌ User not found.' : '❌ Không tìm thấy người dùng.', {
+        reply_markup: { remove_keyboard: true }
+      });
+      return true;
+    }
+
+    // Create deposit record
+    const depositId = await createTrc20Deposit(dbUser.id, usdtAmount, amountVnd, txHash);
+
+    // Update balance
+    await updateBalance(dbUser.id, amountVnd);
+
+    // Log balance change
+    await addBalanceLog({
+      userId: dbUser.id,
+      amount: amountVnd,
+      reason: `usdt_trc20_${usdtAmount}`,
+      adminId: null
+    });
+
+    // Get new balance
+    const updatedUser = await getUserByTelegram(userId);
+    const newBalance = Number(updatedUser.balance) || 0;
+
+    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+
+    const successMsg = lang === 'en'
+      ? `✅ **Deposit Successful!**\n\n` +
+      `💎 USDT: ${usdtAmount} USDT\n` +
+      `💵 VND: ${formatCurrency(amountVnd)}\n` +
+      `📝 TxID: \`${txHash.substring(0, 20)}...\`\n\n` +
+      `💰 New Balance: ${formatCurrency(newBalance)}`
+      : `✅ **Nạp tiền thành công!**\n\n` +
+      `💎 USDT: ${usdtAmount} USDT\n` +
+      `💵 VND: ${formatCurrency(amountVnd)}\n` +
+      `📝 TxID: \`${txHash.substring(0, 20)}...\`\n\n` +
+      `💰 Số dư mới: ${formatCurrency(newBalance)}`;
+
+    await bot.sendMessage(msg.chat.id, successMsg, {
+      parse_mode: 'Markdown',
+      reply_markup: { remove_keyboard: true }
+    });
+
+    // Notify admin
+    try {
+      const { notifyAdminAboutDeposit } = await import('./handleNotify.js');
+      const { globalConfig } = await import('../listen.js');
+      const adminIds = globalConfig?.ADMIN_IDS || [];
+      if (adminIds.length > 0) {
+        await notifyAdminAboutDeposit(bot, adminIds, {
+          depositId,
+          username: dbUser.username,
+          telegramId: userId,
+          originalAmount: amountVnd,
+          bonusAmount: 0,
+          bonusPercentage: 0,
+          finalAmount: amountVnd,
+          finalBalance: newBalance,
+          note: `TRC20: ${usdtAmount} USDT`
+        });
+      }
+    } catch (e) {
+      console.error('[TRC20_DEPOSIT] Error notifying admin:', e);
+    }
+
+    return true;
+
+  } catch (error) {
+    console.error('[TRC20_DEPOSIT] Error verifying hash:', error);
+    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
+    const errorMsg = lang === 'en'
+      ? '❌ Error verifying transaction. Please try again later.'
+      : '❌ Lỗi xác minh giao dịch. Vui lòng thử lại sau.';
+    await bot.sendMessage(msg.chat.id, errorMsg);
+    return true;
+  }
 };
 
 // No longer needs handleBankSelection as we skip it

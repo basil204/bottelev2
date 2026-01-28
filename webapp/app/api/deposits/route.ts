@@ -8,17 +8,28 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
+        const type = searchParams.get('type'); // 'usdt' | 'bank' | null (all)
         const offset = (page - 1) * limit;
+
+        let whereClause = '';
+        const params: any[] = [];
+        if (type && ['usdt', 'bank'].includes(type)) {
+            whereClause = 'WHERE d.type = ?';
+            params.push(type);
+        }
 
         const [rows] = await pool.query(`
             SELECT d.*, u.username 
             FROM deposits d 
             LEFT JOIN users u ON d.user_id = u.id 
+            ${whereClause}
             ORDER BY d.created_at DESC 
             LIMIT ? OFFSET ?
-        `, [limit, offset]);
+        `, [...params, limit, offset]);
 
-        const [countResult] = await pool.query<any[]>('SELECT COUNT(*) as total FROM deposits');
+        let countQuery = 'SELECT COUNT(*) as total FROM deposits d';
+        if (whereClause) countQuery += ` ${whereClause}`;
+        const [countResult] = await pool.query<any[]>(countQuery, params);
         const total = countResult[0].total;
 
         return NextResponse.json({
@@ -63,6 +74,13 @@ export async function POST(request: Request) {
             }
 
             if (action === 'approve') {
+                const { amount } = body;
+                if (amount && typeof amount === 'number' && amount > 0) {
+                    // Update amount first
+                    await connection.query('UPDATE deposits SET amount = ? WHERE id = ?', [amount, depositId]);
+                    deposit.amount = amount; // Update local variable for later calculations
+                }
+
                 // Update deposit status
                 await connection.query('UPDATE deposits SET status = ? WHERE id = ?', ['approved', depositId]);
 

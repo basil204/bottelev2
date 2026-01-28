@@ -73,7 +73,6 @@ export const registerListeners = (bot, config) => {
         keyboard: [
           [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
           [{ text: '🧾 Lịch sử mua' }]
-
         ],
         resize_keyboard: true
       }
@@ -96,6 +95,21 @@ export const registerListeners = (bot, config) => {
   bot.onText(/^\/admin/i, async (msg) => {
     if (!await requireAdmin(config.ADMIN_IDS, msg.from.id)) return bot.sendMessage(msg.chat.id, 'Không có quyền.');
     await adminMenu(bot, msg.chat.id);
+  });
+
+  bot.onText(/^\/lang/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    const { updateLanguage } = await import('./controllers/userController.js');
+    const { t } = await import('./helpers/langHelper.js');
+    const { sendMenu } = await import('./handle/handleUser.js');
+
+    // Toggle language
+    const newLang = (!user.language || user.language === 'vi') ? 'en' : 'vi';
+    await updateLanguage(user.id, newLang);
+    user.language = newLang; // update for sendMenu
+
+    await bot.sendMessage(msg.chat.id, await t('lang_switched', newLang));
+    await sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
   });
 
   bot.onText(/^\/user\s+(.+)/i, async (msg, match) => {
@@ -147,6 +161,28 @@ export const registerListeners = (bot, config) => {
 
     const user = await ensureUser(bot, msg);
 
+    // Xử lý nút Huỷ (ưu tiên cao)
+    if (text === '❌ Huỷ' || text === '❌ Cancel') {
+      const { cancelUploadState } = await import('./handle/handleDeposit.js');
+      // Also clear USDT amount waiting state
+      const { delCache } = await import('../lib/cache/index.js');
+      delCache(`waiting_usdt_amount_${msg.from.id}`);
+      return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
+    }
+
+    // Check USDT amount input (new step for Bybit flow)
+    const { handleUsdtAmountInput, handleTrc20AmountInput, handleTrc20HashInput } = await import('./handle/handleDeposit.js');
+    const handledUsdt = await handleUsdtAmountInput(bot, msg, user, config);
+    if (handledUsdt) return;
+
+    // Check TRC20 amount input
+    const handledTrc20Amount = await handleTrc20AmountInput(bot, msg, user);
+    if (handledTrc20Amount) return;
+
+    // Check TRC20 hash input
+    const handledTrc20Hash = await handleTrc20HashInput(bot, msg, user);
+    if (handledTrc20Hash) return;
+
     // Kiểm tra input số lượng cho sản phẩm trước (ưu tiên cao nhất)
     const handledProduct = await handleProductQuantityInput(bot, msg, text, config);
     if (handledProduct) return; // Đã xử lý input số lượng sản phẩm
@@ -156,14 +192,125 @@ export const registerListeners = (bot, config) => {
     if (handledManual) return; // Đã xử lý manual order input
 
     if (text === '➕ Nạp tiền') return startDepositFlow(bot, msg, user, config);
-    if (text === '🛒 Mua sản phẩm') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE);
+    if (text === '🛒 Mua sản phẩm') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
     if (text === '🧾 Lịch sử mua') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
-    // Thử xử lý như quantity input cho Mail
+    // Check if it's Admin approving deposit
+    if (config.ADMIN_IDS.includes(msg.from.id)) {
+      const { getCache, delCache } = await import('../lib/cache/index.js');
+      const approvingState = getCache(`admin_approving_deposit_${msg.from.id}`);
+      if (approvingState) {
+        const amount = parseInt(text.replace(/\D/g, ''));
+        if (!isNaN(amount) && amount > 0) {
+          const { updateDepositStatus, getDeposit } = await import('./controllers/depositController.js');
+          const { updateBalance, getUserById } = await import('./controllers/userController.js');
+          const { addBalanceLog } = await import('./controllers/balanceLogController.js');
 
+          const deposit = await getDeposit(approvingState.depositId);
+          if (!deposit || deposit.status !== 'pending') {
+            delCache(`admin_approving_deposit_${msg.from.id}`);
+            return bot.sendMessage(msg.chat.id, 'Giao dịch không tồn tại hoặc đã được xử lý.');
+          }
+
+          // Approve logic
+          // Update amount first (since we inserted 0)
+          const { query } = await import('./database/index.js'); // quick fix to update amount
+          await query('UPDATE deposits SET amount = ? WHERE id = ?', [amount, deposit.id]);
+
+          await updateDepositStatus(deposit.id, 'approved');
+          await updateBalance(deposit.user_id, amount);
+          await addBalanceLog({
+            userId: deposit.user_id,
+            amount: amount,
+            reason: 'deposit_usdt',
+            adminId: msg.from.id
+          });
+
+          delCache(`admin_approving_deposit_${msg.from.id}`);
+
+          const u = await getUserById(deposit.user_id);
+          const newBalance = Number(u.balance);
+
+          await bot.sendMessage(msg.chat.id, `✅ Đã duyệt nạp #${deposit.id}.\n💰 Số tiền: ${formatCurrency(amount)}\n💵 Số dư mới người dùng: ${formatCurrency(newBalance)}`);
+
+          // Notify user
+          if (u) {
+            await bot.sendMessage(u.telegram_id, `✅ Nạp tiền thành công!\n\n💰 Số tiền: ${formatCurrency(amount)}\n💵 Số dư hiện tại: ${formatCurrency(newBalance)}\n📝 Mã giao dịch: #${deposit.id}`);
+          }
+          return;
+        } else {
+          return bot.sendMessage(msg.chat.id, '❌ Số tiền không hợp lệ. Vui lòng nhập lại số nguyên.');
+        }
+      }
+    }
 
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     return handleDepositAmount(bot, msg, user, config);
+  });
+
+  // Handle Photo Messages (Receipt Upload)
+  bot.on('photo', async (msg) => {
+    const { getCache, delCache } = await import('../lib/cache/index.js');
+    const user = await ensureUser(bot, msg);
+
+    const isWaiting = getCache(`waiting_payment_proof_${msg.from.id}`);
+
+    if (isWaiting) {
+      const adminIds = config.ADMIN_IDS;
+      if (adminIds && adminIds.length > 0) {
+        try {
+          // Get cached USDT amount
+          const usdtAmount = getCache(`usdt_amount_${msg.from.id}`) || 0;
+
+          // Create deposit record first
+          const { createUsdtDeposit } = await import('./controllers/depositController.js');
+          const depositId = await createUsdtDeposit(user.id, 'BYBIT_PROOF');
+
+          // Update deposit with USDT amount (store in content or separate field)
+          // For now, store usdtAmount in cache for approval handler
+          const { setCache } = await import('../lib/cache/index.js');
+          setCache(`usdt_deposit_amount_${depositId}`, usdtAmount, 60 * 60 * 1000); // 1 hour
+
+          const photoId = msg.photo[msg.photo.length - 1].file_id;
+          const caption = `📸 **Bằng chứng thanh toán USDT**\n\n` +
+            `👤 User: ${user.username || user.telegram_id} (ID: ${user.telegram_id})\n` +
+            `💵 Số tiền: **${usdtAmount} USDT**\n` +
+            `🔢 Deposit ID: #${depositId}\n` +
+            `🕒 Thời gian: ${new Date().toLocaleString('vi-VN')}`;
+
+          for (const adminId of adminIds) {
+            await bot.sendPhoto(adminId, photoId, {
+              caption,
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Duyệt', callback_data: createCallbackData({ action: 'approve_usdt_deposit', id: depositId }) },
+                    { text: '❌ Từ chối', callback_data: createCallbackData({ action: 'reject_usdt_deposit', id: depositId }) }
+                  ]
+                ]
+              }
+            });
+          }
+
+          // Notify user
+          await bot.sendMessage(msg.chat.id, '✅ Đã gửi ảnh xác nhận cho Admin. Mã yêu cầu: #' + depositId);
+
+          // Clear state
+          delCache(`waiting_payment_proof_${msg.from.id}`);
+
+          // Return to menu
+          const { sendMenu } = await import('./handle/handleUser.js');
+          await sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+
+        } catch (err) {
+          console.error('Error forwarding photo:', err);
+          await bot.sendMessage(msg.chat.id, '❌ Có lỗi khi gửi ảnh. Vui lòng thử lại.');
+        }
+      } else {
+        await bot.sendMessage(msg.chat.id, '⚠️ Hệ thống chưa cấu hình Admin để nhận ảnh.');
+      }
+    }
   });
 
   // Callback query listener
@@ -193,12 +340,35 @@ export const registerListeners = (bot, config) => {
 
       switch (action) {
         case 'products':
-          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE);
+          // Need to fetch user to get language for pagination callback too?
+          // If ensureUser wasn't called here (it was called above), we can pass it.
+          // user variable in 'callback_query' listener: const user = await ensureUser(...)
+          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user);
         case 'view_product':
           const { showProductDetail } = await import('./handle/handleBuy.js');
           return showProductDetail(bot, chatId, data.productId, query.from.id);
         case 'buy_product':
           return handlePurchase(bot, query.message, data.productId, query.from, config);
+
+        case 'deposit_select_bank':
+          const { promptForBankDeposit } = await import('./handle/handleDeposit.js');
+          return promptForBankDeposit(bot, chatId, query.from.id, config);
+
+        case 'deposit_select_usdt':
+          const { showUsdtOptions } = await import('./handle/handleDeposit.js');
+          return showUsdtOptions(bot, chatId, config);
+
+        case 'deposit_usdt_wallet':
+          const { showUsdtInfo } = await import('./handle/handleDeposit.js');
+          return showUsdtInfo(bot, chatId, config);
+
+        case 'deposit_usdt_bybit':
+          const { showUsdtBybitInfo } = await import('./handle/handleDeposit.js');
+          return showUsdtBybitInfo(bot, chatId, query.from.id, config);
+
+        case 'deposit_usdt_trc20':
+          const { showTrc20DepositFlow } = await import('./handle/handleDeposit.js');
+          return showTrc20DepositFlow(bot, chatId, query.from.id, config);
 
         case 'check_payment':
           const { checkPaymentForUser } = await import('./services/autoDeposit.js');
@@ -314,6 +484,94 @@ export const registerListeners = (bot, config) => {
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           const { adminDeletePromotion } = await import('./handle/handleAdmin.js');
           return adminDeletePromotion(bot, chatId, data.id);
+
+        case 'approve_usdt_deposit':
+          if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          {
+            const { getCache, delCache } = await import('../lib/cache/index.js');
+            const { updateDepositStatus, getDeposit } = await import('./controllers/depositController.js');
+            const { updateBalance, getUserById } = await import('./controllers/userController.js');
+            const { addBalanceLog } = await import('./controllers/balanceLogController.js');
+            const { query: dbQuery } = await import('./database/index.js');
+
+            const deposit = await getDeposit(data.id);
+            if (!deposit || deposit.status !== 'pending') {
+              return bot.sendMessage(chatId, 'Giao dịch không tồn tại hoặc đã được xử lý.');
+            }
+
+            // Get cached USDT amount
+            const usdtAmount = getCache(`usdt_deposit_amount_${data.id}`) || 0;
+            if (usdtAmount <= 0) {
+              return bot.sendMessage(chatId, '❌ Không tìm thấy số tiền USDT. Có thể đã hết hạn cache.');
+            }
+
+            // Get exchange rate from settings
+            const [rateRows] = await dbQuery("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
+            const exchangeRate = Number(rateRows?.[0]?.value) || 26000;
+
+            // Calculate VND amount
+            const vndAmount = Math.floor(usdtAmount * exchangeRate);
+
+            // Update deposit
+            await dbQuery('UPDATE deposits SET amount = ? WHERE id = ?', [vndAmount, data.id]);
+            await updateDepositStatus(data.id, 'approved');
+            await updateBalance(deposit.user_id, vndAmount);
+            await addBalanceLog({
+              userId: deposit.user_id,
+              amount: vndAmount,
+              reason: `deposit_usdt_${usdtAmount}`,
+              adminId: query.from.id
+            });
+
+            // Clear cache
+            delCache(`usdt_deposit_amount_${data.id}`);
+
+            const u = await getUserById(deposit.user_id);
+            const newBalance = Number(u.balance);
+
+            await bot.sendMessage(chatId,
+              `✅ Đã duyệt nạp #${data.id}.\n` +
+              `💵 ${usdtAmount} USDT × ${formatCurrency(exchangeRate)} = ${formatCurrency(vndAmount)}\n` +
+              `💰 Số dư mới người dùng: ${formatCurrency(newBalance)}`
+            );
+
+            // Notify user
+            if (u) {
+              await bot.sendMessage(u.telegram_id,
+                `✅ Nạp tiền thành công!\n\n` +
+                `💵 Số tiền: ${usdtAmount} USDT = ${formatCurrency(vndAmount)}\n` +
+                `💰 Số dư hiện tại: ${formatCurrency(newBalance)}\n` +
+                `📝 Mã giao dịch: #${data.id}`
+              );
+            }
+          }
+          return;
+
+        case 'reject_usdt_deposit':
+          if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
+          const { updateDepositStatus } = await import('./controllers/depositController.js');
+          const { getDeposit } = await import('./controllers/depositController.js');
+
+          const depositToReject = await getDeposit(data.id);
+          if (!depositToReject || depositToReject.status !== 'pending') {
+            return bot.sendMessage(chatId, 'Giao dịch không tồn tại hoặc đã được xử lý.');
+          }
+
+          await updateDepositStatus(data.id, 'rejected');
+          await bot.sendMessage(chatId, `❌ Đã từ chối giao dịch #${data.id}.`);
+
+          // Notify user
+          try {
+            const userToNotify = await getUserCache(depositToReject.user_id); // we need to user controller to get cached user or db user.
+            // ensureUser caches but key is username/id? 
+            // Let's use getDeposit -> user_id -> getUserById
+            const { getUserById } = await import('./controllers/userController.js');
+            const u = await getUserById(depositToReject.user_id);
+            if (u) {
+              await bot.sendMessage(u.telegram_id, `❌ Yêu cầu nạp tiền #${data.id} của bạn đã bị từ chối.`);
+            }
+          } catch (e) { console.error(e); }
+          return;
 
         default:
           return;

@@ -27,8 +27,10 @@ interface Settings {
     mb_auto_deposit: boolean;
     viettel_token: string;
     min_deposit: number;
+    exchange_rate: number;
     telegram_bot_token: string;
     shop_name: string;
+    usdt_trc20_wallet: string;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -39,8 +41,10 @@ export default function SettingsPage() {
         mb_auto_deposit: true,
         viettel_token: '',
         min_deposit: 50000,
+        exchange_rate: 26000,
         telegram_bot_token: '',
         shop_name: 'SHOP',
+        usdt_trc20_wallet: '',
     });
 
     const [loading, setLoading] = useState(true);
@@ -211,10 +215,11 @@ export default function SettingsPage() {
             <Card>
                 <Tabs defaultValue="payment" className="w-full">
                     <CardHeader>
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-5">
                             <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
                             <TabsTrigger value="payment">{t('settings.payment')}</TabsTrigger>
                             <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
+                            <TabsTrigger value="usdt">USDT</TabsTrigger>
                             <TabsTrigger value="promotions">Promotions</TabsTrigger>
                         </TabsList>
                     </CardHeader>
@@ -277,6 +282,16 @@ export default function SettingsPage() {
                                                 onChange={(e) => handleChange('min_deposit', e.target.value)}
                                                 className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                                 placeholder="50000"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Tỷ giá USD (VNĐ)</label>
+                                            <input
+                                                type="number"
+                                                value={settings.exchange_rate}
+                                                onChange={(e) => handleChange('exchange_rate', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="26000"
                                             />
                                         </div>
                                     </div>
@@ -411,6 +426,25 @@ export default function SettingsPage() {
                                         onChange={(e) => handleChange('shop_name', e.target.value)}
                                         className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                         placeholder="DUCVIETSTORE"
+                                    />
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="usdt" className="space-y-6">
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">💎 Ví USDT TRC20</div>
+                                    <div className="text-sm text-slate-400 mb-4">Địa chỉ ví TRC20 để nhận USDT (dùng cho nạp tiền tự động)</div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Địa chỉ ví TRC20</label>
+                                    <input
+                                        type="text"
+                                        value={settings.usdt_trc20_wallet}
+                                        onChange={(e) => handleChange('usdt_trc20_wallet', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                        placeholder="TJErNxge2EkC2PAkXy9hBag4x5kWPJNKRJ"
                                     />
                                 </div>
                             </div>

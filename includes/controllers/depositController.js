@@ -8,6 +8,14 @@ export const createDeposit = async (userId, amount, content = null) => {
   return result.insertId;
 };
 
+export const createUsdtDeposit = async (userId, content = null) => {
+  const [result] = await getPool().execute(
+    'INSERT INTO deposits (user_id, amount, status, content, type) VALUES (?, 0, "pending", ?, "usdt")',
+    [userId, content]
+  );
+  return result.insertId;
+};
+
 export const createDepositWithStatus = async (userId, amount, status = 'pending', txRef = null) => {
   const [result] = await getPool().execute(
     'INSERT INTO deposits (user_id, amount, status, tx_ref) VALUES (?, ?, ?, ?)',
@@ -52,3 +60,17 @@ export const findLatestPendingByUser = async (userId) => {
   return rows[0];
 };
 
+// Check if a TRC20 transaction hash has already been used
+export const findDepositByTxHash = async (txHash) => {
+  const rows = await query('SELECT * FROM deposits WHERE tx_ref = ?', [txHash]);
+  return rows[0];
+};
+
+// Create a TRC20 USDT deposit with transaction hash
+export const createTrc20Deposit = async (userId, amountUsdt, amountVnd, txHash) => {
+  const [result] = await getPool().execute(
+    'INSERT INTO deposits (user_id, amount, status, tx_ref, type, content) VALUES (?, ?, "approved", ?, "usdt_trc20", ?)',
+    [userId, amountVnd, txHash, `${amountUsdt} USDT`]
+  );
+  return result.insertId;
+};

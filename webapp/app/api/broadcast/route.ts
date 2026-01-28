@@ -32,19 +32,26 @@ export async function POST(request: Request) {
         }
 
         // Build message based on type
-        let message = '';
+        let broadcastMessage = '';
 
         if (type === 'new_product') {
-            message = `📢 ${shopName} thông báo có sản phẩm mới!\n\n` +
+            broadcastMessage = `📢 ${shopName} thông báo có sản phẩm mới!\n\n` +
                 `🎁 Sản phẩm: ${productName}\n` +
                 `💰 Giá: ${Number(productPrice).toLocaleString('vi-VN')}đ\n\n` +
                 `👉 Gõ /start để vào bot mua ngay nhé!`;
         } else if (type === 'stock_added') {
-            message = `📢 ${shopName} thông báo có hàng mới!\n\n` +
+            broadcastMessage = `📢 ${shopName} thông báo có hàng mới!\n\n` +
                 `🎁 Sản phẩm: ${productName}\n` +
                 `➕ Vừa thêm: ${addedCount} tài khoản\n` +
                 `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
                 `👉 Gõ /start để vào bot mua ngay nhé!`;
+        } else if (type === 'custom' || body.message) {
+            // Support custom message for notifications page
+            const customMessage = body.message;
+            if (!customMessage || !customMessage.trim()) {
+                return NextResponse.json({ error: 'Message is required for custom broadcast' }, { status: 400 });
+            }
+            broadcastMessage = `📢 ${shopName} thông báo:\n\n${customMessage}`;
         } else {
             return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
@@ -60,7 +67,7 @@ export async function POST(request: Request) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         chat_id: user.telegram_id,
-                        text: message,
+                        text: broadcastMessage,
                         parse_mode: 'HTML'
                     })
                 });

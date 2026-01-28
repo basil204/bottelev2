@@ -9,32 +9,15 @@ export const ensureUser = async (bot, msg) => {
 };
 
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
-  const credit = user.credit || 0;
-  
-  // Tạo danh sách link group
-  let groupLinksText = '';
-  if (groupLinks && groupLinks.length > 0) {
-    groupLinksText = groupLinks
-      .filter(link => link.url && link.url.trim() !== '')
-      .map(link => `📢 ${link.name}: ${link.url}`)
-      .join('\n');
-  } else {
-    // Fallback nếu không có config
-    groupLinksText = '📢 Group thông báo và chat: https://t.me/+SFp6Gttq18VmYThl';
-  }
-  
-  const text = `👤 ID: ${user.telegram_id}\n💰 Số dư: ${formatCurrency(user.balance)}\n🎁 Credit: ${credit}
+  const { t } = await import('../helpers/langHelper.js');
 
-${groupLinksText}
-👨‍💼 Admin: @nlmsp2025`;
+  // Chỉ hiển thị tiêu đề menu
+  const text = await t('menu_title', user.language);
   const opts = {
     reply_markup: {
       keyboard: [
-        [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
-        [{ text: '📧 Mua Gmail' }, { text: '📧 Mua Mail' }],
-        [{ text: '📧 Gmail sẵn thanh toán' }, { text: '⭐ Gói VIP' }],
-        [{ text: '🧾 Lịch sử mua' }, { text: '🎁 Check-in' }],
-        [{ text: '💎 Đổi Credit' }]
+        [{ text: await t('deposit', user.language) }, { text: await t('buy_product', user.language) }],
+        [{ text: await t('history', user.language) }]
       ],
       resize_keyboard: true
     }
@@ -87,14 +70,14 @@ export const sendUserInfo = async (bot, chatId, user) => {
     const { total_deposits, total_deposited } = depositStats[0] || { total_deposits: 0, total_deposited: 0 };
 
     // Format ngày tạo tài khoản
-    const createdDate = user.created_at 
-      ? new Date(user.created_at).toLocaleDateString('vi-VN', { 
-          year: 'numeric', 
-          month: '2-digit', 
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
+    const createdDate = user.created_at
+      ? new Date(user.created_at).toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
       : 'N/A';
 
     const username = user.username ? `@${user.username}` : 'Chưa có';
@@ -148,4 +131,3 @@ export const sendUserInfo = async (bot, chatId, user) => {
     await bot.sendMessage(chatId, 'Có lỗi xảy ra khi lấy thông tin. Vui lòng thử lại sau.');
   }
 };
-

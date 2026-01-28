@@ -25,7 +25,10 @@ const waitingForProductQuantity = new Map();
 
 
 
-export const sendProductList = async (bot, chatId, page, pageSize) => {
+export const sendProductList = async (bot, chatId, page, pageSize, user) => {
+  const { formatMoney } = await import('../helpers/langHelper.js');
+  const lang = user ? user.language : 'vi';
+
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listProducts(offset, pageSize);
   if (!rows.length) return bot.sendMessage(chatId, 'Chưa có sản phẩm.');
@@ -59,7 +62,7 @@ export const sendProductList = async (bot, chatId, page, pageSize) => {
     return bot.sendMessage(chatId, '🚫 Các sản phẩm đang tạm ẩn. Vui lòng quay lại sau.');
   }
 
-  const inline_keyboard = filteredRows.map((p) => {
+  const inline_keyboard = await Promise.all(filteredRows.map(async (p) => {
     let icon = '✅'; // Default: in stock
     if (p.type === 'order') {
       icon = '📝'; // Order type product
@@ -67,11 +70,13 @@ export const sendProductList = async (bot, chatId, page, pageSize) => {
       icon = '❌'; // Out of stock
     }
     const stockText = p.type === 'order' ? '' : ` (${p.stock})`;
+    const priceText = await formatMoney(p.price, lang);
     return [{
-      text: `${icon} ${p.name} - ${formatCurrency(p.price)}${stockText}`,
+      text: `${icon} ${p.name} - ${priceText}${stockText}`,
       callback_data: createCallbackData({ action: 'view_product', productId: p.id })
     }];
-  });
+  }));
+
   const hasPrev = page > 1;
   const hasNext = offset + rows.length < total;
   inline_keyboard.push(...buildPaginationKeyboard({ action: 'products', page }, page, hasPrev, hasNext));
@@ -90,6 +95,21 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     return bot.sendMessage(chatId, 'Vui lòng /start để tạo tài khoản.');
   }
 
+  // Lấy tỷ giá từ settings
+  let exchangeRate = 26000;
+  try {
+    const rateRows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
+    if (rateRows && rateRows[0]?.value) {
+      exchangeRate = Number(rateRows[0].value) || 26000;
+    }
+  } catch (e) {
+    console.error('[PRODUCT_DETAIL] Error fetching exchange rate:', e);
+  }
+
+  // Tính giá USD
+  const priceVnd = Number(product.price) || 0;
+  const priceUsd = (priceVnd / exchangeRate).toFixed(2);
+
   // Normalize product type: 'auto' -> 'stock', 'manual' -> 'order'
   let productType = product.type || 'stock';
   if (productType === 'auto') productType = 'stock';
@@ -100,7 +120,7 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
 
   let detailText = `📦 **CHI TIẾT SẢN PHẨM**\n\n` +
     `🎁 **Tên:** ${product.name}\n` +
-    `💰 **Giá:** ${formatCurrency(product.price)}\n` +
+    `💰 **Giá:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n` +
     `📝 **Mô tả:** ${description}\n`;
 
   // Hiển thị thông tin tồn kho cho sản phẩm stock

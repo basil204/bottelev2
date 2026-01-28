@@ -23,7 +23,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 export function Sidebar() {
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
-    const { t } = useLanguage();
+    const { t, language, setLanguage } = useLanguage();
 
     const navItems = [
         { name: t('sidebar.dashboard'), href: "/", icon: LayoutDashboard },
@@ -79,7 +79,14 @@ export function Sidebar() {
                         </nav>
                     </div>
 
-                    <div className="p-4 border-t">
+                    <div className="p-4 border-t space-y-2">
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-3"
+                            onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
+                        >
+                            {language === 'vi' ? '🇻🇳 Tiếng Việt' : '🇺🇸 English'}
+                        </Button>
                         <Button variant="ghost" className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
                             <LogOut className="h-5 w-5" />
                             {t('sidebar.logout')}

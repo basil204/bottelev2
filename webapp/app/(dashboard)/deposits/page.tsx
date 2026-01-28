@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { clsx } from 'clsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from 'lucide-react'; // Wait, standard lucide Badge? No, I need a UI Badge. I'll simulate it with span.
 import {
     Table,
     TableBody,
@@ -23,6 +22,7 @@ interface Deposit {
     amount: number;
     tx_ref: string;
     status: 'pending' | 'approved' | 'rejected';
+    type?: 'bank' | 'usdt';
     created_at: string;
 }
 
@@ -34,10 +34,12 @@ export default function DepositsPage() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [typeFilter, setTypeFilter] = useState<'all' | 'bank' | 'usdt'>('all');
 
     useEffect(() => {
         setLoading(true);
-        fetch(`/api/deposits?page=${page}&limit=10`)
+        const typeParam = typeFilter !== 'all' ? `&type=${typeFilter}` : '';
+        fetch(`/api/deposits?page=${page}&limit=10${typeParam}`)
             .then((res) => res.json())
             .then((data) => {
                 if (data.error) {
@@ -58,7 +60,7 @@ export default function DepositsPage() {
                 console.error("Fetch error:", err);
                 setLoading(false);
             });
-    }, [page]);
+    }, [page, typeFilter]);
 
     const getStatusStyles = (status: string) => {
         switch (status) {
@@ -93,6 +95,11 @@ export default function DepositsPage() {
                         <Wallet className="w-5 h-5 text-primary" />
                         {t('deposits.transactions')}
                     </CardTitle>
+                    <div className="flex gap-2 pt-2">
+                        <Button variant={typeFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('all'); setPage(1); }}>Tất cả</Button>
+                        <Button variant={typeFilter === 'bank' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('bank'); setPage(1); }}>🏦 Bank</Button>
+                        <Button variant={typeFilter === 'usdt' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('usdt'); setPage(1); }}>💲 USDT</Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-md border">
@@ -139,16 +146,34 @@ export default function DepositsPage() {
                                                             className="bg-green-600 hover:bg-green-700 text-white h-8 px-2"
                                                             onClick={async () => {
                                                                 if (!confirm('Bạn có chắc chắn muốn DUYỆT yêu cầu này?')) return;
+
+                                                                let amount = deposit.amount;
+                                                                // Always prompt for amount if it's 0 (pending usdt) or even if likely bank ref, just to be safe or allow correction?
+                                                                // For now, if amount is 0, we MUST prompt.
+                                                                // If amount > 0, we can prompt with default value.
+
+                                                                const input = prompt('Nhập số tiền thực nhận (VNĐ):', deposit.amount.toString());
+                                                                if (input === null) return; // Cancelled
+
+                                                                const parsed = parseInt(input.replace(/\D/g, ''));
+                                                                if (isNaN(parsed) || parsed <= 0) {
+                                                                    alert('Số tiền không hợp lệ');
+                                                                    return;
+                                                                }
+                                                                amount = parsed;
+
                                                                 try {
                                                                     const res = await fetch('/api/deposits', {
                                                                         method: 'POST',
                                                                         headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ depositId: deposit.id, action: 'approve' })
+                                                                        body: JSON.stringify({ depositId: deposit.id, action: 'approve', amount })
                                                                     });
                                                                     if (res.ok) {
-                                                                        setDeposits(prev => prev.map(d => d.id === deposit.id ? { ...d, status: 'approved' } : d));
+                                                                        // Update local state with new status AND amount
+                                                                        setDeposits(prev => prev.map(d => d.id === deposit.id ? { ...d, status: 'approved', amount: amount } : d));
                                                                     } else {
-                                                                        alert('Failed to approve');
+                                                                        const text = await res.text();
+                                                                        alert('Failed to approve: ' + text);
                                                                     }
                                                                 } catch (e) { console.error(e); alert('Error'); }
                                                             }}

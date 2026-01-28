@@ -25,6 +25,7 @@ export async function GET() {
             min_deposit: 50000,
             telegram_bot_token: '',
             shop_name: 'SHOP',
+            usdt_trc20_wallet: '',
         };
 
         rows.forEach((row) => {
@@ -53,7 +54,8 @@ export async function POST(request: Request) {
             viettel_token,
             min_deposit,
             telegram_bot_token,
-            shop_name
+            shop_name,
+            usdt_trc20_wallet
         } = body;
 
         const connection = await pool.getConnection();
@@ -77,6 +79,7 @@ export async function POST(request: Request) {
                 shouldRestart = true;
             }
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
+            if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
 
             await connection.commit();
 

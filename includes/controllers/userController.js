@@ -3,9 +3,13 @@ import { query } from '../database/index.js';
 export const findOrCreateUser = async (telegramId, username) => {
   const existing = await query('SELECT * FROM users WHERE telegram_id = ?', [telegramId]);
   if (existing.length) return existing[0];
-  await query('INSERT INTO users (telegram_id, username, balance, credit) VALUES (?, ?, 0, 0)', [telegramId, username || null]);
+  await query('INSERT INTO users (telegram_id, username, balance, credit, language) VALUES (?, ?, 0, 0, "vi")', [telegramId, username || null]);
   const [user] = await query('SELECT * FROM users WHERE telegram_id = ?', [telegramId]);
   return user;
+};
+
+export const updateLanguage = async (userId, lang) => {
+  await query('UPDATE users SET language = ? WHERE id = ?', [lang, userId]);
 };
 
 export const getUserByTelegram = async (telegramId) => {

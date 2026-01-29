@@ -3,7 +3,7 @@
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, Edit, Trash2, Database, List } from 'lucide-react';
+import { Plus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,16 +44,25 @@ export default function ProductsPage() {
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [notifyUsers, setNotifyUsers] = useState(true);
     const [notifyNewProduct, setNotifyNewProduct] = useState(true);
+    // Inventory pagination & selection
+    const [inventoryPage, setInventoryPage] = useState(1);
+    const [inventoryTotalPages, setInventoryTotalPages] = useState(1);
+    const [inventoryTotal, setInventoryTotal] = useState(0);
+    const [selectedAccountIds, setSelectedAccountIds] = useState<Set<number>>(new Set());
+    const [inventoryLoading, setInventoryLoading] = useState(false);
 
     const fetchProducts = () => {
         setLoading(true);
         fetch('/api/products')
             .then((res) => res.json())
             .then((data) => {
-                setProducts(data);
+                setProducts(Array.isArray(data) ? data : []);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch(() => {
+                setProducts([]);
+                setLoading(false);
+            });
     };
 
     useEffect(() => {
@@ -154,10 +163,108 @@ export default function ProductsPage() {
 
     const openViewStockModal = async (product: Product) => {
         setCurrentProductId(product.id);
-        const res = await fetch(`/api/inventory?productId=${product.id}`);
+        setInventoryPage(1);
+        setSelectedAccountIds(new Set());
+        await fetchInventory(product.id, 1);
+        setIsViewStockModalOpen(true);
+    };
+
+    const fetchInventory = async (productId: number, page: number) => {
+        setInventoryLoading(true);
+        const res = await fetch(`/api/inventory?productId=${productId}&page=${page}&limit=20`);
         const data = await res.json();
         setAccounts(data.accounts || []);
-        setIsViewStockModalOpen(true);
+        setInventoryTotalPages(data.pagination?.totalPages || 1);
+        setInventoryTotal(data.pagination?.total || 0);
+        setInventoryLoading(false);
+    };
+
+    const handleInventoryPageChange = (newPage: number) => {
+        if (!currentProductId) return;
+        setInventoryPage(newPage);
+        fetchInventory(currentProductId, newPage);
+    };
+
+    const handleDeleteAccount = async (accountId: number) => {
+        if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
+        const res = await fetch(`/api/inventory?accountId=${accountId}`, { method: 'DELETE' });
+        if (res.ok) {
+            setAccounts(prev => prev.filter(acc => acc.id !== accountId));
+            setSelectedAccountIds(prev => {
+                const next = new Set(prev);
+                next.delete(accountId);
+                return next;
+            });
+            setInventoryTotal(prev => prev - 1);
+            fetchProducts();
+        } else {
+            alert('Lỗi khi xóa tài khoản!');
+        }
+    };
+
+    const handleDeleteSelectedAccounts = async () => {
+        if (selectedAccountIds.size === 0) return;
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedAccountIds.size} tài khoản đã chọn?`)) return;
+        const ids = Array.from(selectedAccountIds).join(',');
+        const res = await fetch(`/api/inventory?accountIds=${ids}`, { method: 'DELETE' });
+        if (res.ok) {
+            const result = await res.json();
+            alert(`Đã xóa ${result.deletedCount} tài khoản!`);
+            setSelectedAccountIds(new Set());
+            if (currentProductId) {
+                await fetchInventory(currentProductId, inventoryPage);
+            }
+            fetchProducts();
+        } else {
+            alert('Lỗi khi xóa tài khoản!');
+        }
+    };
+
+    const toggleAccountSelection = (accountId: number) => {
+        setSelectedAccountIds(prev => {
+            const next = new Set(prev);
+            if (next.has(accountId)) {
+                next.delete(accountId);
+            } else {
+                next.add(accountId);
+            }
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (accounts.every(acc => selectedAccountIds.has(acc.id))) {
+            // Deselect all on current page
+            setSelectedAccountIds(prev => {
+                const next = new Set(prev);
+                accounts.forEach(acc => next.delete(acc.id));
+                return next;
+            });
+        } else {
+            // Select all on current page
+            setSelectedAccountIds(prev => {
+                const next = new Set(prev);
+                accounts.forEach(acc => next.add(acc.id));
+                return next;
+            });
+        }
+    };
+
+    const handleDeleteAccountsByStatus = async (status: 'available' | 'sold' | 'all') => {
+        if (!currentProductId) return;
+        const statusLabel = status === 'all' ? 'tất cả' : (status === 'available' ? 'còn hàng' : 'đã bán');
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${statusLabel} tài khoản?`)) return;
+        const res = await fetch(`/api/inventory?productId=${currentProductId}&status=${status}`, { method: 'DELETE' });
+        if (res.ok) {
+            const result = await res.json();
+            alert(`Đã xóa ${result.deletedCount} tài khoản!`);
+            setSelectedAccountIds(new Set());
+            setInventoryPage(1);
+            await fetchInventory(currentProductId, 1);
+            fetchProducts();
+        } else {
+            alert('Lỗi khi xóa tài khoản!');
+        }
     };
 
     return (
@@ -350,27 +457,110 @@ export default function ProductsPage() {
             <Dialog
                 open={isViewStockModalOpen}
                 onOpenChange={setIsViewStockModalOpen}
-                title={t('products.current_inventory')}
+                title={`${t('products.current_inventory')} (${inventoryTotal} tài khoản)`}
                 className="max-w-2xl"
             >
-                <div className="max-h-[60vh] overflow-auto border rounded-md p-2 space-y-2 bg-muted/20">
-                    {accounts.length === 0 ? (
+                {/* Bulk delete buttons */}
+                <div className="flex gap-2 mb-3 flex-wrap items-center">
+                    {selectedAccountIds.size > 0 && (
+                        <Button size="sm" variant="destructive" onClick={handleDeleteSelectedAccounts}>
+                            <Trash2 className="w-3 h-3 mr-1" /> Xóa đã chọn ({selectedAccountIds.size})
+                        </Button>
+                    )}
+                    <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20" onClick={() => handleDeleteAccountsByStatus('sold')}>
+                        <Trash2 className="w-3 h-3 mr-1" /> Xóa đã bán
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:hover:bg-orange-900/20" onClick={() => handleDeleteAccountsByStatus('available')}>
+                        <Trash2 className="w-3 h-3 mr-1" /> Xóa còn hàng
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => handleDeleteAccountsByStatus('all')}>
+                        <Trash2 className="w-3 h-3 mr-1" /> Xóa tất cả
+                    </Button>
+                </div>
+
+                {/* Header with Select All */}
+                {accounts.length > 0 && (
+                    <div className="flex items-center gap-3 p-2 border-b bg-muted/30 rounded-t-md">
+                        <input
+                            type="checkbox"
+                            checked={accounts.length > 0 && accounts.every(acc => selectedAccountIds.has(acc.id))}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-gray-400 cursor-pointer"
+                            title="Chọn tất cả trang này"
+                        />
+                        <span className="text-sm text-muted-foreground">Chọn tất cả trang này</span>
+                    </div>
+                )}
+
+                <div className="max-h-[50vh] overflow-auto border rounded-b-md p-2 space-y-1 bg-muted/20">
+                    {inventoryLoading ? (
+                        <div className="text-center py-8 text-muted-foreground">Đang tải...</div>
+                    ) : accounts.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">{t('products.empty_inventory')}</div>
                     ) : (
                         accounts.map((acc, i) => (
-                            <div key={acc.id} className="flex items-center justify-between p-2 rounded border bg-card text-card-foreground">
-                                <span className="font-mono text-sm text-muted-foreground">#{i + 1}</span>
-                                <code className="text-sm font-mono flex-1 mx-4 truncate">{acc.username}</code>
+                            <div
+                                key={acc.id}
+                                className={clsx(
+                                    "flex items-center p-2 rounded border bg-card text-card-foreground group cursor-pointer transition-colors",
+                                    selectedAccountIds.has(acc.id) && "bg-primary/10 border-primary/30"
+                                )}
+                                onClick={() => toggleAccountSelection(acc.id)}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={selectedAccountIds.has(acc.id)}
+                                    onChange={() => toggleAccountSelection(acc.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-4 h-4 rounded border-gray-400 mr-3 cursor-pointer"
+                                />
+                                <span className="font-mono text-sm text-muted-foreground w-12">#{(inventoryPage - 1) * 20 + i + 1}</span>
+                                <code className="text-sm font-mono flex-1 truncate">{acc.username}</code>
                                 <span className={clsx(
-                                    "text-xs px-2 py-0.5 rounded-full capitalize",
+                                    "text-xs px-2 py-0.5 rounded-full capitalize mr-2",
                                     acc.status === 'available' ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
                                 )}>
                                     {acc.status}
                                 </span>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteAccount(acc.id); }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600"
+                                    title="Xóa tài khoản"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
                         ))
                     )}
                 </div>
+
+                {/* Pagination */}
+                {inventoryTotalPages > 1 && (
+                    <div className="flex items-center justify-between pt-3">
+                        <div className="text-sm text-muted-foreground">
+                            Trang {inventoryPage} / {inventoryTotalPages}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleInventoryPageChange(inventoryPage - 1)}
+                                disabled={inventoryPage <= 1 || inventoryLoading}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleInventoryPageChange(inventoryPage + 1)}
+                                disabled={inventoryPage >= inventoryTotalPages || inventoryLoading}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex justify-end pt-2">
                     <Button variant="outline" onClick={() => setIsViewStockModalOpen(false)}>{t('products.close')}</Button>
                 </div>

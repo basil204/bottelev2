@@ -6,22 +6,138 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const productId = searchParams.get('productId');
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '50');
+        const offset = (page - 1) * limit;
 
         if (!productId) {
             return NextResponse.json({ error: 'Missing productId' }, { status: 400 });
         }
 
-        const [accounts] = await pool.query<RowDataPacket[]>(
-            'SELECT id, username, password, status FROM accounts WHERE product_id = ? ORDER BY id DESC',
+        // Get total count
+        const [countResult] = await pool.query<RowDataPacket[]>(
+            'SELECT COUNT(*) as total FROM accounts WHERE product_id = ?',
             [productId]
         );
+        const total = countResult[0]?.total || 0;
+        const totalPages = Math.ceil(total / limit);
 
-        return NextResponse.json({ accounts });
+        // Get paginated accounts
+        const [accounts] = await pool.query<RowDataPacket[]>(
+            'SELECT id, username, password, status FROM accounts WHERE product_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+            [productId, limit, offset]
+        );
+
+        return NextResponse.json({
+            accounts,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages
+            }
+        });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const accountId = searchParams.get('accountId');
+        const accountIds = searchParams.get('accountIds'); // comma-separated IDs for bulk delete
+        const productId = searchParams.get('productId');
+        const status = searchParams.get('status'); // 'available' | 'sold' | 'all'
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            let deletedCount = 0;
+            let targetProductId = productId;
+
+            // Xóa nhiều tài khoản theo IDs (checkbox selection)
+            if (accountIds) {
+                const ids = accountIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+                if (ids.length > 0) {
+                    // Lấy product_id từ account đầu tiên
+                    const [accountRows] = await connection.query<RowDataPacket[]>(
+                        'SELECT product_id FROM accounts WHERE id = ?',
+                        [ids[0]]
+                    );
+                    if (accountRows.length > 0) {
+                        targetProductId = accountRows[0].product_id;
+                        const placeholders = ids.map(() => '?').join(',');
+                        const [result] = await connection.query<any>(
+                            `DELETE FROM accounts WHERE id IN (${placeholders})`,
+                            ids
+                        );
+                        deletedCount = result.affectedRows;
+                    }
+                }
+            }
+            // Xóa từng tài khoản
+            else if (accountId) {
+                // Lấy product_id trước khi xóa
+                const [accountRows] = await connection.query<RowDataPacket[]>(
+                    'SELECT product_id FROM accounts WHERE id = ?',
+                    [accountId]
+                );
+                if (accountRows.length > 0) {
+                    targetProductId = accountRows[0].product_id;
+                    await connection.query('DELETE FROM accounts WHERE id = ?', [accountId]);
+                    deletedCount = 1;
+                }
+            }
+            // Xóa hàng loạt theo status
+            else if (productId && status) {
+                if (status === 'all') {
+                    const [result] = await connection.query<any>(
+                        'DELETE FROM accounts WHERE product_id = ?',
+                        [productId]
+                    );
+                    deletedCount = result.affectedRows;
+                } else {
+                    const [result] = await connection.query<any>(
+                        'DELETE FROM accounts WHERE product_id = ? AND status = ?',
+                        [productId, status]
+                    );
+                    deletedCount = result.affectedRows;
+                }
+            } else {
+                await connection.rollback();
+                return NextResponse.json({ error: 'Missing accountId, accountIds or productId with status' }, { status: 400 });
+            }
+
+            // Sync stock
+            if (targetProductId) {
+                const [stockResult] = await connection.query<RowDataPacket[]>(
+                    'SELECT COUNT(*) as cnt FROM accounts WHERE product_id = ? AND status = "available"',
+                    [targetProductId]
+                );
+                const totalStock = stockResult[0]?.cnt || 0;
+                await connection.query(
+                    'UPDATE products SET stock = ? WHERE id = ?',
+                    [totalStock, targetProductId]
+                );
+            }
+
+            await connection.commit();
+            return NextResponse.json({ success: true, deletedCount });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error(error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
 
 export async function POST(request: Request) {
     try {

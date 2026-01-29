@@ -44,20 +44,19 @@ export default function DepositsPage() {
             .then((data) => {
                 if (data.error) {
                     console.error("API Error:", data.error);
+                    setDeposits([]);
+                    setTotalPages(1);
                     setLoading(false);
                     return;
                 }
-                if (!data.data || !data.pagination) {
-                    console.error("Invalid API response:", data);
-                    setLoading(false);
-                    return;
-                }
-                setDeposits(data.data);
-                setTotalPages(data.pagination.totalPages);
+                setDeposits(Array.isArray(data.data) ? data.data : []);
+                setTotalPages(data.pagination?.totalPages || 1);
                 setLoading(false);
             })
             .catch(err => {
                 console.error("Fetch error:", err);
+                setDeposits([]);
+                setTotalPages(1);
                 setLoading(false);
             });
     }, [page, typeFilter]);
@@ -95,11 +94,6 @@ export default function DepositsPage() {
                         <Wallet className="w-5 h-5 text-primary" />
                         {t('deposits.transactions')}
                     </CardTitle>
-                    <div className="flex gap-2 pt-2">
-                        <Button variant={typeFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('all'); setPage(1); }}>Tất cả</Button>
-                        <Button variant={typeFilter === 'bank' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('bank'); setPage(1); }}>🏦 Bank</Button>
-                        <Button variant={typeFilter === 'usdt' ? 'default' : 'outline'} size="sm" onClick={() => { setTypeFilter('usdt'); setPage(1); }}>💲 USDT</Button>
-                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-md border">

@@ -45,12 +45,14 @@ export default function UsersPage() {
         fetch(`/api/users?page=${page}&limit=10&search=${searchQuery}`)
             .then((res) => res.json())
             .then((data) => {
-                setUsers(data.data);
-                setTotalPages(data.pagination.totalPages);
+                setUsers(Array.isArray(data.data) ? data.data : []);
+                setTotalPages(data.pagination?.totalPages || 1);
                 setLoading(false);
             })
             .catch(err => {
                 console.error(err);
+                setUsers([]);
+                setTotalPages(1);
                 setLoading(false);
             });
     };

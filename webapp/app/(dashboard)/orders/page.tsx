@@ -40,12 +40,14 @@ export default function OrdersPage() {
         fetch(`/api/orders?page=${page}&limit=10`)
             .then((res) => res.json())
             .then((data) => {
-                setOrders(data.data);
-                setTotalPages(data.pagination.totalPages);
+                setOrders(Array.isArray(data.data) ? data.data : []);
+                setTotalPages(data.pagination?.totalPages || 1);
                 setLoading(false);
             })
             .catch(err => {
                 console.error(err);
+                setOrders([]);
+                setTotalPages(1);
                 setLoading(false);
             });
     }, [page]);

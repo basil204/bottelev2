@@ -152,11 +152,11 @@ export async function POST(request: Request) {
 
             // Lưu vào database sau khi tạo thành công trên Google
             await pool.query<ResultSetHeader>(
-                'INSERT INTO edu_emails (user_id, email, password, domain_id, delete_at, 2fa_secret) VALUES (?, ?, ?, ?, ?, ?)',
-                [parseInt(userId), email, emailPassword, domain_id, deleteAt, twofa_secret || null]
+                'INSERT INTO edu_emails (user_id, email, password, domain_id, delete_at) VALUES (?, ?, ?, ?, ?)',
+                [parseInt(userId), email, emailPassword, domain_id, deleteAt]
             );
 
-            createdEmails.push({ email, password: emailPassword, twofa_secret: twofa_secret || undefined });
+            createdEmails.push({ email, password: emailPassword });
         }
 
         return NextResponse.json({

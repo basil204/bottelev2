@@ -81,6 +81,16 @@ async function migrate() {
             console.log("Backfill complete.");
         }
 
+        // Fix products.type column to accept all values
+        console.log("Checking products.type column...");
+        const [productColumns] = await connection.query("SHOW COLUMNS FROM products");
+        const typeCol = productColumns.find(c => c.Field === 'type');
+        if (typeCol && typeCol.Type.includes('enum')) {
+            console.log("Converting products.type from ENUM to VARCHAR...");
+            await connection.query("ALTER TABLE products MODIFY COLUMN type VARCHAR(20) DEFAULT 'stock'");
+            console.log("Fixed products.type column.");
+        }
+
         console.log('Migration completed successfully.');
         await connection.end();
     } catch (error) {

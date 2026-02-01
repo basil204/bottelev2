@@ -94,6 +94,16 @@ export async function initDatabase() {
                 INDEX idx_user (user_id),
                 INDEX idx_email (email)
             );
+
+            -- 2FA items table
+            CREATE TABLE IF NOT EXISTS twofa_items (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                secret VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user (user_id)
+            );
         `;
 
         await connection.query(createTablesSQL);

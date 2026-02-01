@@ -159,12 +159,35 @@ export const registerListeners = (bot, config) => {
 
 
 
-
-
   // Command /gmail để mua Gmail EDU
   bot.onText(/^\/gmail/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     await showGmailEduInfo(bot, msg.chat.id, user);
+  });
+
+  // Command /buymail gmail <số lượng> để mua Gmail nhanh
+  bot.onText(/^\/buymail\s+gmail(?:\s+(\d+))?/i, async (msg, match) => {
+    const user = await ensureUser(bot, msg);
+    const lang = user.language || 'vi';
+    const quantity = match[1] ? parseInt(match[1], 10) : null;
+
+    if (!quantity) {
+      // Nếu không có số lượng, hiện thông tin và chờ input
+      await showGmailEduInfo(bot, msg.chat.id, user);
+      return;
+    }
+
+    // Validate số lượng
+    if (quantity < 1 || quantity > 10) {
+      const errorMsg = lang === 'en'
+        ? '❌ Quantity must be between 1 and 10.'
+        : '❌ Số lượng phải từ 1 đến 10.';
+      return bot.sendMessage(msg.chat.id, errorMsg);
+    }
+
+    // Import và gọi trực tiếp handleBuyGmailEdu
+    const { handleBuyGmailEdu } = await import('./handle/handleGmailEdu.js');
+    await handleBuyGmailEdu(bot, msg, user, quantity, lang, null, config);
   });
 
   // Message listener for text flows

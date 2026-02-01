@@ -562,9 +562,8 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
 
     // Notify admin
     try {
-      const { notifyAdminAboutDeposit } = await import('./handleNotify.js');
-      const { globalConfig } = await import('../listen.js');
-      const adminIds = globalConfig?.ADMIN_IDS || [];
+      const { notifyAdminAboutDeposit, getAdminIds } = await import('./handleNotify.js');
+      const adminIds = await getAdminIds([]);
       if (adminIds.length > 0) {
         await notifyAdminAboutDeposit(bot, adminIds, {
           depositId,
@@ -817,8 +816,8 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
   adminMessage += `\n💵 Tổng nhận: ${formatCurrency(promotionResult.finalAmount)}\n💵 Số dư mới của user: ${formatCurrency(finalBalance)}`;
   await bot.sendMessage(chatId, adminMessage);
 
-  const { notifyAdminAboutDeposit } = await import('./handleNotify.js');
-  const adminIds = globalConfig?.ADMIN_IDS || [];
+  const { notifyAdminAboutDeposit, getAdminIds } = await import('./handleNotify.js');
+  const adminIds = await getAdminIds([]);
   if (adminIds.length > 0) {
     await notifyAdminAboutDeposit(bot, adminIds, {
       depositId: depositId,

@@ -4,7 +4,7 @@ import { updateBalance, getUserByTelegram } from '../controllers/userController.
 import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
-import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase } from './handleNotify.js';
+import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
 import { query } from '../database/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -287,8 +287,8 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
     `📧 Tài khoản: \`${account.username}\` | \`${account.password}\`${account.extra_data ? ` | Extra: \`${account.extra_data}\`` : ''}${account.twofa ? ` | 2FA: \`${account.twofa}\`` : ''}`;
   await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
 
-  // Notify admins
-  const adminIds = config?.ADMIN_IDS || [];
+  // Notify admins - fetch from database
+  const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
   if (adminIds.length > 0) {
     notifyAdminAboutPurchase(bot, adminIds, {
       orderId: 'AUTO',
@@ -368,9 +368,10 @@ export const handleManualOrderInput = async (bot, msg, userId, adminIds = []) =>
       }
     }
 
-    // Thông báo cho admin
-    if (order && adminIds && adminIds.length > 0) {
-      await notifyAdminAboutNewManualOrder(bot, adminIds, {
+    // Thông báo cho admin - fetch from database
+    const dbAdminIds = await getAdminIds(adminIds);
+    if (order && dbAdminIds.length > 0) {
+      await notifyAdminAboutNewManualOrder(bot, dbAdminIds, {
         id: order.id,
         product_name: product.name,
         username: user.username,
@@ -597,8 +598,8 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     const updatedUser = await getUserByTelegram(msg.from.id);
     const finalBalance = Number(updatedUser.balance);
 
-    // Notify admins
-    const adminIds = config?.ADMIN_IDS || [];
+    // Notify admins - fetch from database
+    const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
     if (adminIds.length > 0) {
       notifyAdminAboutPurchase(bot, adminIds, {
         orderId: orderResult.insertId || 'AUTO',

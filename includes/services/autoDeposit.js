@@ -150,7 +150,9 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
       `\n📝 Ref: ${ref}`;
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
 
-    const adminIds = globalConfig?.ADMIN_IDS || [];
+    // Notify admins - fetch from database
+    const { getAdminIds } = await import('../handle/handleNotify.js');
+    const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
     if (adminIds.length > 0) {
       notifyAdminAboutDeposit(bot, adminIds, {
         depositId: cached.depositId || ref,

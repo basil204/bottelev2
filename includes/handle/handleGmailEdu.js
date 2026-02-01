@@ -14,7 +14,7 @@ import { createGmailAccountForSale, getGmailEduPrice, markAccountSold } from '..
 import { updateBalance, getUserByTelegram } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { createOrder } from '../controllers/orderController.js';
-import { notifyAdminAboutPurchase } from './handleNotify.js';
+import { notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
 import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 
@@ -335,10 +335,8 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
             });
             if (orderResult && orderResult.insertId) orderId = orderResult.insertId;
 
-            // Notify Admins
-            // Config might be passed or global
-            const { globalConfig } = await import('../listen.js'); // Access global config if not passed
-            const adminIds = config?.ADMIN_IDS || globalConfig?.ADMIN_IDS || [];
+            // Notify Admins - fetch from database
+            const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
             if (adminIds.length > 0) {
                 await notifyAdminAboutPurchase(bot, adminIds, {
                     orderId: orderId,

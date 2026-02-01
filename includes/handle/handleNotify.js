@@ -1,6 +1,23 @@
 import { formatCurrency } from '../../utils/index.js';
 import { query } from '../database/index.js';
 
+// Helper function to get admin IDs from database settings
+export const getAdminIds = async (configAdminIds = []) => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'admin_ids'");
+    if (rows && rows.length > 0 && rows[0].value) {
+      const adminIds = JSON.parse(rows[0].value);
+      if (Array.isArray(adminIds) && adminIds.length > 0) {
+        return adminIds.map(id => Number(id));
+      }
+    }
+  } catch (e) {
+    console.error('[getAdminIds] Error fetching from DB:', e);
+  }
+  // Fallback to config admin IDs
+  return Array.isArray(configAdminIds) ? configAdminIds : [];
+};
+
 export const notifyNewProduct = async (bot, chatId, product) => {
   await bot.sendMessage(
     chatId,

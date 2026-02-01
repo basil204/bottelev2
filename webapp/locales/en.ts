@@ -91,8 +91,9 @@ export const en = {
         deposit_settings: 'Deposit Settings',
         deposit_settings_desc: 'Set minimum deposit amount and exchange rate.',
         min_deposit: 'Minimum Deposit Amount (VND)',
-        exchange_rate: 'Exchange Rate: 1 USD = ? VND',
-        exchange_rate_hint: 'Example: 26000 = 1 USD = 26,000 VND',
+        exchange_rate: '💵 USDT → VND Exchange Rate',
+        exchange_rate_desc: 'Example: 26000 = 1 USDT = 26,000 VND',
+        exchange_rate_hint: 'Example: 26000 = 1 USDT = 26,000 VND',
         // Gmail EDU tab translations
         gmail_edu_config: 'Gmail EDU Configuration',
         gmail_edu_enable: 'Enable Gmail EDU Purchase',

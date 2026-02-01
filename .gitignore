@@ -1,1 +1,29 @@
 node_modules/
+
+# Environment files - DO NOT COMMIT
+.env
+.env.local
+.env.*.local
+*.env
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

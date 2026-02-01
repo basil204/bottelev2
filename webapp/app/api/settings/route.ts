@@ -76,6 +76,7 @@ export async function POST(request: Request) {
             mbbank_token, // New
             mbbank_account, // New
             min_deposit,
+            exchange_rate, // Exchange rate USDT -> VND
             telegram_bot_token,
             shop_name,
             usdt_trc20_wallet,
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
             if (mbbank_token !== undefined) await upsertSetting('mbbank_token', mbbank_token); // New
             if (mbbank_account !== undefined) await upsertSetting('mbbank_account', mbbank_account); // New
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
+            if (exchange_rate !== undefined) await upsertSetting('exchange_rate', exchange_rate);
             if (telegram_bot_token !== undefined) {
                 await upsertSetting('telegram_bot_token', telegram_bot_token);
                 shouldRestart = true;

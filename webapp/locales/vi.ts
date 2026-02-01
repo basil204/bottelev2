@@ -91,7 +91,8 @@ export const vi = {
         deposit_settings: 'Cấu hình nạp tiền',
         deposit_settings_desc: 'Thiết lập số tiền nạp tối thiểu và tỷ giá.',
         min_deposit: 'Số tiền nạp tối thiểu (VNĐ)',
-        exchange_rate: 'Tỷ giá 1 USD = ? VNĐ',
+        exchange_rate: '💵 Tỷ giá USDT → VNĐ',
+        exchange_rate_desc: 'Ví dụ: 26000 = 1 USDT = 26.000 VNĐ',
         exchange_rate_hint: 'Ví dụ: 26000 = 1 USD = 26.000 VNĐ',
         // Gmail EDU tab translations
         gmail_edu_config: 'Cấu hình Gmail EDU',

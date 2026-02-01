@@ -27,18 +27,20 @@ const buildQrUrl = (bankCode, accountNo, amount, content, accountName = null) =>
 // Helper to get Bank Settings for QR
 const getBankConfig = async (defaultConfig) => {
   try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('vietqr_bank_code', 'vietqr_account_no', 'vietqr_account_name')");
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('vietqr_bank_code', 'vietqr_account_no', 'vietqr_account_name', 'viettel_account')");
     const dbConfig = {};
     if (Array.isArray(rows)) {
       rows.forEach(r => {
         if (r.key === 'vietqr_bank_code') dbConfig.bankCode = r.value;
         if (r.key === 'vietqr_account_no') dbConfig.accountNo = r.value;
         if (r.key === 'vietqr_account_name') dbConfig.accountName = r.value;
+        if (r.key === 'viettel_account') dbConfig.viettelAccount = r.value;
       });
     }
+    // Ưu tiên viettel_account nếu có
     return {
       bankCode: dbConfig.bankCode || defaultConfig.VIETQR_BANK_CODE || 'MB',
-      accountNo: dbConfig.accountNo || defaultConfig.VIETQR_ACCOUNT_NO,
+      accountNo: dbConfig.viettelAccount || dbConfig.accountNo || defaultConfig.VIETQR_ACCOUNT_NO,
       accountName: dbConfig.accountName || defaultConfig.VIETQR_ACCOUNT_NAME
     };
   } catch (e) {
@@ -51,17 +53,30 @@ const getBankConfig = async (defaultConfig) => {
 }
 
 export const startDepositFlow = async (bot, msg, user, config) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const lang = user?.language || 'vi';
+
+  const bankLabel = lang === 'en' ? '🏦 Bank Transfer' : '🏦 Ngân hàng (Bank)';
+  const usdtLabel = '💲 USDT';
+
   const inline_keyboard = [
-    [{ text: '🏦 Ngân hàng (Bank)', callback_data: createCallbackData({ action: 'deposit_select_bank' }) }],
-    [{ text: '💲 USDT', callback_data: createCallbackData({ action: 'deposit_select_usdt' }) }]
+    [{ text: bankLabel, callback_data: createCallbackData({ action: 'deposit_select_bank' }) }],
+    [{ text: usdtLabel, callback_data: createCallbackData({ action: 'deposit_select_usdt' }) }]
   ];
-  await bot.sendMessage(msg.chat.id, '💰 **Chọn phương thức nạp tiền:**', {
+
+  const title = t('deposit_menu_title', lang);
+
+  await bot.sendMessage(msg.chat.id, title, {
     parse_mode: 'Markdown',
     reply_markup: { inline_keyboard }
   });
 };
 
 export const promptForBankDeposit = async (bot, chatId, userId, config) => {
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+
   // Check existing QR
   const existing = getCache(qrKey(userId));
   if (existing) {
@@ -69,13 +84,16 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
       await deleteQrMessage(bot, existing);
       delCache(qrKey(userId));
       if (existing.token) delCache(contentKey(existing.token));
-      await bot.sendMessage(chatId, 'QR cũ đã hết hạn. Bạn có thể tạo nạp mới.');
+      const expiredMsg = lang === 'en'
+        ? 'Old QR has expired. You can create a new deposit.'
+        : 'QR cũ đã hết hạn. Bạn có thể tạo nạp mới.';
+      await bot.sendMessage(chatId, expiredMsg);
     } else {
       const ttlSec = Math.ceil((existing.expiresAt - Date.now()) / 1000);
-      return bot.sendMessage(
-        chatId,
-        `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`
-      );
+      const waitingMsg = lang === 'en'
+        ? `You have a pending QR (${ttlSec}s left). Amount: ${formatCurrency(existing.amount)}`
+        : `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`;
+      return bot.sendMessage(chatId, waitingMsg);
     }
   }
 
@@ -83,7 +101,10 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
   setCache(`bank_selection_${userId}`, 'sepay', 5 * 60 * 1000);
 
   // Ask for amount
-  await bot.sendMessage(chatId, 'Nhập số tiền cần nạp (VNĐ).');
+  const promptMsg = lang === 'en'
+    ? 'Enter deposit amount (VND).'
+    : 'Nhập số tiền cần nạp (VNĐ).';
+  await bot.sendMessage(chatId, promptMsg);
 };
 
 const getUsdtConfig = async (defaultConfig) => {
@@ -587,8 +608,12 @@ const getMinDepositAmount = async () => {
 };
 
 export const handleDepositAmount = async (bot, msg, user, config) => {
+  const lang = user?.language || 'vi';
   const existing = getCache(qrKey(msg.from.id));
-  if (existing) return bot.sendMessage(msg.chat.id, 'QR cũ chưa hết hạn, vui lòng chờ.');
+  if (existing) {
+    const waitMsg = lang === 'en' ? 'Old QR not expired yet, please wait.' : 'QR cũ chưa hết hạn, vui lòng chờ.';
+    return bot.sendMessage(msg.chat.id, waitMsg);
+  }
 
   // Get selected bank
   let selectedBank = getCache(`bank_selection_${msg.from.id}`);
@@ -598,31 +623,39 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   }
 
   const amount = Number(msg.text.replace(/\D/g, ''));
-  if (!amount || amount <= 0) return bot.sendMessage(msg.chat.id, 'Số tiền không hợp lệ.');
+  if (!amount || amount <= 0) {
+    const invalidMsg = lang === 'en' ? 'Invalid amount.' : 'Số tiền không hợp lệ.';
+    return bot.sendMessage(msg.chat.id, invalidMsg);
+  }
 
   const purchaseKey = `purchase_${msg.from.id}`;
   const pendingPurchase = getCache(purchaseKey);
 
   const MIN_DEPOSIT_AMOUNT = await getMinDepositAmount();
   if (!pendingPurchase && amount < MIN_DEPOSIT_AMOUNT) {
-    return bot.sendMessage(
-      msg.chat.id,
-      `❌ Số tiền nạp tối thiểu là ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.\n\n` +
+    const minMsg = lang === 'en'
+      ? `❌ Minimum deposit is ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.\n\n` +
+      `💰 You entered: ${formatCurrency(amount)}\n` +
+      `💡 Please enter at least ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.`
+      : `❌ Số tiền nạp tối thiểu là ${formatCurrency(MIN_DEPOSIT_AMOUNT)}.\n\n` +
       `💰 Bạn đã nhập: ${formatCurrency(amount)}\n` +
-      `💡 Vui lòng nhập số tiền từ ${formatCurrency(MIN_DEPOSIT_AMOUNT)} trở lên.`
-    );
+      `💡 Vui lòng nhập số tiền từ ${formatCurrency(MIN_DEPOSIT_AMOUNT)} trở lên.`;
+    return bot.sendMessage(msg.chat.id, minMsg);
   }
 
   if (pendingPurchase) {
     const missingAmount = pendingPurchase.totalPrice - (Number(user.balance) || 0);
     if (amount < missingAmount) {
-      return bot.sendMessage(
-        msg.chat.id,
-        `❌ Số tiền nạp không đủ để mua sản phẩm.\n\n` +
+      const notEnoughMsg = lang === 'en'
+        ? `❌ Deposit amount not enough for purchase.\n\n` +
+        `💰 Need: ${formatCurrency(missingAmount)}\n` +
+        `💰 You entered: ${formatCurrency(amount)}\n` +
+        `💡 Please deposit at least ${formatCurrency(missingAmount)} to complete purchase.`
+        : `❌ Số tiền nạp không đủ để mua sản phẩm.\n\n` +
         `💰 Cần nạp: ${formatCurrency(missingAmount)}\n` +
         `💰 Bạn đã nhập: ${formatCurrency(amount)}\n` +
-        `💡 Vui lòng nạp ít nhất ${formatCurrency(missingAmount)} để hoàn tất mua hàng.`
-      );
+        `💡 Vui lòng nạp ít nhất ${formatCurrency(missingAmount)} để hoàn tất mua hàng.`;
+      return bot.sendMessage(msg.chat.id, notEnoughMsg);
     }
   }
 
@@ -650,24 +683,38 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   // Use bank code as display name
   const bankDisplayName = bankCode;
 
-  let caption = `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n` +
+  let caption = lang === 'en'
+    ? `Deposit request created: ${formatCurrency(amount)}.\n\n` +
+    `🏦 Bank: **${bankDisplayName}**\n` +
+    `💳 Account: \`${accountNo}\` (Click to copy)\n` +
+    `📝 Content: \`${content}\` (Click to copy)\n\n` +
+    `⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 5 minutes.`
+    : `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n` +
     `🏦 Ngân hàng: **${bankDisplayName}**\n` +
     `💳 Số TK: \`${accountNo}\` (Click để copy)\n` +
     `📝 Nội dung: \`${content}\` (Click để copy)\n\n` +
     `⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 5 phút.`;
 
   if (promotionResult.bonusAmount > 0) {
-    caption += `\n\n🎁 **KHUYẾN MẠI:** Nạp ${formatCurrency(amount)} nhận thêm ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)`;
-    caption += `\n💵 **Tổng thực nhận: ${formatCurrency(promotionResult.finalAmount)}**`;
+    if (lang === 'en') {
+      caption += `\n\n🎁 **PROMOTION:** Deposit ${formatCurrency(amount)} get extra ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)`;
+      caption += `\n💵 **Total received: ${formatCurrency(promotionResult.finalAmount)}**`;
+    } else {
+      caption += `\n\n🎁 **KHUYẾN MẠI:** Nạp ${formatCurrency(amount)} nhận thêm ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)`;
+      caption += `\n💵 **Tổng thực nhận: ${formatCurrency(promotionResult.finalAmount)}**`;
+    }
   }
+
+  const confirmBtn = lang === 'en' ? '✅ I have transferred' : '✅ Tôi đã chuyển khoản';
+  const cancelBtn = lang === 'en' ? '❌ Cancel QR' : '❌ Huỷ QR';
 
   const qrMessage = await bot.sendPhoto(msg.chat.id, qrUrl, {
     caption,
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '✅ Tôi đã chuyển khoản', callback_data: createCallbackData({ action: 'check_payment' }) }],
-        [{ text: '❌ Huỷ QR', callback_data: createCallbackData({ action: 'cancel_qr' }) }]
+        [{ text: confirmBtn, callback_data: createCallbackData({ action: 'check_payment' }) }],
+        [{ text: cancelBtn, callback_data: createCallbackData({ action: 'cancel_qr' }) }]
       ]
     }
   });

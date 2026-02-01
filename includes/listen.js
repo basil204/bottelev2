@@ -1,9 +1,7 @@
 import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
 import { sendProductList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
-
-
-
+import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
 
 import {
   adminMenu,
@@ -31,6 +29,7 @@ import {
 import { listPendingDeposits, approveDeposit, rejectDeposit, checkDepositStatus, listDepositHistory } from './handle/handleDeposit.js';
 import { addBalanceLog } from './controllers/balanceLogController.js';
 import { createCallbackData, formatCurrency } from '../utils/index.js';
+import { query } from './database/index.js';
 
 // Lưu config ở module level để có thể truy cập từ các callback
 export let globalConfig = {};
@@ -39,47 +38,61 @@ export const registerListeners = (bot, config) => {
   globalConfig = config;
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
+    const { t } = await import('./helpers/langHelper.js');
+    const { createCallbackData } = await import('../utils/index.js');
 
+    // Kiểm tra nếu user chưa chọn ngôn ngữ (lần đầu /start)
+    if (!user.language) {
+      const selectLangText = t('select_language', 'vi');
+      await bot.sendMessage(msg.chat.id, selectLangText, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'select_lang', lang: 'vi' }) },
+              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'select_lang', lang: 'en' }) }
+            ]
+          ]
+        }
+      });
+      return;
+    }
 
+    // User đã có ngôn ngữ - hiển thị menu bình thường
+    const lang = user.language || 'vi';
 
-
-
-    // Tạo nội dung tin nhắn gộp
-    const groupLinks = config.TELEGRAM_GROUP_LINKS || [];
-    const credit = user.credit || 0;
+    // Lấy tỷ giá để quy đổi USDT
+    let exchangeRate = 26000;
+    try {
+      const rateRows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
+      if (rateRows && rateRows[0]?.value) {
+        exchangeRate = Number(rateRows[0].value) || 26000;
+      }
+    } catch (e) {
+      console.error('[START] Error fetching exchange rate:', e);
+    }
+    const balanceVnd = Number(user.balance) || 0;
+    const balanceUsdt = (balanceVnd / exchangeRate).toFixed(2);
 
     let messageText = '';
+    messageText += t('welcome', lang) + '\n\n';
+    messageText += t('user_info', lang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
+    messageText += t('guide', lang) + '\n\n';
 
-    // Thêm phần chào mừng/ referral
-    messageText += `🎉 **Chào mừng bạn đến với bot!**\n\n`;
-    messageText += `👋 Xin chào! Chúng tôi rất vui được phục vụ bạn.\n\n`;
-
-    // Thông tin tài khoản
-    messageText += `👤 **Thông tin tài khoản:**\n`;
-    messageText += `• ID: ${user.telegram_id}\n`;
-    messageText += `• Số dư: ${formatCurrency(user.balance)}\n\n`;
-
-    // Hướng dẫn sử dụng
-    messageText += `💡 **Hướng dẫn sử dụng:**\n`;
-    messageText += `• Sử dụng menu bên dưới để điều hướng\n`;
-    messageText += `• Nạp tiền để mua sản phẩm\n\n`;
-
-
-
-    // Gửi 1 tin nhắn duy nhất kèm menu
     const opts = {
       parse_mode: 'Markdown',
       reply_markup: {
         keyboard: [
-          [{ text: '➕ Nạp tiền' }, { text: '🛒 Mua sản phẩm' }],
-          [{ text: '🧾 Lịch sử mua' }]
+          [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
+          [{ text: lang === 'en' ? '📧 Gmail EDU' : '📧 Gmail EDU' }, { text: t('history', lang) }],
+          [{ text: t('admin_group', lang) }, { text: t('change_language', lang) }]
         ],
         resize_keyboard: true
       }
     };
 
     await bot.sendMessage(msg.chat.id, messageText, opts);
-    await sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE);
+    await sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
@@ -148,6 +161,12 @@ export const registerListeners = (bot, config) => {
 
 
 
+  // Command /gmail để mua Gmail EDU
+  bot.onText(/^\/gmail/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await showGmailEduInfo(bot, msg.chat.id, user);
+  });
+
   // Message listener for text flows
   bot.on('message', async (msg) => {
     if (!msg.text) return;
@@ -187,13 +206,71 @@ export const registerListeners = (bot, config) => {
     const handledProduct = await handleProductQuantityInput(bot, msg, text, config);
     if (handledProduct) return; // Đã xử lý input số lượng sản phẩm
 
+    // Kiểm tra input số lượng Gmail EDU
+    const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
+    if (handledGmailEdu) return; // Đã xử lý input số lượng Gmail EDU
+
     // Kiểm tra manual order input (email/note)
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
-    if (text === '➕ Nạp tiền') return startDepositFlow(bot, msg, user, config);
-    if (text === '🛒 Mua sản phẩm') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
-    if (text === '🧾 Lịch sử mua') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+    if (text === '➕ Nạp tiền' || text === '➕ Deposit') return startDepositFlow(bot, msg, user, config);
+    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
+    if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (text === '🧾 Lịch sử mua' || text === '🧾 History') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+
+    // Xử lý nút đổi ngôn ngữ
+    if (text === '🌐 Ngôn ngữ' || text === '🌐 Language') {
+      const { t } = await import('./helpers/langHelper.js');
+      const { createCallbackData } = await import('../utils/index.js');
+      await bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'change_lang', lang: 'vi' }) },
+              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) }
+            ]
+          ]
+        }
+      });
+      return;
+    }
+
+    // Xử lý nút Nhóm
+    if (text === '👥 Nhóm' || text === '👥 Group') {
+      const { t } = await import('./helpers/langHelper.js');
+      const lang = user.language || 'vi';
+
+      // Lấy link nhóm từ settings hoặc config
+      let groupLink = config.TELEGRAM_GROUP_LINK || '';
+      try {
+        const rows = await query("SELECT `value` FROM settings WHERE `key` = 'telegram_group_link'");
+        if (rows && rows[0]?.value) {
+          groupLink = rows[0].value;
+        }
+      } catch (e) {
+        console.error('[GROUP_LINK] Error fetching group link:', e);
+      }
+
+      if (!groupLink) {
+        const noLinkMsg = lang === 'en'
+          ? '❌ Support group link not configured yet.'
+          : '❌ Link nhóm hỗ trợ chưa được cấu hình.';
+        return bot.sendMessage(msg.chat.id, noLinkMsg);
+      }
+
+      const groupMsg = t('join_group_msg', lang);
+      await bot.sendMessage(msg.chat.id, groupMsg, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: lang === 'en' ? '👥 Join Group' : '👥 Tham gia nhóm', url: groupLink }]
+          ]
+        }
+      });
+      return;
+    }
 
     // Check if it's Admin approving deposit
     if (config.ADMIN_IDS.includes(msg.from.id)) {
@@ -339,6 +416,80 @@ export const registerListeners = (bot, config) => {
       }
 
       switch (action) {
+        case 'select_lang':
+          // Xử lý chọn ngôn ngữ lần đầu
+          {
+            const { updateLanguage } = await import('./controllers/userController.js');
+            const { t } = await import('./helpers/langHelper.js');
+            const selectedLang = data.lang;
+
+            await updateLanguage(user.id, selectedLang);
+            user.language = selectedLang;
+
+            // Thông báo đã chọn ngôn ngữ
+            await bot.sendMessage(chatId, t('lang_switched', selectedLang), { parse_mode: 'Markdown' });
+
+            // Lấy tỷ giá để quy đổi USDT
+            let exchangeRate = 26000;
+            try {
+              const rateRows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
+              if (rateRows && rateRows[0]?.value) {
+                exchangeRate = Number(rateRows[0].value) || 26000;
+              }
+            } catch (e) { }
+            const balanceVnd = Number(user.balance) || 0;
+            const balanceUsdt = (balanceVnd / exchangeRate).toFixed(2);
+
+            // Hiển thị welcome message và menu
+            let welcomeText = '';
+            welcomeText += t('welcome', selectedLang) + '\n\n';
+            welcomeText += t('user_info', selectedLang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
+            welcomeText += t('guide', selectedLang) + '\n\n';
+
+            await bot.sendMessage(chatId, welcomeText, {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                keyboard: [
+                  [{ text: t('deposit', selectedLang) }, { text: t('buy_product', selectedLang) }],
+                  [{ text: '📧 Gmail EDU' }, { text: t('history', selectedLang) }],
+                  [{ text: t('admin_group', selectedLang) }, { text: t('change_language', selectedLang) }]
+                ],
+                resize_keyboard: true
+              }
+            });
+
+            // Hiển thị danh sách sản phẩm
+            return sendProductList(bot, chatId, 1, config.PAGE_SIZE, user);
+          }
+
+        case 'change_lang':
+          // Xử lý đổi ngôn ngữ từ menu
+          {
+            const { updateLanguage } = await import('./controllers/userController.js');
+            const { t } = await import('./helpers/langHelper.js');
+            const newLang = data.lang;
+
+            await updateLanguage(user.id, newLang);
+            user.language = newLang;
+
+            // Thông báo đã đổi ngôn ngữ
+            await bot.sendMessage(chatId, t('lang_switched', newLang), { parse_mode: 'Markdown' });
+
+            // Cập nhật menu keyboard theo ngôn ngữ mới
+            await bot.sendMessage(chatId, t('menu_title', newLang), {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                keyboard: [
+                  [{ text: t('deposit', newLang) }, { text: t('buy_product', newLang) }],
+                  [{ text: '📧 Gmail EDU' }, { text: t('history', newLang) }],
+                  [{ text: t('admin_group', newLang) }, { text: t('change_language', newLang) }]
+                ],
+                resize_keyboard: true
+              }
+            });
+            return;
+          }
+
         case 'products':
           // Need to fetch user to get language for pagination callback too?
           // If ensureUser wasn't called here (it was called above), we can pass it.
@@ -477,8 +628,80 @@ export const registerListeners = (bot, config) => {
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return adminCompleteManualOrder(bot, chatId, data.orderId, query.from);
 
+        // Gmail EDU deposit options
+        case 'gmail_deposit_bank':
+          {
+            const { getCache, setCache } = await import('../lib/cache/index.js');
+            const { handleDepositAmount } = await import('./handle/handleDeposit.js');
 
+            const amount = data.amount || 5000;
 
+            // Set bank key cho MBBank
+            const bankKey = `bank_${query.from.id}`;
+            setCache(bankKey, 'mbbank', 10 * 60 * 1000);
+
+            // Tạo fake message để gọi handleDepositAmount
+            const fakeMsg = {
+              chat: { id: chatId },
+              from: query.from,
+              text: amount.toString()
+            };
+
+            await bot.sendMessage(chatId, `🏦 Đang tạo QR nạp ${formatCurrency(amount)}...`);
+            await handleDepositAmount(bot, fakeMsg, user, config);
+          }
+          return;
+
+        case 'gmail_deposit_usdt':
+          {
+            const { showUsdtOptions } = await import('./handle/handleDeposit.js');
+            await bot.sendMessage(chatId, `💵 Vui lòng nạp ít nhất ${data.amount || 1} USDT để hoàn tất mua Gmail EDU.`);
+            await showUsdtOptions(bot, chatId, config);
+          }
+          return;
+
+        case 'gmail_deposit_cancel':
+          {
+            const { delCache } = await import('../lib/cache/index.js');
+            const purchaseKey = `gmail_edu_purchase_${query.from.id}`;
+            delCache(purchaseKey);
+            await bot.sendMessage(chatId, '❌ Đã huỷ giao dịch mua Gmail EDU.');
+          }
+          return;
+
+        // Gmail password options
+        case 'gmail_pw_auto':
+          {
+            // Mua Gmail với password tự động
+            await handleBuyGmailEdu(bot, { chat: { id: chatId }, from: query.from }, user, data.qty, user.language || 'vi', null);
+          }
+          return;
+
+        case 'gmail_pw_custom':
+          {
+            // Lưu state chờ input password
+            const { setCache } = await import('../lib/cache/index.js');
+            const gmailEduCacheKey = (telegramId) => `gmail_edu_waiting_${telegramId}`;
+
+            setCache(gmailEduCacheKey(query.from.id), {
+              waiting: true,
+              waitingPassword: true,
+              quantity: data.qty,
+              lang: user.language || 'vi'
+            }, 10 * 60 * 1000);
+
+            const message = (user.language === 'en')
+              ? '✏️ Please enter your desired password (at least 8 characters):'
+              : '✏️ Vui lòng nhập mật khẩu bạn muốn đặt (ít nhất 8 ký tự):';
+            await bot.sendMessage(chatId, message);
+          }
+          return;
+
+        case 'gmail_pw_cancel':
+          {
+            await bot.sendMessage(chatId, '❌ Đã huỷ mua Gmail EDU.');
+          }
+          return;
 
         case 'admin_delete_promotion':
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import { RefreshCw, ArrowUpCircle, ArrowDownCircle, Filter } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Transaction {
     msisdn: string;
@@ -30,6 +31,7 @@ interface Transaction {
 }
 
 export default function BankHistoryPage() {
+    const { t } = useLanguage();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export default function BankHistoryPage() {
             const data = await res.json();
 
             if (!res.ok) {
-                setError(data.error || 'Lỗi tải dữ liệu');
+                setError(data.error || t('bank_history.load_error'));
                 setTransactions([]);
                 setFilteredTransactions([]);
             } else {
@@ -54,7 +56,7 @@ export default function BankHistoryPage() {
                 setFilteredTransactions(txs);
             }
         } catch (err) {
-            setError('Lỗi kết nối server');
+            setError(t('bank_history.server_error'));
             setTransactions([]);
             setFilteredTransactions([]);
         } finally {
@@ -99,12 +101,12 @@ export default function BankHistoryPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Lịch sử Bank</h2>
-                    <p className="text-muted-foreground">Xem lịch sử giao dịch Viettel Money</p>
+                    <h2 className="text-3xl font-bold tracking-tight">{t('bank_history.title')}</h2>
+                    <p className="text-muted-foreground">{t('bank_history.subtitle')}</p>
                 </div>
                 <Button onClick={fetchHistory} disabled={loading}>
                     <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Làm mới
+                    {t('bank_history.refresh')}
                 </Button>
             </div>
 
@@ -112,13 +114,13 @@ export default function BankHistoryPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Filter className="w-5 h-5" />
-                        Lọc theo ngày
+                        {t('bank_history.filter_by_date')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-wrap items-end gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Từ ngày</label>
+                            <label className="text-sm font-medium">{t('bank_history.from_date')}</label>
                             <Input
                                 type="date"
                                 value={dateFrom}
@@ -127,7 +129,7 @@ export default function BankHistoryPage() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Đến ngày</label>
+                            <label className="text-sm font-medium">{t('bank_history.to_date')}</label>
                             <Input
                                 type="date"
                                 value={dateTo}
@@ -137,10 +139,10 @@ export default function BankHistoryPage() {
                         </div>
                         <Button onClick={handleFilter}>
                             <Filter className="w-4 h-4 mr-2" />
-                            Lọc
+                            {t('bank_history.filter')}
                         </Button>
                         <Button variant="outline" onClick={clearFilter}>
-                            Xóa lọc
+                            {t('bank_history.clear_filter')}
                         </Button>
                     </div>
                 </CardContent>
@@ -149,7 +151,7 @@ export default function BankHistoryPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>
-                        Giao dịch ({filteredTransactions.length})
+                        {t('bank_history.transactions')} ({filteredTransactions.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -166,19 +168,19 @@ export default function BankHistoryPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Loại</TableHead>
-                                        <TableHead>Thời gian</TableHead>
-                                        <TableHead>Số tiền</TableHead>
-                                        <TableHead>Số dư</TableHead>
-                                        <TableHead>Mã GD</TableHead>
-                                        <TableHead className="max-w-[300px]">Nội dung</TableHead>
+                                        <TableHead>{t('bank_history.type')}</TableHead>
+                                        <TableHead>{t('bank_history.time')}</TableHead>
+                                        <TableHead>{t('bank_history.amount')}</TableHead>
+                                        <TableHead>{t('bank_history.balance')}</TableHead>
+                                        <TableHead>{t('bank_history.trans_id')}</TableHead>
+                                        <TableHead className="max-w-[300px]">{t('bank_history.content')}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredTransactions.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                Không có giao dịch nào
+                                                {t('bank_history.no_transactions')}
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -188,12 +190,12 @@ export default function BankHistoryPage() {
                                                     {tx.paymentType === 'CREDIT' ? (
                                                         <span className="flex items-center gap-1 text-green-600">
                                                             <ArrowDownCircle className="w-4 h-4" />
-                                                            Nhận
+                                                            {t('bank_history.credit')}
                                                         </span>
                                                     ) : (
                                                         <span className="flex items-center gap-1 text-red-600">
                                                             <ArrowUpCircle className="w-4 h-4" />
-                                                            Chi
+                                                            {t('bank_history.debit')}
                                                         </span>
                                                     )}
                                                 </TableCell>

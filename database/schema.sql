@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   balance DECIMAL(18,2) DEFAULT 0,
   credit INT DEFAULT 0,
   referral_code VARCHAR(50) UNIQUE,
+  language VARCHAR(5) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -156,3 +157,6 @@ CREATE TABLE IF NOT EXISTS settings (
   INDEX idx_key (`key`)
 );
 
+-- Default admin credentials (username: admin, password: admin123)
+INSERT IGNORE INTO settings (`key`, `value`) VALUES ('admin_username', 'admin');
+INSERT IGNORE INTO settings (`key`, `value`) VALUES ('admin_password', 'admin123');

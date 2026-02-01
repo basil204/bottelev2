@@ -5,7 +5,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { initDb, query } from './includes/database/index.js';
 import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
-
+import { startGmailCleanup } from './includes/services/gmailCleanup.js';
 
 import { config } from './config.js';
 
@@ -54,6 +54,7 @@ const bootstrap = async () => {
   registerListeners(bot, config);
   startQrExpirationChecker(bot); // Always start QR expiration checker
   startAutoDepositWatcher(bot, config);
+  startGmailCleanup(5, 5); // Check login và cleanup mỗi 5 phút
 
 };
 

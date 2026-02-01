@@ -9,21 +9,22 @@ export const createDepositPromotion = async (startTime, endTime, bonusPercentage
   return result.insertId;
 };
 
-// Lấy khuyến mại đang active tại thời điểm hiện tại (theo timezone VN)
+// Lấy khuyến mại đang active tại thời điểm hiện tại (theo timezone MySQL server)
 export const getActivePromotion = async () => {
-  // Lấy thời gian hiện tại UTC (MySQL DATETIME thường được lưu như UTC hoặc local)
-  // Giả sử MySQL lưu UTC, ta so sánh với UTC now
-  const nowUTC = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  
+  // Sử dụng NOW() của MySQL để đảm bảo khớp timezone với dữ liệu lưu trong DB
   const rows = await query(
     `SELECT * FROM deposit_promotions 
      WHERE status = 'active' 
-     AND start_time <= ? 
-     AND end_time >= ? 
+     AND start_time <= NOW() 
+     AND end_time >= NOW() 
      ORDER BY created_at DESC 
-     LIMIT 1`,
-    [nowUTC, nowUTC]
+     LIMIT 1`
   );
+
+  if (rows[0]) {
+    console.log('[PROMOTION] Active promotion found:', rows[0].id, 'Bonus:', rows[0].bonus_percentage + '%');
+  }
+
   return rows[0] || null;
 };
 
@@ -40,20 +41,20 @@ export const calculatePromotedAmount = (originalAmount, promotion) => {
   if (!promotion) {
     return { originalAmount: Number(originalAmount), bonusAmount: 0, finalAmount: Number(originalAmount) };
   }
-  
+
   const amount = Number(originalAmount);
   const minAmount = Number(promotion.min_amount);
-  
+
   // Kiểm tra số tiền có đủ tối thiểu không
   if (amount < minAmount) {
     return { originalAmount: amount, bonusAmount: 0, finalAmount: amount };
   }
-  
+
   // Tính khuyến mại
   const bonusPercentage = Number(promotion.bonus_percentage);
   const bonusAmount = Math.floor((amount * bonusPercentage) / 100);
   const finalAmount = amount + bonusAmount;
-  
+
   return {
     originalAmount: amount,
     bonusAmount,

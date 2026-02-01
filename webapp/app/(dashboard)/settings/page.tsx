@@ -25,12 +25,22 @@ import {
 
 interface Settings {
     mb_auto_deposit: boolean;
+    bank_provider: 'mbbank' | 'viettel'; // New field to select bank
     viettel_token: string;
+    viettel_account: string;
+    mbbank_token: string; // New field for MBBank token
+    mbbank_account: string; // New field for MBBank account
     min_deposit: number;
     exchange_rate: number;
     telegram_bot_token: string;
     shop_name: string;
     usdt_trc20_wallet: string;
+    telegram_group_link: string;
+    // Gmail EDU settings
+    gmail_edu_enabled: boolean;
+    gmail_edu_price: number;
+    gmail_edu_domain: string;
+    gmail_edu_delete_hours: number;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -39,12 +49,22 @@ export default function SettingsPage() {
     const { t } = useLanguage();
     const [settings, setSettings] = useState<Settings>({
         mb_auto_deposit: true,
+        bank_provider: 'viettel', // Default to viettel
         viettel_token: '',
+        viettel_account: '',
+        mbbank_token: '', // New default
+        mbbank_account: '', // New default
         min_deposit: 50000,
         exchange_rate: 26000,
         telegram_bot_token: '',
         shop_name: 'SHOP',
         usdt_trc20_wallet: '',
+        telegram_group_link: '',
+        // Gmail EDU defaults
+        gmail_edu_enabled: true,
+        gmail_edu_price: 10000,
+        gmail_edu_domain: 'suafpoly.app',
+        gmail_edu_delete_hours: 1,
     });
 
     const [loading, setLoading] = useState(true);
@@ -213,14 +233,14 @@ export default function SettingsPage() {
             </div>
 
             <Card>
-                <Tabs defaultValue="payment" className="w-full">
+                <Tabs defaultValue="general" className="w-full">
                     <CardHeader>
                         <TabsList className="grid w-full grid-cols-5">
                             <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
-                            <TabsTrigger value="payment">{t('settings.payment')}</TabsTrigger>
+                            <TabsTrigger value="gmail">{t('settings.gmail')}</TabsTrigger>
                             <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
-                            <TabsTrigger value="usdt">USDT</TabsTrigger>
-                            <TabsTrigger value="promotions">Promotions</TabsTrigger>
+                            <TabsTrigger value="usdt">{t('settings.usdt')}</TabsTrigger>
+                            <TabsTrigger value="promotions">{t('settings.promotions')}</TabsTrigger>
                         </TabsList>
                     </CardHeader>
 
@@ -231,51 +251,131 @@ export default function SettingsPage() {
                                     <Banknote className="w-5 h-5 text-green-400" />
                                     {t('settings.deposit_config')}
                                 </h3>
-                                <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800 mb-4">
                                     <div>
-                                        <div className="font-medium text-white">Auto Deposit (MBBank/Viettel)</div>
-                                        <div className="text-sm text-slate-400">Enable automatic deposit checking via API</div>
+                                        <div className="font-medium text-white">{t('settings.auto_deposit')}</div>
+                                        <div className="text-sm text-slate-400">{t('settings.auto_deposit_desc')}</div>
                                     </div>
                                     <Switch
                                         checked={settings.mb_auto_deposit}
                                         onCheckedChange={() => handleToggle('mb_auto_deposit')}
                                     />
                                 </div>
-                            </div>
-                        </TabsContent>
 
-                        <TabsContent value="payment" className="space-y-6">
-                            <div className="mb-6">
-                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                    <CreditCard className="w-5 h-5 text-purple-400" />
-                                    {t('settings.viettel_config')}
-                                </h3>
+                                {/* Bank Provider Selection */}
+                                {settings.mb_auto_deposit && (
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                            <div className="font-medium text-white mb-3">{t('settings.select_bank')}</div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings(prev => ({ ...prev, bank_provider: 'mbbank' }))}
+                                                    className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${settings.bank_provider === 'mbbank'
+                                                        ? 'border-blue-500 bg-blue-500/20 text-blue-400'
+                                                        : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                                                        }`}
+                                                >
+                                                    <span className="text-2xl">🏦</span>
+                                                    <span className="font-medium">MBBank</span>
+                                                    {settings.bank_provider === 'mbbank' && (
+                                                        <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">{t('settings.using')}</span>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings(prev => ({ ...prev, bank_provider: 'viettel' }))}
+                                                    className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${settings.bank_provider === 'viettel'
+                                                        ? 'border-red-500 bg-red-500/20 text-red-400'
+                                                        : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                                                        }`}
+                                                >
+                                                    <span className="text-2xl">📱</span>
+                                                    <span className="font-medium">Viettel Money</span>
+                                                    {settings.bank_provider === 'viettel' && (
+                                                        <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">{t('settings.using')}</span>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                <div className="space-y-4">
-                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                        <div>
-                                            <div className="font-medium text-white mb-2">{t('settings.viettel_integration')}</div>
-                                            <div className="text-sm text-slate-400 mb-4">{t('settings.viettel_desc')}</div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.viettel_token')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.viettel_token}
-                                                onChange={(e) => handleChange('viettel_token', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                placeholder="Token Sieuthicode..."
-                                            />
-                                        </div>
+                                        {/* MBBank Config */}
+                                        {settings.bank_provider === 'mbbank' && (
+                                            <div className="p-4 bg-blue-900/20 rounded-lg border border-blue-800">
+                                                <div className="font-medium text-blue-400 mb-2 flex items-center gap-2">
+                                                    🏦 {t('settings.mbbank_config')}
+                                                </div>
+                                                <div className="text-sm text-slate-400 mb-4">
+                                                    {t('settings.mbbank_desc')}
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token MBBank (Sieuthicode)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.mbbank_token}
+                                                            onChange={(e) => handleChange('mbbank_token', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="Token MBBank từ Sieuthicode..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản MBBank (STK)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.mbbank_account}
+                                                            onChange={(e) => handleChange('mbbank_account', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="Số tài khoản MBBank..."
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Viettel Config */}
+                                        {settings.bank_provider === 'viettel' && (
+                                            <div className="p-4 bg-red-900/20 rounded-lg border border-red-800">
+                                                <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
+                                                    📱 {t('settings.viettel_config')}
+                                                </div>
+                                                <div className="text-sm text-slate-400 mb-4">
+                                                    {t('settings.viettel_desc')}
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token Viettel (Sieuthicode)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.viettel_token}
+                                                            onChange={(e) => handleChange('viettel_token', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="Token Viettel từ Sieuthicode..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản Viettel Money (STK)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.viettel_account}
+                                                            onChange={(e) => handleChange('viettel_account', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="Số điện thoại Viettel Money..."
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
+                                )}
 
-                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                {/* Deposit Configuration */}
+                                <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800 mt-4">
+                                    <div className="font-medium text-white mb-2">💰 {t('settings.deposit_settings')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.deposit_settings_desc')}</div>
+                                    <div className="space-y-3">
                                         <div>
-                                            <div className="font-medium text-white mb-2">Deposit Configuration</div>
-                                            <div className="text-sm text-slate-400 mb-4">Set minimum deposit amount.</div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">Minimum Deposit Amount (VNĐ)</label>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.min_deposit')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.min_deposit}
@@ -285,7 +385,7 @@ export default function SettingsPage() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">Tỷ giá USD (VNĐ)</label>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">💵 {t('settings.exchange_rate')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.exchange_rate}
@@ -293,6 +393,64 @@ export default function SettingsPage() {
                                                 className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
                                                 placeholder="26000"
                                             />
+                                            <div className="text-xs text-slate-500 mt-1">{t('settings.exchange_rate_hint')}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="gmail" className="space-y-6">
+                            <div className="mb-6">
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    📧 {t('settings.gmail_edu_config')}
+                                </h3>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
+                                        <div>
+                                            <div className="font-medium text-white">{t('settings.gmail_edu_enable')}</div>
+                                            <div className="text-sm text-slate-400">{t('settings.gmail_edu_enable_desc')}</div>
+                                        </div>
+                                        <Switch
+                                            checked={settings.gmail_edu_enabled}
+                                            onCheckedChange={() => handleToggle('gmail_edu_enabled')}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_price')}</label>
+                                            <input
+                                                type="number"
+                                                value={settings.gmail_edu_price}
+                                                onChange={(e) => handleChange('gmail_edu_price', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="10000"
+                                            />
+                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_price_hint')}</div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_domain')}</label>
+                                            <input
+                                                type="text"
+                                                value={settings.gmail_edu_domain}
+                                                onChange={(e) => handleChange('gmail_edu_domain', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="suafpoly.app"
+                                            />
+                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_domain_hint')}</div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_delete_hours')}</label>
+                                            <input
+                                                type="number"
+                                                value={settings.gmail_edu_delete_hours}
+                                                onChange={(e) => handleChange('gmail_edu_delete_hours', e.target.value)}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="1"
+                                            />
+                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_delete_hours_hint')}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -302,35 +460,35 @@ export default function SettingsPage() {
                         <TabsContent value="admin" className="space-y-6">
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white mb-2">🔐 Đổi mật khẩu Admin</div>
-                                    <div className="text-sm text-slate-400 mb-4">Thay đổi mật khẩu đăng nhập trang quản trị.</div>
+                                    <div className="font-medium text-white mb-2">🔐 {t('settings.change_password')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.change_password_desc')}</div>
                                 </div>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu hiện tại</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.current_password')}</label>
                                         <input
                                             type="password"
                                             id="currentPassword"
                                             className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Nhập mật khẩu hiện tại..."
+                                            placeholder={t('settings.current_password_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu mới</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.new_password')}</label>
                                         <input
                                             type="password"
                                             id="newPassword"
                                             className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Nhập mật khẩu mới..."
+                                            placeholder={t('settings.new_password_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Xác nhận mật khẩu mới</label>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.confirm_password')}</label>
                                         <input
                                             type="password"
                                             id="confirmPassword"
                                             className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Nhập lại mật khẩu mới..."
+                                            placeholder={t('settings.confirm_password_placeholder')}
                                         />
                                     </div>
                                     <Button
@@ -340,15 +498,15 @@ export default function SettingsPage() {
                                             const confirmPassword = (document.getElementById('confirmPassword') as HTMLInputElement)?.value;
 
                                             if (!currentPassword || !newPassword || !confirmPassword) {
-                                                setMessage({ type: 'error', text: 'Vui lòng điền đầy đủ thông tin!' });
+                                                setMessage({ type: 'error', text: t('settings.fill_all_fields') });
                                                 return;
                                             }
                                             if (newPassword !== confirmPassword) {
-                                                setMessage({ type: 'error', text: 'Mật khẩu mới không khớp!' });
+                                                setMessage({ type: 'error', text: t('settings.password_not_match') });
                                                 return;
                                             }
                                             if (newPassword.length < 6) {
-                                                setMessage({ type: 'error', text: 'Mật khẩu mới phải có ít nhất 6 ký tự!' });
+                                                setMessage({ type: 'error', text: t('settings.password_min_length') });
                                                 return;
                                             }
 
@@ -360,28 +518,28 @@ export default function SettingsPage() {
                                                 });
                                                 const data = await res.json();
                                                 if (res.ok) {
-                                                    setMessage({ type: 'success', text: 'Đổi mật khẩu thành công!' });
+                                                    setMessage({ type: 'success', text: t('settings.password_success') });
                                                     (document.getElementById('currentPassword') as HTMLInputElement).value = '';
                                                     (document.getElementById('newPassword') as HTMLInputElement).value = '';
                                                     (document.getElementById('confirmPassword') as HTMLInputElement).value = '';
                                                 } else {
-                                                    setMessage({ type: 'error', text: data.error || 'Lỗi đổi mật khẩu!' });
+                                                    setMessage({ type: 'error', text: data.error || t('settings.password_error') });
                                                 }
                                             } catch (e) {
-                                                setMessage({ type: 'error', text: 'Lỗi kết nối server!' });
+                                                setMessage({ type: 'error', text: t('settings.server_error') });
                                             }
                                         }}
                                         className="w-full"
                                     >
-                                        Đổi mật khẩu
+                                        {t('settings.change_password_btn')}
                                     </Button>
                                 </div>
                             </div>
 
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white mb-2">🤖 Telegram Bot Token</div>
-                                    <div className="text-sm text-slate-400 mb-4">Token của Telegram Bot (lấy từ @BotFather)</div>
+                                    <div className="font-medium text-white mb-2">🤖 {t('settings.telegram_bot_token')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.telegram_bot_token_desc')}</div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">Bot Token</label>
@@ -397,26 +555,8 @@ export default function SettingsPage() {
 
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white mb-2">⚠️ Danger Zone</div>
-                                    <div className="text-sm text-slate-400 mb-4">Các tác vụ quản trị nâng cao.</div>
-                                </div>
-                                <div>
-                                    <Button
-                                        onClick={handleRestart}
-                                        variant="destructive"
-                                        className="w-full sm:w-auto"
-                                        disabled={saving}
-                                    >
-                                        <Power className="w-4 h-4 mr-2" />
-                                        Khởi động lại Bot
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">🏪 Tên Shop</div>
-                                    <div className="text-sm text-slate-400 mb-4">Tên hiển thị trong thông báo sản phẩm mới</div>
+                                    <div className="font-medium text-white mb-2">🏠 {t('settings.shop_name')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.shop_name_desc')}</div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">Shop Name</label>
@@ -429,16 +569,33 @@ export default function SettingsPage() {
                                     />
                                 </div>
                             </div>
+
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">👥 {t('settings.support_group')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.support_group_desc')}</div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Telegram Group Link</label>
+                                    <input
+                                        type="text"
+                                        value={settings.telegram_group_link}
+                                        onChange={(e) => handleChange('telegram_group_link', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="https://t.me/+xxxxxx"
+                                    />
+                                </div>
+                            </div>
                         </TabsContent>
 
                         <TabsContent value="usdt" className="space-y-6">
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white mb-2">💎 Ví USDT TRC20</div>
-                                    <div className="text-sm text-slate-400 mb-4">Địa chỉ ví TRC20 để nhận USDT (dùng cho nạp tiền tự động)</div>
+                                    <div className="font-medium text-white mb-2">💎 {t('settings.usdt_wallet')}</div>
+                                    <div className="text-sm text-slate-400 mb-4">{t('settings.usdt_wallet_desc')}</div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Địa chỉ ví TRC20</label>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.usdt_wallet_address')}</label>
                                     <input
                                         type="text"
                                         value={settings.usdt_trc20_wallet}
@@ -453,15 +610,15 @@ export default function SettingsPage() {
                         <TabsContent value="promotions">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Khuyến mãi nạp tiền</CardTitle>
-                                    <CardDescription>Quản lý khuyến mãi tự động khi nạp tiền.</CardDescription>
+                                    <CardTitle>{t('settings.promotions')}</CardTitle>
+                                    <CardDescription>{t('settings.promotions_desc')}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
-                                        <h3 className="font-semibold">Tạo khuyến mãi mới</h3>
+                                        <h3 className="font-semibold">{t('settings.create_promotion')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <Label>Thời gian bắt đầu</Label>
+                                                <Label>{t('settings.start_time')}</Label>
                                                 <Input
                                                     type="datetime-local"
                                                     value={newPromo.start_time}
@@ -469,7 +626,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Thời gian kết thúc</Label>
+                                                <Label>{t('settings.end_time')}</Label>
                                                 <Input
                                                     type="datetime-local"
                                                     value={newPromo.end_time}
@@ -477,7 +634,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Phần trăm thưởng (%)</Label>
+                                                <Label>{t('settings.bonus_percentage')}</Label>
                                                 <Input
                                                     type="number"
                                                     value={newPromo.bonus_percentage}
@@ -485,7 +642,7 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label>Nạp tối thiểu</Label>
+                                                <Label>{t('settings.min_deposit_promo')}</Label>
                                                 <Input
                                                     type="number"
                                                     value={newPromo.min_amount}
@@ -494,7 +651,7 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <Button onClick={handleCreatePromotion} disabled={promoLoading}>
-                                            Tạo khuyến mãi
+                                            {t('settings.create_promotion_btn')}
                                         </Button>
                                     </div>
 
@@ -502,12 +659,12 @@ export default function SettingsPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>Bắt đầu</TableHead>
-                                                    <TableHead>Kết thúc</TableHead>
-                                                    <TableHead>Thưởng</TableHead>
-                                                    <TableHead>Nạp tối thiểu</TableHead>
-                                                    <TableHead>Trạng thái</TableHead>
-                                                    <TableHead>Thao tác</TableHead>
+                                                    <TableHead>{t('settings.promo_start')}</TableHead>
+                                                    <TableHead>{t('settings.promo_end')}</TableHead>
+                                                    <TableHead>{t('settings.promo_bonus')}</TableHead>
+                                                    <TableHead>{t('settings.min_deposit_promo')}</TableHead>
+                                                    <TableHead>{t('settings.promo_status')}</TableHead>
+                                                    <TableHead>{t('settings.promo_actions')}</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -528,7 +685,7 @@ export default function SettingsPage() {
                                                 {promotions.length === 0 && (
                                                     <TableRow>
                                                         <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                            Chưa có khuyến mãi nào.
+                                                            {t('settings.no_promotions')}
                                                         </TableCell>
                                                     </TableRow>
                                                 )}

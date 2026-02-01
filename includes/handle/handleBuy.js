@@ -27,11 +27,14 @@ const waitingForProductQuantity = new Map();
 
 export const sendProductList = async (bot, chatId, page, pageSize, user) => {
   const { formatMoney } = await import('../helpers/langHelper.js');
-  const lang = user ? user.language : 'vi';
+  const lang = user?.language || 'vi';
 
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listProducts(offset, pageSize);
-  if (!rows.length) return bot.sendMessage(chatId, 'Chưa có sản phẩm.');
+  if (!rows.length) {
+    const msg = lang === 'en' ? 'No products yet.' : 'Chưa có sản phẩm.';
+    return bot.sendMessage(chatId, msg);
+  }
 
   // Get settings
   let settings = { buy_gmail_edu: true, buy_gmail_non: true };
@@ -59,7 +62,10 @@ export const sendProductList = async (bot, chatId, page, pageSize, user) => {
   });
 
   if (!filteredRows.length && rows.length > 0) {
-    return bot.sendMessage(chatId, '🚫 Các sản phẩm đang tạm ẩn. Vui lòng quay lại sau.');
+    const msg = lang === 'en'
+      ? '🚫 Products are temporarily hidden. Please come back later.'
+      : '🚫 Các sản phẩm đang tạm ẩn. Vui lòng quay lại sau.';
+    return bot.sendMessage(chatId, msg);
   }
 
   const inline_keyboard = await Promise.all(filteredRows.map(async (p) => {
@@ -80,19 +86,25 @@ export const sendProductList = async (bot, chatId, page, pageSize, user) => {
   const hasPrev = page > 1;
   const hasNext = offset + rows.length < total;
   inline_keyboard.push(...buildPaginationKeyboard({ action: 'products', page }, page, hasPrev, hasNext));
-  await bot.sendMessage(chatId, 'Chọn sản phẩm:', { reply_markup: { inline_keyboard } });
+
+  const selectMsg = lang === 'en' ? 'Select product:' : 'Chọn sản phẩm:';
+  await bot.sendMessage(chatId, selectMsg, { reply_markup: { inline_keyboard } });
 };
 
 // Hiển thị chi tiết sản phẩm
 export const showProductDetail = async (bot, chatId, productId, userId) => {
   const product = await getProduct(productId);
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+
   if (!product) {
-    return bot.sendMessage(chatId, '❌ Sản phẩm không tồn tại.');
+    const msg = lang === 'en' ? '❌ Product not found.' : '❌ Sản phẩm không tồn tại.';
+    return bot.sendMessage(chatId, msg);
   }
 
-  const user = await getUserByTelegram(userId);
   if (!user) {
-    return bot.sendMessage(chatId, 'Vui lòng /start để tạo tài khoản.');
+    const msg = lang === 'en' ? 'Please /start to create account.' : 'Vui lòng /start để tạo tài khoản.';
+    return bot.sendMessage(chatId, msg);
   }
 
   // Lấy tỷ giá từ settings
@@ -116,17 +128,26 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   if (productType === 'manual') productType = 'order';
 
   const stock = Number(product.stock) || 0;
-  const description = product.description || 'Không có mô tả';
+  const defaultDesc = lang === 'en' ? 'No description' : 'Không có mô tả';
+  const description = product.description || defaultDesc;
 
-  let detailText = `📦 **CHI TIẾT SẢN PHẨM**\n\n` +
-    `🎁 **Tên:** ${product.name}\n` +
-    `💰 **Giá:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n` +
-    `📝 **Mô tả:** ${description}\n`;
+  const titleLabel = lang === 'en' ? '📦 **PRODUCT DETAILS**' : '📦 **CHI TIẾT SẢN PHẨM**';
+  const nameLabel = lang === 'en' ? 'Name' : 'Tên';
+  const priceLabel = lang === 'en' ? 'Price' : 'Giá';
+  const descLabel = lang === 'en' ? 'Description' : 'Mô tả';
+  const stockLabel = lang === 'en' ? 'Stock' : 'Tồn kho';
+
+  let detailText = `${titleLabel}\n\n` +
+    `🎁 **${nameLabel}:** ${product.name}\n` +
+    `💰 **${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n` +
+    `📝 **${descLabel}:** ${description}\n`;
 
   // Hiển thị thông tin tồn kho cho sản phẩm stock
   if (productType === 'stock') {
-    const stockText = stock > 0 ? `✅ Còn ${stock} sản phẩm` : '❌ Hết hàng';
-    detailText += ` **Tồn kho:** ${stockText}\n`;
+    const stockText = stock > 0
+      ? (lang === 'en' ? `✅ ${stock} in stock` : `✅ Còn ${stock} sản phẩm`)
+      : (lang === 'en' ? '❌ Out of stock' : '❌ Hết hàng');
+    detailText += ` **${stockLabel}:** ${stockText}\n`;
   }
 
   // Nếu là sản phẩm stock và còn hàng, hoặc là sản phẩm order, yêu cầu nhập số lượng
@@ -141,13 +162,17 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     });
     console.log(`[BUY_DEBUG] Set waitingForProductQuantity for user ${userIdStr}:`, waitingForProductQuantity.get(userIdStr));
 
-    detailText += `\n\nVui lòng nhập số lượng bạn muốn mua (số lượng nhỏ hơn hoặc bằng tồn kho):`;
+    const quantityPrompt = lang === 'en'
+      ? `\n\nPlease enter quantity to buy (less than or equal to stock):`
+      : `\n\nVui lòng nhập số lượng bạn muốn mua (số lượng nhỏ hơn hoặc bằng tồn kho):`;
+    detailText += quantityPrompt;
   }
 
+  const backBtn = lang === 'en' ? '⬅️ Back' : '⬅️ Quay lại';
   const inline_keyboard = [
     [
       {
-        text: '⬅️ Quay lại',
+        text: backBtn,
         callback_data: createCallbackData({ action: 'products', page: 1 })
       }
     ]
@@ -160,7 +185,10 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
 
   // Nếu là sản phẩm stock và hết hàng, gửi thông báo riêng
   if (productType === 'stock' && stock === 0) {
-    await bot.sendMessage(chatId, '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.');
+    const outOfStockMsg = lang === 'en'
+      ? '❌ This product is out of stock. Please choose another product.'
+      : '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.';
+    await bot.sendMessage(chatId, outOfStockMsg);
   }
 };
 

@@ -21,19 +21,29 @@ export async function GET() {
         // Default settings
         const settings: Record<string, any> = {
             mb_auto_deposit: true,
+            bank_provider: 'viettel', // New: mbbank or viettel
             viettel_token: '',
+            viettel_account: '',
+            mbbank_token: '', // New: MBBank token
+            mbbank_account: '', // New: MBBank account
             min_deposit: 50000,
             telegram_bot_token: '',
             shop_name: 'SHOP',
             usdt_trc20_wallet: '',
+            telegram_group_link: '',
+            // Gmail EDU defaults
+            gmail_edu_enabled: true,
+            gmail_edu_price: 10000,
+            gmail_edu_domain: 'suafpoly.app',
+            gmail_edu_delete_hours: 1,
         };
 
         rows.forEach((row) => {
             // Handle booleans
-            if (['mb_auto_deposit'].includes(row.key)) {
+            if (['mb_auto_deposit', 'gmail_edu_enabled'].includes(row.key)) {
                 settings[row.key] = row.value === 'true';
-            } else if (['min_deposit'].includes(row.key)) {
-                settings[row.key] = Number(row.value) || 50000;
+            } else if (['min_deposit', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
+                settings[row.key] = Number(row.value) || settings[row.key];
             } else {
                 settings[row.key] = row.value;
             }
@@ -51,11 +61,21 @@ export async function POST(request: Request) {
         const body = await request.json();
         const {
             mb_auto_deposit,
+            bank_provider, // New
             viettel_token,
+            viettel_account,
+            mbbank_token, // New
+            mbbank_account, // New
             min_deposit,
             telegram_bot_token,
             shop_name,
-            usdt_trc20_wallet
+            usdt_trc20_wallet,
+            telegram_group_link,
+            // Gmail EDU
+            gmail_edu_enabled,
+            gmail_edu_price,
+            gmail_edu_domain,
+            gmail_edu_delete_hours
         } = body;
 
         const connection = await pool.getConnection();
@@ -72,7 +92,11 @@ export async function POST(request: Request) {
             };
 
             if (mb_auto_deposit !== undefined) await upsertSetting('mb_auto_deposit', mb_auto_deposit);
+            if (bank_provider !== undefined) await upsertSetting('bank_provider', bank_provider); // New
             if (viettel_token !== undefined) await upsertSetting('viettel_token', viettel_token);
+            if (viettel_account !== undefined) await upsertSetting('viettel_account', viettel_account);
+            if (mbbank_token !== undefined) await upsertSetting('mbbank_token', mbbank_token); // New
+            if (mbbank_account !== undefined) await upsertSetting('mbbank_account', mbbank_account); // New
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
             if (telegram_bot_token !== undefined) {
                 await upsertSetting('telegram_bot_token', telegram_bot_token);
@@ -80,6 +104,12 @@ export async function POST(request: Request) {
             }
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
             if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
+            if (telegram_group_link !== undefined) await upsertSetting('telegram_group_link', telegram_group_link);
+            // Gmail EDU settings
+            if (gmail_edu_enabled !== undefined) await upsertSetting('gmail_edu_enabled', gmail_edu_enabled);
+            if (gmail_edu_price !== undefined) await upsertSetting('gmail_edu_price', gmail_edu_price);
+            if (gmail_edu_domain !== undefined) await upsertSetting('gmail_edu_domain', gmail_edu_domain);
+            if (gmail_edu_delete_hours !== undefined) await upsertSetting('gmail_edu_delete_hours', gmail_edu_delete_hours);
 
             await connection.commit();
 

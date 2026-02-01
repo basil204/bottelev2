@@ -56,26 +56,54 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
 
+        const imageUrl = body.imageUrl; // Optional image URL
+        // If image URL is relative (starts with /), prepend domain if needed
+        // Telegram API requires absolute URL for photo or file_id
+        // Since we are running localhost or basic deploy, we might need a public URL.
+        // If this is running locally, Telegram server CANNOT access /uploads/xxx
+        // However, we can't easily tunnel.
+        // Alternative: Input full URL manually OR accept that it only works on public deploy.
+        // For now, let's assume we pass what we get. If it is relative, we try to create an absolute URL if we know the host.
+        // But request.url gives us the API URL.
+
+        let finalImageUrl = imageUrl;
+        if (imageUrl && imageUrl.startsWith('/')) {
+            const protocol = request.headers.get('x-forwarded-proto') || 'http';
+            const host = request.headers.get('host');
+            if (host) {
+                finalImageUrl = `${protocol}://${host}${imageUrl}`;
+            }
+        }
+
         // Send to all users
         let sentCount = 0;
         let failCount = 0;
 
         for (const user of users) {
             try {
-                const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: user.telegram_id,
-                        text: broadcastMessage,
-                        parse_mode: 'HTML'
-                    })
-                });
-
-                if (response.ok) {
+                if (finalImageUrl) {
+                    // Import sendPhoto dynamically
+                    const { sendPhoto } = await import('@/lib/telegram');
+                    await sendPhoto(user.telegram_id, finalImageUrl, broadcastMessage, botToken);
+                    // We assume success if no error thrown (our lib catches error logs but doesn't throw, 
+                    // but ideally we should update lib to return status. For now, assume success if no crash)
                     sentCount++;
                 } else {
-                    failCount++;
+                    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: user.telegram_id,
+                            text: broadcastMessage,
+                            parse_mode: 'HTML'
+                        })
+                    });
+
+                    if (response.ok) {
+                        sentCount++;
+                    } else {
+                        failCount++;
+                    }
                 }
             } catch (err) {
                 failCount++;

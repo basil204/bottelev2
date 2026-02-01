@@ -13,7 +13,8 @@ import {
     LogOut,
     Menu,
     Bell,
-    Landmark
+    Landmark,
+    Mail
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export function Sidebar() {
         { name: t('sidebar.dashboard'), href: "/", icon: LayoutDashboard },
         { name: t('sidebar.users'), href: "/users", icon: Users },
         { name: t('sidebar.products'), href: "/products", icon: Package },
+        { name: "Gmail EDU", href: "/gmail-edu", icon: Mail },
         { name: t('sidebar.orders'), href: "/orders", icon: ShoppingCart },
         { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
         { name: "Lịch sử Bank", href: "/bank-history", icon: Landmark },

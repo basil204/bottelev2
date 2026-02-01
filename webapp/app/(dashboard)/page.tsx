@@ -31,19 +31,26 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
+  const [ramUsage, setRamUsage] = useState<{ usagePercent: number; usedGB: string; totalGB: string; freeGB: string } | null>(null);
   const { theme } = useTheme();
   const { t } = useLanguage();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, promoRes] = await Promise.all([
+        const [statsRes, promoRes, sysInfoRes] = await Promise.all([
           fetch('/api/stats'),
-          fetch('/api/promotions')
+          fetch('/api/promotions'),
+          fetch('/api/system-info')
         ]);
 
         const statsData = await statsRes.json();
         setStats(statsData);
+
+        const sysInfoData = await sysInfoRes.json();
+        if (sysInfoData.usagePercent !== undefined) {
+          setRamUsage(sysInfoData);
+        }
 
         const promoData = await promoRes.json();
         if (Array.isArray(promoData)) {
@@ -81,7 +88,7 @@ export default function Dashboard() {
 
   const cards = [
     {
-      title: t('dashboard.total_revenue'), // Approx map or use specific keys
+      title: t('dashboard.total_revenue'), // Appropriating this key or adding new one
       value: formatCurrency(stats.todayDeposits),
       icon: DollarSign,
       desc: t('dashboard.today'),
@@ -89,11 +96,19 @@ export default function Dashboard() {
       iconEndColor: 'to-emerald-700',
     },
     {
+      title: 'Total Project Revenue', // Hardcoded or add to lang
+      value: formatCurrency(stats.totalDeposits),
+      icon: Database,
+      desc: 'All time',
+      iconStartColor: 'from-yellow-500',
+      iconEndColor: 'to-orange-700',
+    },
+    {
       title: t('dashboard.month_revenue'),
       value: formatCurrency(stats.monthDeposits),
       icon: CreditCard,
       desc: t('dashboard.this_month'),
-      iconStartColor: 'from-blue-500',
+      iconStartColor: 'from-blue-500', // Changed color to distinguish
       iconEndColor: 'to-indigo-700',
     },
     {
@@ -143,7 +158,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {cards.map((card, i) => (
           <Card key={i} className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -190,7 +205,7 @@ export default function Dashboard() {
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value) => `$${value}`}
+                    tickFormatter={(value) => `${value}đ`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -199,6 +214,7 @@ export default function Dashboard() {
                       borderRadius: '8px',
                       color: isDark ? '#f8fafc' : '#0f172a'
                     }}
+                    formatter={(value) => [`${Number(value).toLocaleString('vi-VN')}đ`, t('dashboard.total_revenue')]}
                   />
                   <Line
                     type="monotone"
@@ -268,12 +284,24 @@ export default function Dashboard() {
 
             <div className="mt-8 p-4 rounded-lg bg-muted/50 border border-dashed">
               <div className="flex justify-between text-sm mb-2">
-                <span className="text-muted-foreground">Storage Usage</span>
-                <span className="font-medium">24%</span>
+                <span className="text-muted-foreground">🖥️ RAM Usage</span>
+                <span className="font-medium">
+                  {ramUsage ? `${ramUsage.usedGB}GB / ${ramUsage.totalGB}GB (${ramUsage.usagePercent}%)` : 'Loading...'}
+                </span>
               </div>
               <div className="w-full bg-secondary rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full w-[24%]" />
+                <div
+                  className={`h-2 rounded-full transition-all ${ramUsage && ramUsage.usagePercent > 80 ? 'bg-red-500' :
+                      ramUsage && ramUsage.usagePercent > 60 ? 'bg-yellow-500' : 'bg-primary'
+                    }`}
+                  style={{ width: `${ramUsage?.usagePercent || 0}%` }}
+                />
               </div>
+              {ramUsage && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Free: {ramUsage.freeGB}GB
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

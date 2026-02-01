@@ -10,14 +10,16 @@ export const ensureUser = async (bot, msg) => {
 
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
   const { t } = await import('../helpers/langHelper.js');
+  const lang = user.language || 'vi';
 
   // Chỉ hiển thị tiêu đề menu
-  const text = await t('menu_title', user.language);
+  const text = t('menu_title', lang);
   const opts = {
     reply_markup: {
       keyboard: [
-        [{ text: await t('deposit', user.language) }, { text: await t('buy_product', user.language) }],
-        [{ text: await t('history', user.language) }]
+        [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
+        [{ text: '📧 Gmail EDU' }, { text: t('history', lang) }],
+        [{ text: t('admin_group', lang) }, { text: t('change_language', lang) }]
       ],
       resize_keyboard: true
     }
@@ -26,10 +28,15 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 };
 
 export const sendOrderHistory = async (bot, chatId, userId, page, pageSize) => {
+  const { getUserById } = await import('../controllers/userController.js');
+  const user = await getUserById(userId);
+  const lang = user?.language || 'vi';
+
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listOrdersByUser(userId, offset, pageSize);
   if (!rows.length) {
-    return bot.sendMessage(chatId, 'Chưa có đơn hàng.');
+    const msg = lang === 'en' ? 'No orders yet.' : 'Chưa có đơn hàng.';
+    return bot.sendMessage(chatId, msg);
   }
   const lines = rows.map((o) => `#${o.id} - ${o.name} - ${formatCurrency(o.price)} - ${o.created_at}`);
   const hasPrev = page > 1;

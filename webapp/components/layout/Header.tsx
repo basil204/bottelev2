@@ -1,6 +1,5 @@
 "use client";
 
-import { ModeToggle } from "@/components/mode-toggle";
 import { usePathname } from "next/navigation";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -20,7 +19,6 @@ export function Header() {
             </div>
             <div className="flex items-center gap-4">
                 <LanguageSwitcher />
-                <ModeToggle />
                 <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-semibold">
                     A
                 </div>

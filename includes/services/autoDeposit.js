@@ -88,6 +88,13 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   const originalAmount = typeof cached.amount !== 'undefined' ? Number(cached.amount) : credit;
   const promotionResult = calculatePromotedAmount(originalAmount, promotion);
 
+  // Log promotion application
+  if (promotion) {
+    console.log(`[DEPOSIT] Promotion applied: ${promotion.bonus_percentage}% bonus on ${originalAmount} => +${promotionResult.bonusAmount} => Final: ${promotionResult.finalAmount}`);
+  } else {
+    console.log(`[DEPOSIT] No active promotion. Amount: ${originalAmount}`);
+  }
+
   if (cached.depositId) {
     await updateDepositStatus(cached.depositId, 'approved', ref);
   } else {
@@ -124,6 +131,12 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   try {
     const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
     await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
+  } catch (e) { }
+
+  // Hoàn tất mua Gmail EDU nếu có pending purchase
+  try {
+    const { completeGmailEduPurchaseAfterDeposit } = await import('../handle/handleGmailEdu.js');
+    await completeGmailEduPurchaseAfterDeposit(bot, user.telegram_id);
   } catch (e) { }
 
   try {

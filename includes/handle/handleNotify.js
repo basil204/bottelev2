@@ -1,6 +1,12 @@
 import { formatCurrency } from '../../utils/index.js';
 import { query } from '../database/index.js';
 
+// Helper function to escape Markdown special characters
+const escapeMarkdown = (text) => {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+};
+
 // Helper function to get admin IDs from database settings
 export const getAdminIds = async (configAdminIds = []) => {
   try {
@@ -162,9 +168,9 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
       if (Array.isArray(purchaseInfo.accounts)) {
         // Nếu là array object {username/email, password, ...}
         const accountList = purchaseInfo.accounts.map(acc => {
-          const user = acc.username || acc.email;
-          const pass = acc.password;
-          const twofa = acc.twofa ? ` | 2FA: ${acc.twofa}` : '';
+          const user = escapeMarkdown(acc.username || acc.email);
+          const pass = escapeMarkdown(acc.password);
+          const twofa = acc.twofa ? ` | 2FA: ${escapeMarkdown(acc.twofa)}` : '';
           return `• \`${user}\` | \`${pass}\`${twofa}`;
         }).join('\n');
         message += accountList;

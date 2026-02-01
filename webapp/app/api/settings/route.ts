@@ -27,6 +27,7 @@ export async function GET() {
             mbbank_token: '', // New: MBBank token
             mbbank_account: '', // New: MBBank account
             min_deposit: 50000,
+            exchange_rate: 26000, // USDT -> VND exchange rate
             telegram_bot_token: '',
             shop_name: 'SHOP',
             usdt_trc20_wallet: '',
@@ -44,7 +45,7 @@ export async function GET() {
             // Handle booleans
             if (['mb_auto_deposit', 'gmail_edu_enabled'].includes(row.key)) {
                 settings[row.key] = row.value === 'true';
-            } else if (['min_deposit', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
+            } else if (['min_deposit', 'exchange_rate', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
             } else if (row.key === 'admin_ids') {
                 // Parse admin_ids as JSON array

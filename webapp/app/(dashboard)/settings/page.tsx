@@ -41,6 +41,8 @@ interface Settings {
     gmail_edu_price: number;
     gmail_edu_domain: string;
     gmail_edu_delete_hours: number;
+    // Admin IDs
+    admin_ids: number[];
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -65,7 +67,11 @@ export default function SettingsPage() {
         gmail_edu_price: 10000,
         gmail_edu_domain: 'suafpoly.app',
         gmail_edu_delete_hours: 1,
+        // Admin IDs
+        admin_ids: [],
     });
+
+    const [newAdminId, setNewAdminId] = useState('');
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -234,13 +240,13 @@ export default function SettingsPage() {
 
             <Card>
                 <Tabs defaultValue="general" className="w-full">
-                    <CardHeader>
-                        <TabsList className="grid w-full grid-cols-5">
-                            <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
-                            <TabsTrigger value="gmail">{t('settings.gmail')}</TabsTrigger>
-                            <TabsTrigger value="admin">{t('settings.admin')}</TabsTrigger>
-                            <TabsTrigger value="usdt">{t('settings.usdt')}</TabsTrigger>
-                            <TabsTrigger value="promotions">{t('settings.promotions')}</TabsTrigger>
+                    <CardHeader className="pb-3">
+                        <TabsList className="flex flex-wrap gap-1 h-auto p-1 sm:grid sm:grid-cols-5">
+                            <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.general')}</TabsTrigger>
+                            <TabsTrigger value="gmail" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.gmail')}</TabsTrigger>
+                            <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.admin')}</TabsTrigger>
+                            <TabsTrigger value="usdt" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.usdt')}</TabsTrigger>
+                            <TabsTrigger value="promotions" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.promotions')}</TabsTrigger>
                         </TabsList>
                     </CardHeader>
 
@@ -585,6 +591,66 @@ export default function SettingsPage() {
                                         placeholder="https://t.me/+xxxxxx"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Admin Telegram IDs */}
+                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                <div>
+                                    <div className="font-medium text-white mb-2">👤 Admin Telegram IDs</div>
+                                    <div className="text-sm text-slate-400 mb-4">Telegram ID của các admin có quyền quản trị bot (hỗ trợ nhiều ID)</div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={newAdminId}
+                                        onChange={(e) => setNewAdminId(e.target.value.replace(/\D/g, ''))}
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="Nhập Telegram ID (VD: 123456789)"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newAdminId) {
+                                                e.preventDefault();
+                                                const id = Number(newAdminId);
+                                                if (id && !settings.admin_ids.includes(id)) {
+                                                    setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, id] }));
+                                                    setNewAdminId('');
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        type="button"
+                                        onClick={() => {
+                                            const id = Number(newAdminId);
+                                            if (id && !settings.admin_ids.includes(id)) {
+                                                setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, id] }));
+                                                setNewAdminId('');
+                                            }
+                                        }}
+                                        disabled={!newAdminId}
+                                    >
+                                        Thêm
+                                    </Button>
+                                </div>
+                                {settings.admin_ids.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {settings.admin_ids.map((id) => (
+                                            <span
+                                                key={id}
+                                                className="inline-flex items-center gap-1 px-3 py-1 bg-blue-500/20 border border-blue-500 rounded-full text-sm text-blue-400"
+                                            >
+                                                {id}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
+                                                    className="ml-1 hover:text-red-400"
+                                                >
+                                                    ×
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="text-xs text-slate-500">Nhấn Enter hoặc bấm Thêm để thêm ID. Bấm × để xóa.</div>
                             </div>
                         </TabsContent>
 

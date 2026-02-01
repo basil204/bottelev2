@@ -33,7 +33,8 @@ export const adminMenu = async (bot, chatId) => {
 
     [{ text: '💰 Quản lý nạp tiền', callback_data: createCallbackData({ action: 'admin_deposits', page: 1 }) }],
     [{ text: '📝 Đơn hàng cần xử lý', callback_data: createCallbackData({ action: 'admin_manual_orders', page: 1 }) }],
-    [{ text: '👤 Quản lý user', callback_data: createCallbackData({ action: 'admin_users', page: 1 }) }]
+    [{ text: '👤 Quản lý user', callback_data: createCallbackData({ action: 'admin_users', page: 1 }) }],
+    [{ text: '🌐 Web Dashboard', web_app: { url: 'https://cp-admin.manhit.dev' } }]
   ];
   await bot.sendMessage(chatId, 'Admin panel', { reply_markup: { inline_keyboard } });
 };

@@ -6,11 +6,11 @@ import { exec } from 'child_process';
 const restartCoba = () => {
     exec('pm2 restart all', (error, stdout, stderr) => {
         if (error) {
-            console.error(`exec error: ${error}`);
+            // PM2 might not be installed in dev environment - silently ignore
+            console.log('[Settings] PM2 not available, skip restart');
             return;
         }
-        console.log(`stdout: ${stdout}`);
-        console.error(`stderr: ${stderr}`);
+        if (stdout) console.log(`[Settings] PM2: ${stdout}`);
     });
 };
 
@@ -36,6 +36,8 @@ export async function GET() {
             gmail_edu_price: 10000,
             gmail_edu_domain: 'suafpoly.app',
             gmail_edu_delete_hours: 1,
+            // Admin IDs
+            admin_ids: [],
         };
 
         rows.forEach((row) => {
@@ -44,6 +46,13 @@ export async function GET() {
                 settings[row.key] = row.value === 'true';
             } else if (['min_deposit', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
+            } else if (row.key === 'admin_ids') {
+                // Parse admin_ids as JSON array
+                try {
+                    settings[row.key] = JSON.parse(row.value) || [];
+                } catch {
+                    settings[row.key] = [];
+                }
             } else {
                 settings[row.key] = row.value;
             }
@@ -75,7 +84,9 @@ export async function POST(request: Request) {
             gmail_edu_enabled,
             gmail_edu_price,
             gmail_edu_domain,
-            gmail_edu_delete_hours
+            gmail_edu_delete_hours,
+            // Admin IDs
+            admin_ids
         } = body;
 
         const connection = await pool.getConnection();
@@ -110,6 +121,8 @@ export async function POST(request: Request) {
             if (gmail_edu_price !== undefined) await upsertSetting('gmail_edu_price', gmail_edu_price);
             if (gmail_edu_domain !== undefined) await upsertSetting('gmail_edu_domain', gmail_edu_domain);
             if (gmail_edu_delete_hours !== undefined) await upsertSetting('gmail_edu_delete_hours', gmail_edu_delete_hours);
+            // Admin IDs - save as JSON string
+            if (admin_ids !== undefined) await upsertSetting('admin_ids', JSON.stringify(admin_ids));
 
             await connection.commit();
 

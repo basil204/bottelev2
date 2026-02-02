@@ -124,7 +124,7 @@ export async function POST(request: Request) {
             const emailUsername = username && quantity === 1
                 ? username
                 : generateRandomUsername(8);
-            const emailPassword = generateRandomPassword(12);
+            const emailPassword = 'Abc@123456'; // Default password
             const email = `${emailUsername}@${domain}`;
 
             // Kiểm tra email đã tồn tại trên Google chưa

@@ -100,7 +100,7 @@ export async function POST(request: Request) {
             domain = emailDomain;
             username = emailUsername;
             address = full_email;
-            password = emailUsername; // Password = username
+            password = 'Abc@123456'; // Default password
 
             // Check if this email already exists in our database
             const [existingEmail] = await pool.query<RowDataPacket[]>(
@@ -182,8 +182,8 @@ export async function POST(request: Request) {
                 username = generateRandomUsername(10);
             }
 
-            // Password = username (as requested)
-            password = username;
+            // Default password
+            password = 'Abc@123456';
             address = `${username}@${domain}`;
         }
 

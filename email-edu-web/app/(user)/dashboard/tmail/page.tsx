@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,13 +19,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { RefreshCw, Copy, Check, Trash2, Mail, Plus, Inbox, ArrowLeft } from 'lucide-react';
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { RefreshCw, Copy, Check, Trash2, Mail, Plus, Inbox, ArrowLeft, ChevronDown, Search } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 interface TMail {
@@ -69,6 +67,21 @@ export default function TMailPage() {
     const [copiedId, setCopiedId] = useState<number | null>(null);
     const [username, setUsername] = useState('');
     const [selectedDomainId, setSelectedDomainId] = useState<string>('');
+    const [domainSearch, setDomainSearch] = useState('');
+    const [domainPopoverOpen, setDomainPopoverOpen] = useState(false);
+
+    // Filter domains based on search
+    const filteredDomains = useMemo(() => {
+        if (!domainSearch.trim()) return domains;
+        return domains.filter(d =>
+            d.domain.toLowerCase().includes(domainSearch.toLowerCase())
+        );
+    }, [domains, domainSearch]);
+
+    // Get selected domain name
+    const selectedDomain = useMemo(() => {
+        return domains.find(d => d.id.toString() === selectedDomainId);
+    }, [domains, selectedDomainId]);
 
     // Inbox state
     const [selectedTmail, setSelectedTmail] = useState<TMail | null>(null);
@@ -258,18 +271,62 @@ export default function TMailPage() {
                         {!username.includes('@') ? (
                             <div className="flex items-center gap-2">
                                 <span className="text-muted-foreground">@</span>
-                                <Select value={selectedDomainId} onValueChange={setSelectedDomainId}>
-                                    <SelectTrigger className="w-full sm:w-[180px]">
-                                        <SelectValue placeholder="Chọn domain" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {domains.map((domain) => (
-                                            <SelectItem key={domain.id} value={domain.id.toString()}>
-                                                {domain.domain}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover open={domainPopoverOpen} onOpenChange={setDomainPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={domainPopoverOpen}
+                                            className="w-full sm:w-[220px] justify-between"
+                                        >
+                                            <span className="truncate">
+                                                {selectedDomain?.domain || 'Chọn domain...'}
+                                            </span>
+                                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[220px] p-0" align="start">
+                                        <div className="flex items-center border-b px-3 py-2">
+                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                            <input
+                                                placeholder="Tìm domain..."
+                                                value={domainSearch}
+                                                onChange={(e) => setDomainSearch(e.target.value)}
+                                                className="flex h-8 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                            />
+                                        </div>
+                                        <div className="max-h-[200px] overflow-auto p-1">
+                                            {filteredDomains.length === 0 ? (
+                                                <div className="text-center py-4 text-sm text-muted-foreground">
+                                                    Không tìm thấy domain
+                                                </div>
+                                            ) : (
+                                                filteredDomains.map((domain) => (
+                                                    <div
+                                                        key={domain.id}
+                                                        onClick={() => {
+                                                            setSelectedDomainId(domain.id.toString());
+                                                            setDomainPopoverOpen(false);
+                                                            setDomainSearch('');
+                                                        }}
+                                                        className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${selectedDomainId === domain.id.toString()
+                                                                ? 'bg-accent text-accent-foreground'
+                                                                : ''
+                                                            }`}
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedDomainId === domain.id.toString()
+                                                                    ? 'opacity-100'
+                                                                    : 'opacity-0'
+                                                                }`}
+                                                        />
+                                                        {domain.domain}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-md">

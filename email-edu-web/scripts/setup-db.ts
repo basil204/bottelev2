@@ -70,11 +70,7 @@ async function setupDatabase() {
         console.log('✅ settings table ready\n');
 
         // Insert default domains
-        console.log('Inserting default domains...');
-        await pool.query(`INSERT IGNORE INTO edu_domains (domain) VALUES ('suafpoly.app')`);
-        await pool.query(`INSERT IGNORE INTO edu_domains (domain) VALUES ('student.edu.vn')`);
-        await pool.query(`INSERT IGNORE INTO edu_domains (domain) VALUES ('fpoly.edu.vn')`);
-        console.log('✅ Default domains inserted\n');
+
 
         // Insert default settings
         console.log('Inserting default settings...');

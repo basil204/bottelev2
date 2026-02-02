@@ -174,7 +174,7 @@ export async function POST(request: Request) {
     }
 }
 
-// DELETE - Xóa email
+// DELETE - Xóa email (hỗ trợ xóa đơn lẻ hoặc nhiều)
 export async function DELETE(request: Request) {
     try {
         const cookieStore = await cookies();
@@ -188,61 +188,72 @@ export async function DELETE(request: Request) {
             );
         }
 
-        const { id } = await request.json();
+        const body = await request.json();
+        const { id, ids } = body;
 
-        if (!id) {
+        // Hỗ trợ cả xóa đơn lẻ (id) và xóa nhiều (ids)
+        const idsToDelete: number[] = ids || (id ? [id] : []);
+
+        if (idsToDelete.length === 0) {
             return NextResponse.json(
                 { success: false, error: 'ID là bắt buộc' },
                 { status: 400 }
             );
         }
 
-        // Check ownership or admin
-        if (userRole !== 'admin') {
-            const [emailRows] = await pool.query<RowDataPacket[]>(
-                'SELECT id FROM edu_emails WHERE id = ? AND user_id = ?',
-                [id, parseInt(userId)]
-            );
+        const results: { id: number; success: boolean; error?: string }[] = [];
 
-            if (emailRows.length === 0) {
-                return NextResponse.json(
-                    { success: false, error: 'Không có quyền xóa email này' },
-                    { status: 403 }
+        for (const emailId of idsToDelete) {
+            try {
+                // Check ownership or admin
+                if (userRole !== 'admin') {
+                    const [emailRows] = await pool.query<RowDataPacket[]>(
+                        'SELECT id FROM edu_emails WHERE id = ? AND user_id = ?',
+                        [emailId, parseInt(userId)]
+                    );
+
+                    if (emailRows.length === 0) {
+                        results.push({ id: emailId, success: false, error: 'Không có quyền' });
+                        continue;
+                    }
+                }
+
+                // Lấy thông tin email trước khi xóa
+                const [emailInfo] = await pool.query<RowDataPacket[]>(
+                    'SELECT email FROM edu_emails WHERE id = ?',
+                    [emailId]
                 );
+
+                if (emailInfo.length === 0) {
+                    results.push({ id: emailId, success: false, error: 'Không tồn tại' });
+                    continue;
+                }
+
+                const email = emailInfo[0].email;
+
+                // Xóa user trên Google Workspace
+                const googleResult = await deleteGoogleUser(email);
+                if (!googleResult.success) {
+                    console.warn(`Warning: Không thể xóa ${email} trên Google: ${googleResult.error}`);
+                }
+
+                await pool.query<ResultSetHeader>(
+                    'UPDATE edu_emails SET status = "deleted", deleted_at = NOW() WHERE id = ?',
+                    [emailId]
+                );
+
+                results.push({ id: emailId, success: true });
+            } catch (err) {
+                results.push({ id: emailId, success: false, error: 'Lỗi xử lý' });
             }
         }
 
-        // Lấy thông tin email trước khi xóa
-        const [emailInfo] = await pool.query<RowDataPacket[]>(
-            'SELECT email FROM edu_emails WHERE id = ?',
-            [id]
-        );
-
-        if (emailInfo.length === 0) {
-            return NextResponse.json(
-                { success: false, error: 'Email không tồn tại' },
-                { status: 404 }
-            );
-        }
-
-        const email = emailInfo[0].email;
-
-        // Xóa user trên Google Workspace
-        const googleResult = await deleteGoogleUser(email);
-        if (!googleResult.success) {
-            console.warn(`Warning: Không thể xóa ${email} trên Google: ${googleResult.error}`);
-            // Vẫn tiếp tục xóa trong database
-        }
-
-        await pool.query<ResultSetHeader>(
-            'UPDATE edu_emails SET status = "deleted", deleted_at = NOW() WHERE id = ?',
-            [id]
-        );
+        const successCount = results.filter(r => r.success).length;
 
         return NextResponse.json({
-            success: true,
-            google_deleted: googleResult.success,
-            message: googleResult.success ? 'Đã xóa email trên Google và database' : 'Đã xóa trong database (Google có thể thất bại)'
+            success: successCount > 0,
+            results,
+            message: `Đã xóa ${successCount}/${idsToDelete.length} email`
         });
     } catch (error) {
         console.error('Error deleting email:', error);

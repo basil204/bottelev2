@@ -11,7 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { RefreshCw, Mail, User, Clock, Trash2 } from 'lucide-react';
+import { RefreshCw, Mail, User, Clock, Trash2, AlertTriangle, Cloud } from 'lucide-react';
 import { formatDate, getTimeRemaining } from '@/lib/utils';
 
 interface Email {
@@ -26,10 +26,19 @@ interface Email {
     created_at: string;
 }
 
+interface GoogleUser {
+    email: string;
+    name: string;
+    creationTime: string;
+}
+
 export default function AdminEmailsPage() {
     const [emails, setEmails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(true);
     const [cleanupLoading, setCleanupLoading] = useState(false);
+    const [googleUsers, setGoogleUsers] = useState<GoogleUser[]>([]);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [deleteAllLoading, setDeleteAllLoading] = useState(false);
 
     useEffect(() => {
         fetchEmails();
@@ -47,6 +56,60 @@ export default function AdminEmailsPage() {
             console.error('Error fetching emails:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchGoogleUsers = async () => {
+        try {
+            setGoogleLoading(true);
+            const res = await fetch('/api/admin/google-users');
+            const data = await res.json();
+            if (data.success) {
+                setGoogleUsers(data.users || []);
+            } else {
+                alert('Lỗi: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching Google users:', error);
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
+    const deleteAllGoogleUsers = async () => {
+        const confirmed = prompt(
+            `⚠️ CẢNH BÁO NGHIÊM TRỌNG ⚠️\n\n` +
+            `Bạn sắp xóa TẤT CẢ ${googleUsers.length} Gmail từ Google Workspace!\n` +
+            `Hành động này KHÔNG THỂ HOÀN TÁC!\n\n` +
+            `Nhập "XOA TAT CA" để xác nhận:`
+        );
+
+        if (confirmed !== 'XOA TAT CA') {
+            alert('Đã hủy xóa.');
+            return;
+        }
+
+        try {
+            setDeleteAllLoading(true);
+            const res = await fetch('/api/admin/google-users', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirmDelete: 'DELETE_ALL' })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert(data.message);
+                fetchGoogleUsers();
+                fetchEmails();
+            } else {
+                alert('Lỗi: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Error deleting all Google users:', error);
+            alert('Lỗi khi xóa');
+        } finally {
+            setDeleteAllLoading(false);
         }
     };
 
@@ -116,7 +179,7 @@ export default function AdminEmailsPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Tổng Emails</CardTitle>
@@ -144,7 +207,79 @@ export default function AdminEmailsPage() {
                         <div className="text-2xl font-bold text-red-600">{deletedEmails.length}</div>
                     </CardContent>
                 </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Google WS</CardTitle>
+                        <Cloud className="h-4 w-4 text-blue-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-blue-600">{googleUsers.length}</div>
+                    </CardContent>
+                </Card>
             </div>
+
+            {/* Google Workspace Management */}
+            <Card className="border-orange-500 border-2">
+                <CardHeader className="bg-orange-50 dark:bg-orange-950">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            <CardTitle className="text-orange-700 dark:text-orange-300">
+                                Quản lý Google Workspace
+                            </CardTitle>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={fetchGoogleUsers}
+                                variant="outline"
+                                disabled={googleLoading}
+                            >
+                                <Cloud className="w-4 h-4 mr-2" />
+                                {googleLoading ? 'Đang tải...' : 'Lấy danh sách'}
+                            </Button>
+                            <Button
+                                onClick={deleteAllGoogleUsers}
+                                variant="destructive"
+                                disabled={deleteAllLoading || googleUsers.length === 0}
+                            >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                {deleteAllLoading ? 'Đang xóa...' : `Xóa tất cả (${googleUsers.length})`}
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                        ⚠️ Khu vực này cho phép xem và xóa tất cả Gmail trực tiếp từ Google Workspace.
+                        <strong className="text-red-500"> Hành động xóa không thể hoàn tác!</strong>
+                    </p>
+                    {googleUsers.length > 0 && (
+                        <div className="max-h-60 overflow-y-auto rounded border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Tên</TableHead>
+                                        <TableHead>Ngày tạo</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {googleUsers.map((user, idx) => (
+                                        <TableRow key={idx}>
+                                            <TableCell className="font-mono text-sm">{user.email}</TableCell>
+                                            <TableCell>{user.name}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {user.creationTime ? formatDate(user.creationTime) : '-'}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
 
             {/* Emails Table */}
             <Card>

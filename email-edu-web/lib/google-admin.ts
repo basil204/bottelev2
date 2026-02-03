@@ -166,3 +166,141 @@ export async function checkUserLoginStatus(email: string): Promise<{
         };
     }
 }
+
+/**
+ * Lấy danh sách tất cả users từ Google Workspace
+ */
+export async function listAllGoogleUsers(domain?: string): Promise<{
+    success: boolean;
+    users?: { email: string; name: string; creationTime: string }[];
+    error?: string;
+}> {
+    try {
+        const auth = getOAuth2Client();
+        const admin = google.admin({ version: 'directory_v1', auth });
+
+        const allUsers: { email: string; name: string; creationTime: string }[] = [];
+        let pageToken: string | undefined;
+
+        do {
+            const response = await admin.users.list({
+                customer: 'my_customer',
+                domain: domain || undefined,
+                maxResults: 500,
+                pageToken: pageToken,
+            });
+
+            if (response.data.users) {
+                for (const user of response.data.users) {
+                    allUsers.push({
+                        email: user.primaryEmail || '',
+                        name: `${user.name?.givenName || ''} ${user.name?.familyName || ''}`.trim(),
+                        creationTime: user.creationTime || '',
+                    });
+                }
+            }
+
+            pageToken = response.data.nextPageToken || undefined;
+        } while (pageToken);
+
+        return {
+            success: true,
+            users: allUsers,
+        };
+    } catch (error: any) {
+        console.error('Error listing Google users:', error);
+        return {
+            success: false,
+            error: error.message || 'Unknown error',
+        };
+    }
+}
+
+/**
+ * Xóa tất cả users từ Google Workspace (trừ super admin)
+ * Xử lý theo batch 7 accounts một lần
+ */
+export async function deleteAllGoogleUsers(domain?: string): Promise<{
+    success: boolean;
+    deleted: number;
+    failed: { email: string; error: string }[];
+    error?: string;
+}> {
+    try {
+        const auth = getOAuth2Client();
+        const admin = google.admin({ version: 'directory_v1', auth });
+
+        // Lấy danh sách users
+        const listResult = await listAllGoogleUsers(domain);
+        if (!listResult.success || !listResult.users) {
+            return {
+                success: false,
+                deleted: 0,
+                failed: [],
+                error: listResult.error || 'Cannot list users',
+            };
+        }
+
+        let deleted = 0;
+        const failed: { email: string; error: string }[] = [];
+        const BATCH_SIZE = 7;
+
+        // Chia thành các batch 7 accounts
+        for (let i = 0; i < listResult.users.length; i += BATCH_SIZE) {
+            const batch = listResult.users.slice(i, i + BATCH_SIZE);
+            console.log(`[GOOGLE_ADMIN] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(listResult.users.length / BATCH_SIZE)} (${batch.length} users)`);
+
+            // Xóa 7 accounts cùng lúc
+            const deletePromises = batch.map(async (user) => {
+                try {
+                    await admin.users.delete({
+                        userKey: user.email,
+                    });
+                    console.log(`[GOOGLE_ADMIN] ✅ Deleted: ${user.email}`);
+                    return { success: true, email: user.email };
+                } catch (error: any) {
+                    // Skip if user is super admin hoặc không thể xóa
+                    if (error.message?.includes('Cannot delete a user') || error.message?.includes('super admin')) {
+                        console.log(`[GOOGLE_ADMIN] ⚠️ Skipped (admin): ${user.email}`);
+                        return { success: true, email: user.email, skipped: true };
+                    } else {
+                        console.error(`[GOOGLE_ADMIN] ❌ Failed: ${user.email}:`, error.message);
+                        return { success: false, email: user.email, error: error.message || 'Unknown error' };
+                    }
+                }
+            });
+
+            const results = await Promise.all(deletePromises);
+
+            for (const result of results) {
+                if (result.success) {
+                    if (!result.skipped) {
+                        deleted++;
+                    }
+                } else {
+                    failed.push({ email: result.email, error: result.error || 'Unknown error' });
+                }
+            }
+
+            // Delay giữa các batch để tránh rate limit
+            if (i + BATCH_SIZE < listResult.users.length) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        return {
+            success: true,
+            deleted,
+            failed,
+        };
+    } catch (error: any) {
+        console.error('Error deleting all Google users:', error);
+        return {
+            success: false,
+            deleted: 0,
+            failed: [],
+            error: error.message || 'Unknown error',
+        };
+    }
+}
+

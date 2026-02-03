@@ -234,11 +234,15 @@ export async function DELETE(request: Request) {
                 // Xóa user trên Google Workspace
                 const googleResult = await deleteGoogleUser(email);
                 if (!googleResult.success) {
-                    console.warn(`Warning: Không thể xóa ${email} trên Google: ${googleResult.error}`);
+                    // Nếu không tồn tại trên Google (đã bị xóa rồi), vẫn cho phép xóa trong DB
+                    if (!googleResult.error?.includes('Resource Not Found') && !googleResult.error?.includes('notFound')) {
+                        console.warn(`Warning: Không thể xóa ${email} trên Google: ${googleResult.error}`);
+                    }
                 }
 
+                // Xóa hoàn toàn khỏi database
                 await pool.query<ResultSetHeader>(
-                    'UPDATE edu_emails SET status = "deleted", deleted_at = NOW() WHERE id = ?',
+                    'DELETE FROM edu_emails WHERE id = ?',
                     [emailId]
                 );
 

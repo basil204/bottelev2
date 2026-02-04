@@ -345,11 +345,34 @@ export const getAvailableAccount = async (type) => {
 /**
  * Đánh dấu account đã bán
  */
-export const markAccountSold = async (accountId) => {
+/**
+ * Đánh dấu account đã bán
+ */
+export const markAccountSold = async (accountId, userId = null, price = null, orderId = null) => {
     try {
+        const updates = ['status = "sold"', 'sold_at = NOW()'];
+        const params = [];
+
+        if (userId) {
+            updates.push('sold_to_user_id = ?');
+            params.push(userId);
+        }
+
+        if (price !== null) {
+            updates.push('sold_price = ?');
+            params.push(price);
+        }
+
+        if (orderId) {
+            updates.push('order_id = ?');
+            params.push(orderId);
+        }
+
+        params.push(accountId);
+
         await query(
-            'UPDATE gmail_accounts SET status = "sold", sold_at = NOW() WHERE id = ?',
-            [accountId]
+            `UPDATE gmail_accounts SET ${updates.join(', ')} WHERE id = ?`,
+            params
         );
         return { success: true };
     } catch (error) {

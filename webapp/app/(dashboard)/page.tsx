@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { Users, CreditCard, ShoppingCart, DollarSign, TrendingUp, Activity, Database, Server } from 'lucide-react';
+import { Users, CreditCard, ShoppingCart, DollarSign, TrendingUp, Activity, Database, Server, Package, CalendarDays, Filter } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
+
+interface ProductRevenue {
+  product_id: number;
+  product_name: string;
+  order_count: number;
+  total_revenue: number;
+}
 
 interface DashboardStats {
   totalUsers: number;
@@ -15,6 +23,7 @@ interface DashboardStats {
   monthDeposits: number;
   totalOrders: number;
   revenueChart: { date: string; total: number }[];
+  productRevenue: ProductRevenue[];
 }
 
 interface Promotion {
@@ -34,6 +43,29 @@ export default function Dashboard() {
   const [ramUsage, setRamUsage] = useState<{ usagePercent: number; usedGB: string; totalGB: string; freeGB: string } | null>(null);
   const { theme } = useTheme();
   const { t } = useLanguage();
+
+  // Product Revenue Filter States
+  const [revenueFilter, setRevenueFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [filteredProductRevenue, setFilteredProductRevenue] = useState<ProductRevenue[]>([]);
+  const [loadingRevenue, setLoadingRevenue] = useState(false);
+
+  // Gmail EDU Revenue States
+  interface GmailEduSale {
+    id: number;
+    email: string;
+    sold_at: string;
+    buyer_username: string;
+    buyer_telegram_id: string;
+    price: number;
+  }
+  const [gmailFilter, setGmailFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  const [gmailFromDate, setGmailFromDate] = useState('');
+  const [gmailToDate, setGmailToDate] = useState('');
+  const [gmailSales, setGmailSales] = useState<GmailEduSale[]>([]);
+  const [gmailSummary, setGmailSummary] = useState<{ totalSold: number; totalRevenue: number; pricePerAccount: number } | null>(null);
+  const [loadingGmail, setLoadingGmail] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,6 +104,67 @@ export default function Dashboard() {
     };
 
     fetchData();
+  }, []);
+
+  // Fetch filtered product revenue
+  const fetchProductRevenue = async () => {
+    setLoadingRevenue(true);
+    try {
+      let url = `/api/product-revenue?filter=${revenueFilter}`;
+      if (revenueFilter === 'custom') {
+        if (fromDate) url += `&from=${fromDate}`;
+        if (toDate) url += `&to=${toDate}`;
+      }
+      const res = await fetch(url);
+      const data = await res.json();
+      setFilteredProductRevenue(data.productRevenue || []);
+    } catch (err) {
+      console.error('Error fetching product revenue:', err);
+    }
+    setLoadingRevenue(false);
+  };
+
+  useEffect(() => {
+    if (revenueFilter !== 'custom') {
+      fetchProductRevenue();
+    }
+  }, [revenueFilter]);
+
+  // Initialize with stats data
+  useEffect(() => {
+    if (stats?.productRevenue) {
+      setFilteredProductRevenue(stats.productRevenue);
+    }
+  }, [stats]);
+
+  // Fetch Gmail EDU revenue
+  const fetchGmailRevenue = async () => {
+    setLoadingGmail(true);
+    try {
+      let url = `/api/gmail-edu-revenue?filter=${gmailFilter}`;
+      if (gmailFilter === 'custom') {
+        if (gmailFromDate) url += `&from=${gmailFromDate}`;
+        if (gmailToDate) url += `&to=${gmailToDate}`;
+      }
+      const res = await fetch(url);
+      const data = await res.json();
+      setGmailSales(data.data || []);
+      setGmailSummary(data.summary || null);
+    } catch (err) {
+      console.error('Error fetching Gmail EDU revenue:', err);
+    }
+    setLoadingGmail(false);
+  };
+
+  useEffect(() => {
+    if (gmailFilter !== 'custom') {
+      fetchGmailRevenue();
+    }
+  }, [gmailFilter]);
+
+  // Initialize Gmail EDU data on mount
+  useEffect(() => {
+    fetchGmailRevenue();
   }, []);
 
   if (loading) return (
@@ -292,7 +385,7 @@ export default function Dashboard() {
               <div className="w-full bg-secondary rounded-full h-2">
                 <div
                   className={`h-2 rounded-full transition-all ${ramUsage && ramUsage.usagePercent > 80 ? 'bg-red-500' :
-                      ramUsage && ramUsage.usagePercent > 60 ? 'bg-yellow-500' : 'bg-primary'
+                    ramUsage && ramUsage.usagePercent > 60 ? 'bg-yellow-500' : 'bg-primary'
                     }`}
                   style={{ width: `${ramUsage?.usagePercent || 0}%` }}
                 />
@@ -306,6 +399,258 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Product Revenue Section */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-primary" />
+              {t('dashboard.product_revenue')}
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Quick Filter Buttons */}
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                {(['all', 'today', 'week', 'month'] as const).map((filter) => (
+                  <Button
+                    key={filter}
+                    size="sm"
+                    variant={revenueFilter === filter ? 'default' : 'ghost'}
+                    className="h-7 px-3 text-xs"
+                    onClick={() => setRevenueFilter(filter)}
+                  >
+                    {t(`dashboard.filter_${filter}`)}
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant={revenueFilter === 'custom' ? 'default' : 'ghost'}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setRevenueFilter('custom')}
+                >
+                  <CalendarDays className="w-3 h-3 mr-1" />
+                  {t('dashboard.filter_custom')}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Custom Date Range */}
+          {revenueFilter === 'custom' && (
+            <div className="flex flex-wrap items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">{t('dashboard.from_date')}:</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">{t('dashboard.to_date')}:</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                />
+              </div>
+              <Button size="sm" onClick={fetchProductRevenue} disabled={loadingRevenue}>
+                <Filter className="w-3 h-3 mr-1" />
+                {loadingRevenue ? t('dashboard.filtering') : t('dashboard.filter_btn')}
+              </Button>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {loadingRevenue ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : filteredProductRevenue.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">{t('dashboard.product')}</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">{t('dashboard.orders_count')}</th>
+                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">{t('dashboard.revenue')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProductRevenue.map((product, index) => (
+                    <tr key={product.product_id} className={`border-b last:border-0 ${index % 2 === 0 ? 'bg-muted/30' : ''}`}>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                            <Package className="h-3 w-3" />
+                          </div>
+                          <span className="font-medium">{product.product_name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-400">
+                          {product.order_count}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
+                        {formatCurrency(product.total_revenue)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/50 font-semibold">
+                    <td className="py-3 px-4">{t('dashboard.total')}</td>
+                    <td className="py-3 px-4 text-center">
+                      {filteredProductRevenue.reduce((sum, p) => sum + Number(p.order_count), 0)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-green-600 dark:text-green-400">
+                      {formatCurrency(filteredProductRevenue.reduce((sum, p) => sum + Number(p.total_revenue), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              {t('dashboard.no_data')}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Gmail EDU Revenue Section */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-primary" />
+              Gmail EDU Revenue
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                {(['all', 'today', 'week', 'month'] as const).map((filter) => (
+                  <Button
+                    key={filter}
+                    size="sm"
+                    variant={gmailFilter === filter ? 'default' : 'ghost'}
+                    className="h-7 px-3 text-xs"
+                    onClick={() => setGmailFilter(filter)}
+                  >
+                    {t(`dashboard.filter_${filter}`)}
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant={gmailFilter === 'custom' ? 'default' : 'ghost'}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setGmailFilter('custom')}
+                >
+                  <CalendarDays className="w-3 h-3 mr-1" />
+                  {t('dashboard.filter_custom')}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {gmailFilter === 'custom' && (
+            <div className="flex flex-wrap items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">{t('dashboard.from_date')}:</label>
+                <input
+                  type="date"
+                  value={gmailFromDate}
+                  onChange={(e) => setGmailFromDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">{t('dashboard.to_date')}:</label>
+                <input
+                  type="date"
+                  value={gmailToDate}
+                  onChange={(e) => setGmailToDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                />
+              </div>
+              <Button size="sm" onClick={fetchGmailRevenue} disabled={loadingGmail}>
+                <Filter className="w-3 h-3 mr-1" />
+                {loadingGmail ? t('dashboard.filtering') : t('dashboard.filter_btn')}
+              </Button>
+            </div>
+          )}
+
+          {/* Summary Cards */}
+          {gmailSummary && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="text-sm text-muted-foreground">Tổng đã bán</div>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{gmailSummary.totalSold}</div>
+              </div>
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div className="text-sm text-muted-foreground">Tổng doanh thu</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(gmailSummary.totalRevenue)}</div>
+              </div>
+              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <div className="text-sm text-muted-foreground">Giá/tài khoản</div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{formatCurrency(gmailSummary.pricePerAccount)}</div>
+              </div>
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {loadingGmail ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : gmailSales.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Người mua</th>
+                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Ngày bán</th>
+                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Giá</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gmailSales.slice(0, 20).map((sale, index) => (
+                    <tr key={sale.id} className={`border-b last:border-0 ${index % 2 === 0 ? 'bg-muted/30' : ''}`}>
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-sm">{sale.email}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">{sale.buyer_username || 'N/A'}</span>
+                          <span className="text-xs text-muted-foreground">{sale.buyer_telegram_id || ''}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center text-sm">
+                        {sale.sold_at ? new Date(sale.sold_at).toLocaleDateString('vi-VN') : 'N/A'}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
+                        {formatCurrency(sale.price)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {gmailSales.length > 20 && (
+                <div className="text-center py-2 text-sm text-muted-foreground">
+                  Hiển thị 20/{gmailSales.length} giao dịch gần nhất
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              {t('dashboard.no_data')}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

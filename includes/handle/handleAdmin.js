@@ -27,16 +27,29 @@ export const requireAdmin = async (adminIds, telegramId) => {
 };
 
 export const adminMenu = async (bot, chatId) => {
-  const inline_keyboard = [
-    [{ text: '📊 Quản lý sản phẩm', callback_data: createCallbackData({ action: 'admin_products', page: 1 }) }],
-    [{ text: '📦 Quản lý tài khoản', callback_data: createCallbackData({ action: 'admin_accounts_pick', page: 1 }) }],
+  // Lấy domain từ settings nếu có
+  let webDomain = 'https://cp-admin.manhit.dev';
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'admin_web_domain'");
+    if (rows && rows.length > 0 && rows[0].value) {
+      webDomain = rows[0].value;
+    }
+  } catch (e) {
+    console.error('Error fetching admin_web_domain:', e);
+  }
 
-    [{ text: '💰 Quản lý nạp tiền', callback_data: createCallbackData({ action: 'admin_deposits', page: 1 }) }],
-    [{ text: '📝 Đơn hàng cần xử lý', callback_data: createCallbackData({ action: 'admin_manual_orders', page: 1 }) }],
-    [{ text: '👤 Quản lý user', callback_data: createCallbackData({ action: 'admin_users', page: 1 }) }],
-    [{ text: '🌐 Web Dashboard', web_app: { url: 'https://cp-admin.manhit.dev' } }]
+  const inline_keyboard = [
+    [{ text: '🌐 Mở Dashboard Admin', web_app: { url: webDomain } }]
   ];
-  await bot.sendMessage(chatId, 'Admin panel', { reply_markup: { inline_keyboard } });
+
+  await bot.sendMessage(
+    chatId,
+    '👋 **Xin chào Admin!**\n\n📱 Nhấn nút bên dưới để mở Dashboard quản lý.\n\n💡 *Tất cả chức năng quản lý đã được chuyển lên Web Dashboard để tiện sử dụng.*',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard }
+    }
+  );
 };
 
 export const adminProducts = async (bot, chatId, page, pageSize) => {

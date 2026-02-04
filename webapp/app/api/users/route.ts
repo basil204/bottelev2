@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
 
 export async function GET(request: Request) {
     try {
@@ -46,6 +47,7 @@ export async function PUT(request: Request) {
     try {
         const body = await request.json();
         const { id, amount, type, reason } = body; // type: 'add' or 'subtract'
+        const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id || !amount || !type) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -121,6 +123,16 @@ export async function PUT(request: Request) {
         } catch (e) {
             console.error("Notification failed", e);
         }
+
+        // Log admin action
+        await logAdminAction({
+            action: 'UPDATE',
+            targetType: 'USER',
+            targetId: id,
+            details: { type, amount, reason: reason || 'Admin thay đổi' },
+            ipAddress,
+            userAgent
+        });
 
         return NextResponse.json({ success: true });
 

@@ -15,7 +15,8 @@ import {
     Bell,
     Landmark,
     Mail,
-    Archive
+    Archive,
+    Activity
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function Sidebar() {
         { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
         { name: "Lịch sử Bank", href: "/bank-history", icon: Landmark },
         { name: "Kho", href: "/stored-accounts", icon: Archive },
+        { name: "Nhật ký", href: "/admin-logs", icon: Activity },
         { name: t('sidebar.notifications'), href: "/notifications", icon: Bell },
         { name: t('sidebar.settings'), href: "/settings", icon: Settings },
     ];

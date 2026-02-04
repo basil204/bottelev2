@@ -107,7 +107,6 @@ export default function StoredAccountsPage() {
 
     // Filter state
     const [filterType, setFilterType] = useState<string>('all');
-    const [filterPayment, setFilterPayment] = useState<string>('all');
     const [filterSale, setFilterSale] = useState<string>('all');
 
     // Add type dialog
@@ -134,7 +133,6 @@ export default function StoredAccountsPage() {
             const params = new URLSearchParams();
 
             if (filterType !== 'all') params.append('type', filterType);
-            if (filterPayment !== 'all') params.append('payment_status', filterPayment);
             if (filterSale !== 'all') params.append('sale_status', filterSale);
 
             const res = await fetch(url + params.toString());
@@ -147,7 +145,7 @@ export default function StoredAccountsPage() {
         } finally {
             setLoading(false);
         }
-    }, [filterType, filterPayment, filterSale]);
+    }, [filterType, filterSale]);
 
     useEffect(() => {
         fetchTypes();
@@ -290,9 +288,6 @@ export default function StoredAccountsPage() {
     // Stats
     const stats = {
         total: accounts.length,
-        pending: accounts.filter(a => a.payment_status === 'pending').length,
-        paid: accounts.filter(a => a.payment_status === 'paid').length,
-        invalid: accounts.filter(a => a.payment_status === 'invalid').length,
         inStock: accounts.filter(a => a.sale_status === 'in_stock').length,
         sold: accounts.filter(a => a.sale_status === 'sold').length,
     };
@@ -311,7 +306,7 @@ export default function StoredAccountsPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-6">
+            <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardContent className="pt-4">
                         <div className="text-2xl font-bold">{stats.total}</div>
@@ -320,32 +315,14 @@ export default function StoredAccountsPage() {
                 </Card>
                 <Card>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-                        <p className="text-xs text-muted-foreground">Chưa pay</p>
+                        <div className="text-2xl font-bold text-orange-600">{stats.inStock}</div>
+                        <p className="text-xs text-muted-foreground">Chưa lên Bot</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-green-600">{stats.paid}</div>
-                        <p className="text-xs text-muted-foreground">Đã pay</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-red-600">{stats.invalid}</div>
-                        <p className="text-xs text-muted-foreground">Sai thông tin</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-blue-600">{stats.inStock}</div>
-                        <p className="text-xs text-muted-foreground">Còn hàng</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-purple-600">{stats.sold}</div>
-                        <p className="text-xs text-muted-foreground">Đã bán</p>
+                        <div className="text-2xl font-bold text-green-600">{stats.sold}</div>
+                        <p className="text-xs text-muted-foreground">Đã lên Bot</p>
                     </CardContent>
                 </Card>
             </div>
@@ -436,29 +413,15 @@ export default function StoredAccountsPage() {
                             </Select>
                         </div>
                         <div className="w-48">
-                            <label className="text-sm font-medium mb-2 block">Tình trạng pay</label>
-                            <Select value={filterPayment} onValueChange={setFilterPayment}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Tất cả</SelectItem>
-                                    <SelectItem value="pending">Chưa pay</SelectItem>
-                                    <SelectItem value="paid">Đã pay</SelectItem>
-                                    <SelectItem value="invalid">Sai thông tin</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="w-48">
-                            <label className="text-sm font-medium mb-2 block">Trạng thái bán</label>
+                            <label className="text-sm font-medium mb-2 block">Trạng thái Bot</label>
                             <Select value={filterSale} onValueChange={setFilterSale}>
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Tất cả</SelectItem>
-                                    <SelectItem value="in_stock">Còn hàng</SelectItem>
-                                    <SelectItem value="sold">Đã bán</SelectItem>
+                                    <SelectItem value="in_stock">Chưa lên Bot</SelectItem>
+                                    <SelectItem value="sold">Đã lên Bot</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -492,11 +455,9 @@ export default function StoredAccountsPage() {
                                         <TableHead className="w-[80px]">Loại</TableHead>
                                         <TableHead>TK</TableHead>
                                         <TableHead>MK</TableHead>
-                                        <TableHead>Extra</TableHead>
                                         <TableHead>2FA</TableHead>
-                                        <TableHead className="w-[120px]">Tình trạng</TableHead>
-                                        <TableHead className="w-[110px]">Trạng thái</TableHead>
-                                        <TableHead className="w-[140px]">Note</TableHead>
+                                        <TableHead className="w-[110px]">Lên Bot</TableHead>
+                                        <TableHead className="w-[160px]">Note</TableHead>
                                         <TableHead className="w-[80px]">Copy All</TableHead>
                                         <TableHead className="w-[80px]">Xóa</TableHead>
                                     </TableRow>
@@ -565,31 +526,6 @@ export default function StoredAccountsPage() {
                                                     <div className="flex items-center gap-1">
                                                         <code
                                                             className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate cursor-pointer hover:bg-muted/80"
-                                                            title={parsed.extra ? `Click để copy: ${parsed.extra}` : ''}
-                                                            onClick={() => parsed.extra && copyText(parsed.extra, `extra-${account.id}`)}
-                                                        >
-                                                            {parsed.extra || '-'}
-                                                        </code>
-                                                        {parsed.extra && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-6 w-6 p-0"
-                                                                onClick={() => copyText(parsed.extra, `extra-${account.id}`)}
-                                                            >
-                                                                {copiedField === `extra-${account.id}` ? (
-                                                                    <Check className="w-3 h-3 text-green-500" />
-                                                                ) : (
-                                                                    <Copy className="w-3 h-3" />
-                                                                )}
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-1">
-                                                        <code
-                                                            className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate cursor-pointer hover:bg-muted/80"
                                                             title={parsed.twofa ? `Click để copy: ${parsed.twofa}` : ''}
                                                             onClick={() => parsed.twofa && copyText(parsed.twofa, `2fa-${account.id}`)}
                                                         >
@@ -613,35 +549,17 @@ export default function StoredAccountsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <Select
-                                                        value={account.payment_status}
-                                                        onValueChange={(val: string) => handleUpdateStatus(account.id, 'payment_status', val)}
-                                                    >
-                                                        <SelectTrigger className={`w-[110px] h-8 text-xs ${account.payment_status === 'paid' ? 'border-green-500 text-green-600' :
-                                                            account.payment_status === 'invalid' ? 'border-red-500 text-red-600' :
-                                                                'border-yellow-500 text-yellow-600'
-                                                            }`}>
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="pending">Chưa pay</SelectItem>
-                                                            <SelectItem value="paid">Đã pay</SelectItem>
-                                                            <SelectItem value="invalid">Sai thông tin</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Select
                                                         value={account.sale_status}
                                                         onValueChange={(val: string) => handleUpdateStatus(account.id, 'sale_status', val)}
                                                     >
-                                                        <SelectTrigger className={`w-[100px] h-8 text-xs ${account.sale_status === 'sold' ? 'border-purple-500 text-purple-600' :
-                                                            'border-blue-500 text-blue-600'
+                                                        <SelectTrigger className={`w-[100px] h-8 text-xs ${account.sale_status === 'sold' ? 'border-green-500 text-green-600' :
+                                                            'border-orange-500 text-orange-600'
                                                             }`}>
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="in_stock">Còn hàng</SelectItem>
-                                                            <SelectItem value="sold">Đã bán</SelectItem>
+                                                            <SelectItem value="in_stock">Chưa lên Bot</SelectItem>
+                                                            <SelectItem value="sold">Đã lên Bot</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
@@ -651,7 +569,7 @@ export default function StoredAccountsPage() {
                                                             <Input
                                                                 value={editNote}
                                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditNote(e.target.value)}
-                                                                className="h-7 text-xs w-20"
+                                                                className="h-7 text-xs w-24"
                                                             />
                                                             <Button
                                                                 variant="ghost"
@@ -672,7 +590,7 @@ export default function StoredAccountsPage() {
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-1">
-                                                            <span className="text-xs truncate max-w-[80px]" title={account.note || ''}>
+                                                            <span className="text-xs truncate max-w-[100px]" title={account.note || ''}>
                                                                 {account.note || '-'}
                                                             </span>
                                                             <Button
@@ -695,8 +613,7 @@ export default function StoredAccountsPage() {
                                                             const copyData = [
                                                                 `TK: ${parsed.tk}`,
                                                                 `MK: ${parsed.mk}`,
-                                                                parsed.twofa ? `2FA: ${parsed.twofa}` : '',
-                                                                parsed.extra ? `Extra: ${parsed.extra}` : ''
+                                                                parsed.twofa ? `2FA: ${parsed.twofa}` : ''
                                                             ].filter(Boolean).join('\n');
                                                             copyText(copyData, `all-${account.id}`);
                                                         }}

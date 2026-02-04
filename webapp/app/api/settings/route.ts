@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { exec } from 'child_process';
+import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
 
 const restartCoba = () => {
     exec('pm2 restart all', (error, stdout, stderr) => {
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
 
         const connection = await pool.getConnection();
         let shouldRestart = false;
+        const { ipAddress, userAgent } = getRequestInfo(request);
 
         try {
             await connection.beginTransaction();
@@ -123,6 +125,15 @@ export async function POST(request: Request) {
             if (shouldRestart) {
                 restartCoba();
             }
+
+            // Log admin action
+            await logAdminAction({
+                action: 'UPDATE',
+                targetType: 'SETTING',
+                details: Object.keys(body).filter(k => body[k] !== undefined),
+                ipAddress,
+                userAgent
+            });
 
             return NextResponse.json({ success: true });
         } catch (error) {

@@ -284,9 +284,9 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                 // Đánh dấu account đã bán
                 const [account] = await query('SELECT id FROM gmail_accounts WHERE email = ? LIMIT 1', [result.email]);
                 if (account) {
-                    await markAccountSold(account.id);
+                    await markAccountSold(account.id, currentUser.id, pricePerGmail);
+                    createdAccounts.push({ ...result, id: account.id });
                 }
-                createdAccounts.push(result);
             } else {
                 console.error(`[BUY_GMAIL_EDU] Error creating account ${i + 1}:`, result.error);
             }
@@ -334,6 +334,13 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                 note: `Mua ${createdAccounts.length} Gmail EDU`
             });
             if (orderResult && orderResult.insertId) orderId = orderResult.insertId;
+
+            // Update orderId cho các accounts đã tạo
+            const accountIds = createdAccounts.map(acc => acc.id).filter(id => id);
+            if (accountIds.length > 0) {
+                const placeholders = accountIds.map(() => '?').join(',');
+                await query(`UPDATE gmail_accounts SET order_id = ? WHERE id IN (${placeholders})`, [orderId, ...accountIds]);
+            }
 
             // Notify Admins - fetch from database
             const adminIds = await getAdminIds(config?.ADMIN_IDS || []);

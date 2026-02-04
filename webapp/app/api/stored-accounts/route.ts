@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
 
 // GET - List stored accounts with filters
 export async function GET(request: Request) {
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const { account_type_id, data, note } = await request.json();
+        const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!account_type_id) {
             return NextResponse.json(
@@ -69,8 +71,21 @@ export async function POST(request: Request) {
         // Support bulk import: split by newlines
         const accounts = data.split('\n').map((line: string) => line.trim()).filter((line: string) => line);
         let insertCount = 0;
+        let skipCount = 0;
 
         for (const accountData of accounts) {
+            // Check if account already exists with same type and data
+            const [existing] = await pool.query<RowDataPacket[]>(
+                'SELECT id FROM stored_accounts WHERE account_type_id = ? AND data = ?',
+                [account_type_id, accountData]
+            );
+
+            if (existing.length > 0) {
+                // Skip duplicate
+                skipCount++;
+                continue;
+            }
+
             await pool.query<ResultSetHeader>(
                 'INSERT INTO stored_accounts (account_type_id, data, note) VALUES (?, ?, ?)',
                 [account_type_id, accountData, note || null]
@@ -78,10 +93,22 @@ export async function POST(request: Request) {
             insertCount++;
         }
 
+        // Log action
+        if (insertCount > 0) {
+            await logAdminAction({
+                action: 'CREATE',
+                targetType: 'STORED_ACCOUNT',
+                details: { account_type_id, count: insertCount, skipped: skipCount },
+                ipAddress,
+                userAgent
+            });
+        }
+
         return NextResponse.json({
             success: true,
-            message: `Đã thêm ${insertCount} tài khoản`,
-            count: insertCount
+            message: `Đã thêm ${insertCount} tài khoản${skipCount > 0 ? `, bỏ qua ${skipCount} tài khoản trùng` : ''}`,
+            count: insertCount,
+            skipped: skipCount
         });
     } catch (error) {
         console.error('Error creating stored account:', error);

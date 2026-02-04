@@ -363,28 +363,26 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
             resultMessage += `📧 Quantity: ${createdAccounts.length}\n`;
             resultMessage += `💰 Price: ${formatCurrency(actualPrice)}\n`;
             resultMessage += `💵 New balance: ${formatCurrency(finalBalance)}\n\n`;
-            resultMessage += `📋 **Account list:**\n`;
-            resultMessage += `\`\`\`\n`;
-            createdAccounts.forEach((acc) => {
-                resultMessage += `${acc.email}|${acc.password}\n`;
-            });
-            resultMessage += `\`\`\`\n\n`;
             resultMessage += `⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`;
         } else {
             resultMessage = `✅ **Mua Gmail EDU thành công!**\n\n`;
             resultMessage += `📧 Số lượng: ${createdAccounts.length}\n`;
             resultMessage += `💰 Giá: ${formatCurrency(actualPrice)}\n`;
             resultMessage += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
-            resultMessage += `📋 **Danh sách tài khoản:**\n`;
-            resultMessage += `\`\`\`\n`;
-            createdAccounts.forEach((acc) => {
-                resultMessage += `${acc.email}|${acc.password}\n`;
-            });
-            resultMessage += `\`\`\`\n\n`;
             resultMessage += `⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`;
         }
 
         await bot.sendMessage(chatId, resultMessage, { parse_mode: 'Markdown' });
+
+        // Gửi từng tài khoản riêng để dễ copy
+        for (let i = 0; i < createdAccounts.length; i++) {
+            const acc = createdAccounts[i];
+            const accountMsg = lang === 'en'
+                ? `📧 **Account ${i + 1}:**\n\n🔹 **TK:**\n\`${acc.email}\`\n\n🔹 **MK:**\n\`${acc.password}\``
+                : `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:**\n\`${acc.email}\`\n\n🔹 **MK:**\n\`${acc.password}\``;
+
+            await bot.sendMessage(chatId, accountMsg, { parse_mode: 'Markdown' });
+        }
 
         console.log(`[BUY_GMAIL_EDU] ✅ User ${telegramId} purchased ${createdAccounts.length} Gmail EDU`);
 

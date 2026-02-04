@@ -12,7 +12,9 @@ import {
     Menu,
     X,
     Clock,
-    Film
+    Film,
+    Tag,
+    Package
 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
@@ -22,6 +24,7 @@ const navItems = [
     { href: '/admin/domains', label: 'EDU Domains', icon: Globe },
     { href: '/admin/tmail-domains', label: 'tMail Domains', icon: Clock },
     { href: '/admin/netflix', label: 'Netflix', icon: Film },
+    { href: '/admin/stored-accounts', label: 'Kho', icon: Package },
     { href: '/admin/users', label: 'Quản lý Users', icon: Users },
     { href: '/admin/emails', label: 'Tất cả Emails', icon: Mail },
     { href: '/admin/settings', label: 'Cài đặt', icon: Settings },

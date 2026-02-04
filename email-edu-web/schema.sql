@@ -50,10 +50,7 @@ CREATE TABLE IF NOT EXISTS settings (
     `value` TEXT
 );
 
--- Insert domains mặc định
-INSERT IGNORE INTO edu_domains (domain) VALUES ('suafpoly.app');
-INSERT IGNORE INTO edu_domains (domain) VALUES ('student.edu.vn');
-INSERT IGNORE INTO edu_domains (domain) VALUES ('fpoly.edu.vn');
+-- Insert domains mặc đị
 
 -- Bảng tMail domains (admin quản lý)
 CREATE TABLE IF NOT EXISTS tmail_domains (

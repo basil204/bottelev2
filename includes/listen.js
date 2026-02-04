@@ -659,9 +659,9 @@ export const registerListeners = (bot, config) => {
 
             const amount = data.amount || 5000;
 
-            // Set bank key cho MBBank
+            // Set bank key cho Viettel Money
             const bankKey = `bank_${query.from.id}`;
-            setCache(bankKey, 'mbbank', 10 * 60 * 1000);
+            setCache(bankKey, 'viettel', 10 * 60 * 1000);
 
             // Tạo fake message để gọi handleDepositAmount
             const fakeMsg = {

@@ -499,10 +499,10 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
       // CONFIG is passed as argument, use it directly.
 
-      // Tự động chọn MBBank và tạo QR
+      // Tự động chọn Viettel Money và tạo QR
       const { setCache: setCacheDeposit } = await import('../../lib/cache/index.js');
       const bankKey = (telegramId) => `bank_${telegramId}`;
-      setCacheDeposit(bankKey(msg.from.id), 'mbbank', 10 * 60 * 1000);
+      setCacheDeposit(bankKey(msg.from.id), 'viettel', 10 * 60 * 1000);
 
       // Tạo message giả để gọi handleDepositAmount
       const fakeMsg = {

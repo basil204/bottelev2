@@ -513,7 +513,11 @@ export default function StoredAccountsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1">
-                                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate" title={parsed.tk}>
+                                                        <code
+                                                            className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate cursor-pointer hover:bg-muted/80"
+                                                            title={parsed.tk ? `Click để copy: ${parsed.tk}` : ''}
+                                                            onClick={() => parsed.tk && copyText(parsed.tk, `tk-${account.id}`)}
+                                                        >
                                                             {parsed.tk || '-'}
                                                         </code>
                                                         {parsed.tk && (
@@ -534,7 +538,11 @@ export default function StoredAccountsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1">
-                                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate" title={parsed.mk}>
+                                                        <code
+                                                            className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80"
+                                                            title={parsed.mk ? `Click để copy: ${parsed.mk}` : ''}
+                                                            onClick={() => parsed.mk && copyText(parsed.mk, `mk-${account.id}`)}
+                                                        >
                                                             {parsed.mk || '-'}
                                                         </code>
                                                         {parsed.mk && (
@@ -555,7 +563,11 @@ export default function StoredAccountsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1">
-                                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate" title={parsed.extra}>
+                                                        <code
+                                                            className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate cursor-pointer hover:bg-muted/80"
+                                                            title={parsed.extra ? `Click để copy: ${parsed.extra}` : ''}
+                                                            onClick={() => parsed.extra && copyText(parsed.extra, `extra-${account.id}`)}
+                                                        >
                                                             {parsed.extra || '-'}
                                                         </code>
                                                         {parsed.extra && (
@@ -576,7 +588,11 @@ export default function StoredAccountsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1">
-                                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate" title={parsed.twofa}>
+                                                        <code
+                                                            className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate cursor-pointer hover:bg-muted/80"
+                                                            title={parsed.twofa ? `Click để copy: ${parsed.twofa}` : ''}
+                                                            onClick={() => parsed.twofa && copyText(parsed.twofa, `2fa-${account.id}`)}
+                                                        >
                                                             {parsed.twofa || '-'}
                                                         </code>
                                                         {parsed.twofa && (

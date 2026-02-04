@@ -35,6 +35,7 @@ interface StoredAccount {
     data: string;
     payment_status: 'pending' | 'paid' | 'invalid';
     sale_status: 'in_stock' | 'sold';
+    bot_status: 'not_uploaded' | 'uploaded';
     paid_at: string | null;
     sold_at: string | null;
     note: string | null;
@@ -107,7 +108,9 @@ export default function StoredAccountsPage() {
 
     // Filter state
     const [filterType, setFilterType] = useState<string>('all');
+    const [filterPayment, setFilterPayment] = useState<string>('all');
     const [filterSale, setFilterSale] = useState<string>('all');
+    const [filterBot, setFilterBot] = useState<string>('all');
 
     // Add type dialog
     const [showAddTypeDialog, setShowAddTypeDialog] = useState(false);
@@ -133,7 +136,9 @@ export default function StoredAccountsPage() {
             const params = new URLSearchParams();
 
             if (filterType !== 'all') params.append('type', filterType);
+            if (filterPayment !== 'all') params.append('payment_status', filterPayment);
             if (filterSale !== 'all') params.append('sale_status', filterSale);
+            if (filterBot !== 'all') params.append('bot_status', filterBot);
 
             const res = await fetch(url + params.toString());
             const data = await res.json();
@@ -145,7 +150,7 @@ export default function StoredAccountsPage() {
         } finally {
             setLoading(false);
         }
-    }, [filterType, filterSale]);
+    }, [filterType, filterPayment, filterSale, filterBot]);
 
     useEffect(() => {
         fetchTypes();
@@ -217,7 +222,7 @@ export default function StoredAccountsPage() {
         }
     };
 
-    const handleUpdateStatus = async (id: number, field: 'payment_status' | 'sale_status', value: string) => {
+    const handleUpdateStatus = async (id: number, field: 'payment_status' | 'sale_status' | 'bot_status', value: string) => {
         try {
             const res = await fetch('/api/stored-accounts', {
                 method: 'PUT',
@@ -288,8 +293,12 @@ export default function StoredAccountsPage() {
     // Stats
     const stats = {
         total: accounts.length,
+        pending: accounts.filter(a => a.payment_status === 'pending').length,
+        paid: accounts.filter(a => a.payment_status === 'paid').length,
         inStock: accounts.filter(a => a.sale_status === 'in_stock').length,
         sold: accounts.filter(a => a.sale_status === 'sold').length,
+        notUploaded: accounts.filter(a => a.bot_status === 'not_uploaded' || !a.bot_status).length,
+        uploaded: accounts.filter(a => a.bot_status === 'uploaded').length,
     };
 
     return (
@@ -306,22 +315,46 @@ export default function StoredAccountsPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-7">
                 <Card>
                     <CardContent className="pt-4">
                         <div className="text-2xl font-bold">{stats.total}</div>
-                        <p className="text-xs text-muted-foreground">Tổng cộng</p>
+                        <p className="text-xs text-muted-foreground">Tổng</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-orange-600">{stats.inStock}</div>
+                        <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+                        <p className="text-xs text-muted-foreground">Chưa pay</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <div className="text-2xl font-bold text-green-600">{stats.paid}</div>
+                        <p className="text-xs text-muted-foreground">Đã pay</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <div className="text-2xl font-bold text-blue-600">{stats.inStock}</div>
+                        <p className="text-xs text-muted-foreground">Còn hàng</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <div className="text-2xl font-bold text-purple-600">{stats.sold}</div>
+                        <p className="text-xs text-muted-foreground">Đã bán</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <div className="text-2xl font-bold text-orange-600">{stats.notUploaded}</div>
                         <p className="text-xs text-muted-foreground">Chưa lên Bot</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardContent className="pt-4">
-                        <div className="text-2xl font-bold text-green-600">{stats.sold}</div>
+                        <div className="text-2xl font-bold text-teal-600">{stats.uploaded}</div>
                         <p className="text-xs text-muted-foreground">Đã lên Bot</p>
                     </CardContent>
                 </Card>
@@ -396,7 +429,7 @@ export default function StoredAccountsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-wrap gap-4">
-                        <div className="w-48">
+                        <div className="w-40">
                             <label className="text-sm font-medium mb-2 block">Loại tài khoản</label>
                             <Select value={filterType} onValueChange={setFilterType}>
                                 <SelectTrigger>
@@ -412,16 +445,43 @@ export default function StoredAccountsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="w-48">
-                            <label className="text-sm font-medium mb-2 block">Trạng thái Bot</label>
+                        <div className="w-36">
+                            <label className="text-sm font-medium mb-2 block">Tình trạng pay</label>
+                            <Select value={filterPayment} onValueChange={setFilterPayment}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Tất cả</SelectItem>
+                                    <SelectItem value="pending">Chưa pay</SelectItem>
+                                    <SelectItem value="paid">Đã pay</SelectItem>
+                                    <SelectItem value="invalid">Sai TT</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="w-36">
+                            <label className="text-sm font-medium mb-2 block">Trạng thái bán</label>
                             <Select value={filterSale} onValueChange={setFilterSale}>
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Tất cả</SelectItem>
-                                    <SelectItem value="in_stock">Chưa lên Bot</SelectItem>
-                                    <SelectItem value="sold">Đã lên Bot</SelectItem>
+                                    <SelectItem value="in_stock">Còn hàng</SelectItem>
+                                    <SelectItem value="sold">Đã bán</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="w-36">
+                            <label className="text-sm font-medium mb-2 block">Lên Bot</label>
+                            <Select value={filterBot} onValueChange={setFilterBot}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Tất cả</SelectItem>
+                                    <SelectItem value="not_uploaded">Chưa lên</SelectItem>
+                                    <SelectItem value="uploaded">Đã lên</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -456,10 +516,13 @@ export default function StoredAccountsPage() {
                                         <TableHead>TK</TableHead>
                                         <TableHead>MK</TableHead>
                                         <TableHead>2FA</TableHead>
-                                        <TableHead className="w-[110px]">Lên Bot</TableHead>
-                                        <TableHead className="w-[160px]">Note</TableHead>
-                                        <TableHead className="w-[80px]">Copy All</TableHead>
-                                        <TableHead className="w-[80px]">Xóa</TableHead>
+                                        <TableHead className="w-[95px]">Tình trạng</TableHead>
+                                        <TableHead className="w-[85px]">Ngày pay</TableHead>
+                                        <TableHead className="w-[90px]">Trạng thái</TableHead>
+                                        <TableHead className="w-[90px]">Lên Bot</TableHead>
+                                        <TableHead className="w-[120px]">Note</TableHead>
+                                        <TableHead className="w-[60px]">Copy</TableHead>
+                                        <TableHead className="w-[60px]">Xóa</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -547,19 +610,62 @@ export default function StoredAccountsPage() {
                                                         )}
                                                     </div>
                                                 </TableCell>
+                                                {/* Tình trạng pay */}
+                                                <TableCell>
+                                                    <Select
+                                                        value={account.payment_status}
+                                                        onValueChange={(val: string) => handleUpdateStatus(account.id, 'payment_status', val)}
+                                                    >
+                                                        <SelectTrigger className={`w-[90px] h-7 text-xs ${account.payment_status === 'paid' ? 'border-green-500 text-green-600' :
+                                                            account.payment_status === 'invalid' ? 'border-red-500 text-red-600' :
+                                                                'border-yellow-500 text-yellow-600'
+                                                            }`}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="pending">Chưa pay</SelectItem>
+                                                            <SelectItem value="paid">Đã pay</SelectItem>
+                                                            <SelectItem value="invalid">Sai TT</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                {/* Ngày pay */}
+                                                <TableCell>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {account.paid_at ? formatDate(account.paid_at) : '-'}
+                                                    </span>
+                                                </TableCell>
+                                                {/* Trạng thái bán */}
                                                 <TableCell>
                                                     <Select
                                                         value={account.sale_status}
                                                         onValueChange={(val: string) => handleUpdateStatus(account.id, 'sale_status', val)}
                                                     >
-                                                        <SelectTrigger className={`w-[100px] h-8 text-xs ${account.sale_status === 'sold' ? 'border-green-500 text-green-600' :
+                                                        <SelectTrigger className={`w-[90px] h-7 text-xs ${account.sale_status === 'sold' ? 'border-purple-500 text-purple-600' :
+                                                            'border-blue-500 text-blue-600'
+                                                            }`}>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="in_stock">Còn hàng</SelectItem>
+                                                            <SelectItem value="sold">Đã bán</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                {/* Lên Bot */}
+                                                <TableCell>
+                                                    <Select
+                                                        value={account.bot_status || 'not_uploaded'}
+                                                        onValueChange={(val: string) => handleUpdateStatus(account.id, 'bot_status', val)}
+                                                    >
+                                                        <SelectTrigger className={`w-[90px] h-7 text-xs ${account.bot_status === 'uploaded' ? 'border-teal-500 text-teal-600' :
                                                             'border-orange-500 text-orange-600'
                                                             }`}>
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="in_stock">Chưa lên Bot</SelectItem>
-                                                            <SelectItem value="sold">Đã lên Bot</SelectItem>
+                                                            <SelectItem value="not_uploaded">Chưa lên</SelectItem>
+                                                            <SelectItem value="uploaded">Đã lên</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>

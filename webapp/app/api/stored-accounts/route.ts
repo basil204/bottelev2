@@ -10,6 +10,7 @@ export async function GET(request: Request) {
         const typeId = searchParams.get('type');
         const paymentStatus = searchParams.get('payment_status');
         const saleStatus = searchParams.get('sale_status');
+        const botStatus = searchParams.get('bot_status');
 
         let query = `
             SELECT sa.*, at.name as type_name 
@@ -32,6 +33,11 @@ export async function GET(request: Request) {
         if (saleStatus) {
             query += ' AND sa.sale_status = ?';
             params.push(saleStatus);
+        }
+
+        if (botStatus) {
+            query += ' AND sa.bot_status = ?';
+            params.push(botStatus);
         }
 
         query += ' ORDER BY sa.created_at DESC';
@@ -122,7 +128,7 @@ export async function POST(request: Request) {
 // PUT - Update account status
 export async function PUT(request: Request) {
     try {
-        const { id, payment_status, sale_status, note } = await request.json();
+        const { id, payment_status, sale_status, bot_status, note } = await request.json();
 
         if (!id) {
             return NextResponse.json(
@@ -157,6 +163,11 @@ export async function PUT(request: Request) {
             } else if (sale_status === 'in_stock') {
                 updates.push('sold_at = NULL');
             }
+        }
+
+        if (bot_status !== undefined) {
+            updates.push('bot_status = ?');
+            params.push(bot_status);
         }
 
         if (note !== undefined) {

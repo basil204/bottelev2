@@ -37,15 +37,15 @@ const getBankConfig = async (defaultConfig) => {
         if (r.key === 'viettel_account') dbConfig.viettelAccount = r.value;
       });
     }
-    // Ưu tiên viettel_account nếu có
+    // Ưu tiên viettel_account nếu có, default bank code là VIETTELMONEY
     return {
-      bankCode: dbConfig.bankCode || defaultConfig.VIETQR_BANK_CODE || 'MB',
+      bankCode: dbConfig.bankCode || defaultConfig.VIETQR_BANK_CODE || 'VIETTELMONEY',
       accountNo: dbConfig.viettelAccount || dbConfig.accountNo || defaultConfig.VIETQR_ACCOUNT_NO,
       accountName: dbConfig.accountName || defaultConfig.VIETQR_ACCOUNT_NAME
     };
   } catch (e) {
     return {
-      bankCode: defaultConfig.VIETQR_BANK_CODE || 'MB',
+      bankCode: defaultConfig.VIETQR_BANK_CODE || 'VIETTELMONEY',
       accountNo: defaultConfig.VIETQR_ACCOUNT_NO,
       accountName: defaultConfig.VIETQR_ACCOUNT_NAME
     };

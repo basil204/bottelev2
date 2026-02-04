@@ -21,11 +21,8 @@ export async function GET() {
         // Default settings
         const settings: Record<string, any> = {
             mb_auto_deposit: true,
-            bank_provider: 'viettel', // New: mbbank or viettel
             viettel_token: '',
             viettel_account: '',
-            mbbank_token: '', // New: MBBank token
-            mbbank_account: '', // New: MBBank account
             min_deposit: 50000,
             exchange_rate: 26000, // USDT -> VND exchange rate
             telegram_bot_token: '',
@@ -71,11 +68,8 @@ export async function POST(request: Request) {
         const body = await request.json();
         const {
             mb_auto_deposit,
-            bank_provider, // New
             viettel_token,
             viettel_account,
-            mbbank_token, // New
-            mbbank_account, // New
             min_deposit,
             exchange_rate, // Exchange rate USDT -> VND
             telegram_bot_token,
@@ -105,11 +99,8 @@ export async function POST(request: Request) {
             };
 
             if (mb_auto_deposit !== undefined) await upsertSetting('mb_auto_deposit', mb_auto_deposit);
-            if (bank_provider !== undefined) await upsertSetting('bank_provider', bank_provider); // New
             if (viettel_token !== undefined) await upsertSetting('viettel_token', viettel_token);
             if (viettel_account !== undefined) await upsertSetting('viettel_account', viettel_account);
-            if (mbbank_token !== undefined) await upsertSetting('mbbank_token', mbbank_token); // New
-            if (mbbank_account !== undefined) await upsertSetting('mbbank_account', mbbank_account); // New
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
             if (exchange_rate !== undefined) await upsertSetting('exchange_rate', exchange_rate);
             if (telegram_bot_token !== undefined) {

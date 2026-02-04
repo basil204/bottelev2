@@ -25,11 +25,8 @@ import {
 
 interface Settings {
     mb_auto_deposit: boolean;
-    bank_provider: 'mbbank' | 'viettel'; // New field to select bank
     viettel_token: string;
     viettel_account: string;
-    mbbank_token: string; // New field for MBBank token
-    mbbank_account: string; // New field for MBBank account
     min_deposit: number;
     exchange_rate: number;
     telegram_bot_token: string;
@@ -51,11 +48,8 @@ export default function SettingsPage() {
     const { t } = useLanguage();
     const [settings, setSettings] = useState<Settings>({
         mb_auto_deposit: true,
-        bank_provider: 'viettel', // Default to viettel
         viettel_token: '',
         viettel_account: '',
-        mbbank_token: '', // New default
-        mbbank_account: '', // New default
         min_deposit: 50000,
         exchange_rate: 26000,
         telegram_bot_token: '',
@@ -268,110 +262,37 @@ export default function SettingsPage() {
                                     />
                                 </div>
 
-                                {/* Bank Provider Selection */}
+                                {/* Viettel Config - Show when auto deposit is enabled */}
                                 {settings.mb_auto_deposit && (
-                                    <div className="space-y-4">
-                                        <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                            <div className="font-medium text-white mb-3">{t('settings.select_bank')}</div>
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings(prev => ({ ...prev, bank_provider: 'mbbank' }))}
-                                                    className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${settings.bank_provider === 'mbbank'
-                                                        ? 'border-blue-500 bg-blue-500/20 text-blue-400'
-                                                        : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                                                        }`}
-                                                >
-                                                    <span className="text-2xl">🏦</span>
-                                                    <span className="font-medium">MBBank</span>
-                                                    {settings.bank_provider === 'mbbank' && (
-                                                        <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">{t('settings.using')}</span>
-                                                    )}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings(prev => ({ ...prev, bank_provider: 'viettel' }))}
-                                                    className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${settings.bank_provider === 'viettel'
-                                                        ? 'border-red-500 bg-red-500/20 text-red-400'
-                                                        : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
-                                                        }`}
-                                                >
-                                                    <span className="text-2xl">📱</span>
-                                                    <span className="font-medium">Viettel Money</span>
-                                                    {settings.bank_provider === 'viettel' && (
-                                                        <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded">{t('settings.using')}</span>
-                                                    )}
-                                                </button>
+                                    <div className="p-4 bg-red-900/20 rounded-lg border border-red-800">
+                                        <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
+                                            📱 {t('settings.viettel_config')}
+                                        </div>
+                                        <div className="text-sm text-slate-400 mb-4">
+                                            {t('settings.viettel_desc')}
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Token Viettel (Sieuthicode)</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.viettel_token}
+                                                    onChange={(e) => handleChange('viettel_token', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="Token Viettel từ Sieuthicode..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản Viettel Money (STK)</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.viettel_account}
+                                                    onChange={(e) => handleChange('viettel_account', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="Số điện thoại Viettel Money..."
+                                                />
                                             </div>
                                         </div>
-
-                                        {/* MBBank Config */}
-                                        {settings.bank_provider === 'mbbank' && (
-                                            <div className="p-4 bg-blue-900/20 rounded-lg border border-blue-800">
-                                                <div className="font-medium text-blue-400 mb-2 flex items-center gap-2">
-                                                    🏦 {t('settings.mbbank_config')}
-                                                </div>
-                                                <div className="text-sm text-slate-400 mb-4">
-                                                    {t('settings.mbbank_desc')}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token MBBank (Sieuthicode)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings.mbbank_token}
-                                                            onChange={(e) => handleChange('mbbank_token', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            placeholder="Token MBBank từ Sieuthicode..."
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản MBBank (STK)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings.mbbank_account}
-                                                            onChange={(e) => handleChange('mbbank_account', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            placeholder="Số tài khoản MBBank..."
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Viettel Config */}
-                                        {settings.bank_provider === 'viettel' && (
-                                            <div className="p-4 bg-red-900/20 rounded-lg border border-red-800">
-                                                <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
-                                                    📱 {t('settings.viettel_config')}
-                                                </div>
-                                                <div className="text-sm text-slate-400 mb-4">
-                                                    {t('settings.viettel_desc')}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token Viettel (Sieuthicode)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings.viettel_token}
-                                                            onChange={(e) => handleChange('viettel_token', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            placeholder="Token Viettel từ Sieuthicode..."
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản Viettel Money (STK)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings.viettel_account}
-                                                            onChange={(e) => handleChange('viettel_account', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            placeholder="Số điện thoại Viettel Money..."
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
 

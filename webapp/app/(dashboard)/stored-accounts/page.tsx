@@ -497,6 +497,7 @@ export default function StoredAccountsPage() {
                                         <TableHead className="w-[120px]">Tình trạng</TableHead>
                                         <TableHead className="w-[110px]">Trạng thái</TableHead>
                                         <TableHead className="w-[140px]">Note</TableHead>
+                                        <TableHead className="w-[80px]">Copy All</TableHead>
                                         <TableHead className="w-[80px]">Xóa</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -668,6 +669,29 @@ export default function StoredAccountsPage() {
                                                             </Button>
                                                         </div>
                                                     )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7"
+                                                        onClick={() => {
+                                                            const copyData = [
+                                                                `TK: ${parsed.tk}`,
+                                                                `MK: ${parsed.mk}`,
+                                                                parsed.twofa ? `2FA: ${parsed.twofa}` : '',
+                                                                parsed.extra ? `Extra: ${parsed.extra}` : ''
+                                                            ].filter(Boolean).join('\n');
+                                                            copyText(copyData, `all-${account.id}`);
+                                                        }}
+                                                        title="Copy TK, MK, 2FA"
+                                                    >
+                                                        {copiedField === `all-${account.id}` ? (
+                                                            <Check className="w-4 h-4 text-green-500" />
+                                                        ) : (
+                                                            <Copy className="w-4 h-4" />
+                                                        )}
+                                                    </Button>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Button

@@ -314,10 +314,18 @@ export const showTrc20DepositFlow = async (bot, chatId, userId, config) => {
     ? `💎 **USDT TRC20 Deposit**\n\n` +
     `📍 **Wallet Address:**\n\`${walletAddress}\`\n(Click to copy)\n\n` +
     `🌐 **Network:** TRC20 (TRON)\n\n` +
+    `⚠️ **IMPORTANT NOTICE:**\n` +
+    `• Our system uses **OKX** for automatic deposit processing.\n` +
+    `• If you are using **OKX** to deposit, please contact admin @tlshop25 for approval.\n` +
+    `• Other wallets: Fully automatic (no approval needed).\n\n` +
     `💲 **Enter USDT amount** (minimum 1 USDT):`
     : `💎 **Nạp tiền USDT TRC20**\n\n` +
     `📍 **Địa chỉ ví:**\n\`${walletAddress}\`\n(Click để copy)\n\n` +
     `🌐 **Mạng:** TRC20 (TRON)\n\n` +
+    `⚠️ **LƯU Ý QUAN TRỌNG:**\n` +
+    `• Hệ thống đang sử dụng **OKX** để xử lý nạp tiền tự động.\n` +
+    `• Nếu bạn dùng **OKX** để nạp, vui lòng liên hệ admin @tlshop25 để duyệt.\n` +
+    `• Ví khác: Hoàn toàn tự động (không cần duyệt).\n\n` +
     `💲 **Nhập số tiền USDT** (tối thiểu 1 USDT):`;
 
   await bot.sendMessage(chatId, message, {

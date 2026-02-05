@@ -129,6 +129,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const { id, payment_status, sale_status, bot_status, note } = await request.json();
+        const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) {
             return NextResponse.json(
@@ -140,10 +141,12 @@ export async function PUT(request: Request) {
         // Build dynamic update query
         const updates: string[] = [];
         const params: (string | number | null)[] = [];
+        const changedFields: Record<string, unknown> = {};
 
         if (payment_status !== undefined) {
             updates.push('payment_status = ?');
             params.push(payment_status);
+            changedFields.payment_status = payment_status;
 
             // Auto-set paid_at when changing to 'paid'
             if (payment_status === 'paid') {
@@ -156,6 +159,7 @@ export async function PUT(request: Request) {
         if (sale_status !== undefined) {
             updates.push('sale_status = ?');
             params.push(sale_status);
+            changedFields.sale_status = sale_status;
 
             // Auto-set sold_at when changing to 'sold'
             if (sale_status === 'sold') {
@@ -168,11 +172,13 @@ export async function PUT(request: Request) {
         if (bot_status !== undefined) {
             updates.push('bot_status = ?');
             params.push(bot_status);
+            changedFields.bot_status = bot_status;
         }
 
         if (note !== undefined) {
             updates.push('note = ?');
             params.push(note);
+            changedFields.note = note;
         }
 
         if (updates.length === 0) {
@@ -187,6 +193,16 @@ export async function PUT(request: Request) {
             `UPDATE stored_accounts SET ${updates.join(', ')} WHERE id = ?`,
             params
         );
+
+        // Log action
+        await logAdminAction({
+            action: 'UPDATE',
+            targetType: 'STORED_ACCOUNT',
+            targetId: id,
+            details: changedFields,
+            ipAddress,
+            userAgent
+        });
 
         return NextResponse.json({
             success: true,
@@ -205,6 +221,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
     try {
         const { id, ids } = await request.json();
+        const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (ids && Array.isArray(ids) && ids.length > 0) {
             // Bulk delete
@@ -212,6 +229,16 @@ export async function DELETE(request: Request) {
                 'DELETE FROM stored_accounts WHERE id IN (?)',
                 [ids]
             );
+
+            // Log action
+            await logAdminAction({
+                action: 'DELETE',
+                targetType: 'STORED_ACCOUNT',
+                details: { count: ids.length, ids },
+                ipAddress,
+                userAgent
+            });
+
             return NextResponse.json({
                 success: true,
                 message: `Đã xóa ${ids.length} tài khoản`
@@ -219,6 +246,16 @@ export async function DELETE(request: Request) {
         } else if (id) {
             // Single delete
             await pool.query('DELETE FROM stored_accounts WHERE id = ?', [id]);
+
+            // Log action
+            await logAdminAction({
+                action: 'DELETE',
+                targetType: 'STORED_ACCOUNT',
+                targetId: id,
+                ipAddress,
+                userAgent
+            });
+
             return NextResponse.json({
                 success: true,
                 message: 'Đã xóa tài khoản'

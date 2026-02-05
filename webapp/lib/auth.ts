@@ -6,25 +6,32 @@ export async function validateAdminCredentials(username?: string, password?: str
 
     try {
         const [rows] = await pool.query<RowDataPacket[]>(
-            "SELECT `key`, `value` FROM settings WHERE `key` IN ('admin_username', 'admin_password')"
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('admin_username', 'admin_password', 'admin_username2', 'admin_password2')"
         );
 
-        let dbUser = '';
-        let dbPass = '';
+        let dbUser1 = '';
+        let dbPass1 = '';
+        let dbUser2 = '';
+        let dbPass2 = '';
 
         rows.forEach((r: any) => {
-            if (r.key === 'admin_username') dbUser = r.value;
-            if (r.key === 'admin_password') dbPass = r.value;
+            if (r.key === 'admin_username') dbUser1 = r.value;
+            if (r.key === 'admin_password') dbPass1 = r.value;
+            if (r.key === 'admin_username2') dbUser2 = r.value;
+            if (r.key === 'admin_password2') dbPass2 = r.value;
         });
 
-        // If fetch failed or keys missing, fail safe
-        if (!dbUser || !dbPass) {
-            // Fallback for initial setup if needed? Or just fail. 
-            // For security, if not set in DB, no one can login.
-            return false;
+        // Check admin 1 credentials
+        if (dbUser1 && dbPass1 && username === dbUser1 && password === dbPass1) {
+            return true;
         }
 
-        return username === dbUser && password === dbPass;
+        // Check admin 2 credentials
+        if (dbUser2 && dbPass2 && username === dbUser2 && password === dbPass2) {
+            return true;
+        }
+
+        return false;
     } catch (error) {
         console.error('Validate Admin Error:', error);
         return false;

@@ -1,9 +1,19 @@
 import { query, getPool } from '../database/index.js';
 
+// Tạo mã hóa đơn: HD-YYYYMMDD-XXXX
+const generateInvoiceCode = (orderId) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const orderNum = String(orderId).padStart(4, '0');
+  return `HD-${year}${month}${day}-${orderNum}`;
+};
+
 export const createOrder = async ({ userId, productId, price, email = null, note = null, status = 'completed' }) => {
   const pool = getPool();
   try {
-    // Thử INSERT với đầy đủ các cột mới (email, note, status)
+    // Thử INSERT với đầy đủ các cột mới (email, note, status, invoice_code)
     const [result] = await pool.execute('INSERT INTO orders (user_id, product_id, price, email, note, status) VALUES (?, ?, ?, ?, ?, ?)', [
       userId,
       productId,
@@ -12,7 +22,19 @@ export const createOrder = async ({ userId, productId, price, email = null, note
       note,
       status
     ]);
-    return result;
+
+    // Tạo invoice_code từ order ID vừa tạo
+    const invoiceCode = generateInvoiceCode(result.insertId);
+
+    // Cập nhật invoice_code vào order (nếu cột tồn tại)
+    try {
+      await pool.execute('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, result.insertId]);
+    } catch (e) {
+      // Nếu cột chưa tồn tại, bỏ qua
+      if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
+    }
+
+    return { ...result, invoiceCode };
   } catch (error) {
     // Nếu lỗi do thiếu cột, thử INSERT chỉ với các cột cơ bản
     if (error.code === 'ER_BAD_FIELD_ERROR') {
@@ -22,7 +44,11 @@ export const createOrder = async ({ userId, productId, price, email = null, note
         productId,
         price
       ]);
-      return result;
+
+      // Tạo invoice_code từ order ID
+      const invoiceCode = generateInvoiceCode(result.insertId);
+
+      return { ...result, invoiceCode };
     } else {
       throw error;
     }

@@ -517,7 +517,8 @@ export const registerListeners = (bot, config) => {
           // Need to fetch user to get language for pagination callback too?
           // If ensureUser wasn't called here (it was called above), we can pass it.
           // user variable in 'callback_query' listener: const user = await ensureUser(...)
-          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user);
+          // Lấy messageId từ message để edit thay vì gửi mới
+          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, query.message.message_id);
         case 'view_product':
           const { showProductDetail } = await import('./handle/handleBuy.js');
           return showProductDetail(bot, chatId, data.productId, query.from.id);

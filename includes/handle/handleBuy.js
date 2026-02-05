@@ -25,12 +25,14 @@ const waitingForProductQuantity = new Map();
 
 
 
-export const sendProductList = async (bot, chatId, page, pageSize, user) => {
+export const sendProductList = async (bot, chatId, page, pageSize, user, messageId = null) => {
   const { formatMoney } = await import('../helpers/langHelper.js');
   const lang = user?.language || 'vi';
 
-  const offset = (page - 1) * pageSize;
-  const { rows, total } = await listProducts(offset, pageSize);
+  // Hardcode 10 sản phẩm mỗi trang
+  const actualPageSize = 10;
+  const offset = (page - 1) * actualPageSize;
+  const { rows, total } = await listProducts(offset, actualPageSize);
   if (!rows.length) {
     const msg = lang === 'en' ? 'No products yet.' : 'Chưa có sản phẩm.';
     return bot.sendMessage(chatId, msg);
@@ -88,7 +90,22 @@ export const sendProductList = async (bot, chatId, page, pageSize, user) => {
   inline_keyboard.push(...buildPaginationKeyboard({ action: 'products', page }, page, hasPrev, hasNext));
 
   const selectMsg = lang === 'en' ? 'Select product:' : 'Chọn sản phẩm:';
-  await bot.sendMessage(chatId, selectMsg, { reply_markup: { inline_keyboard } });
+
+  // Nếu có messageId, edit message thay vì gửi mới
+  if (messageId) {
+    try {
+      await bot.editMessageText(selectMsg, {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {
+      // Nếu edit thất bại (message không thay đổi), bỏ qua
+      console.log('[PRODUCT_LIST] Edit message skipped:', e.message);
+    }
+  } else {
+    await bot.sendMessage(chatId, selectMsg, { reply_markup: { inline_keyboard } });
+  }
 };
 
 // Hiển thị chi tiết sản phẩm
@@ -613,53 +630,84 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       });
     }
 
-    // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
-    const fileContent = purchasedAccounts.map(acc => {
-      let line = `${acc.username}|${acc.password}`;
-      if (acc.extra_data) line += `|${acc.extra_data}`;
-      if (acc.twofa) line += `|${acc.twofa}`;
-      return line;
-    }).join('\n');
-    const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
-    const tempFilePath = path.join(__dirname, '../../temp', fileName);
+    // Nếu chỉ mua 1 tài khoản, hiển thị trực tiếp trong tin nhắn
+    if (quantity === 1) {
+      const acc = purchasedAccounts[0];
+      let accountInfo = `📧 TK: \`${acc.username}\`\n🔑 MK: \`${acc.password}\``;
+      if (acc.extra_data) accountInfo += `\n📩 Mail phụ: \`${acc.extra_data}\``;
+      if (acc.twofa) accountInfo += `\n🔐 2FA: \`${acc.twofa}\``;
 
-    // Đảm bảo thư mục temp tồn tại
-    const tempDir = path.dirname(tempFilePath);
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-    // Ghi file tạm thời
-    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-
-    try {
-      // Gửi file từ đường dẫn
-      const caption = `✅ **Mua thành công!**\n\n` +
+      const content = `✅ **Mua thành công!**\n\n` +
+        `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
+        `🕒 Thời gian: ${timeStr}\n` +
         `🎁 Sản phẩm: ${product.name}\n` +
-        `📦 Số lượng: ${quantity}\n` +
         `💰 Giá: ${formatCurrency(totalPrice)}\n` +
-        `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+        `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
+        `${accountInfo}`;
 
-      await bot.sendDocument(msg.chat.id, tempFilePath, {
-        caption: caption,
-        parse_mode: 'Markdown'
-      });
-      console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công`);
-    } catch (sendError) {
-      console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
-      // Nếu không gửi được file, gửi thông tin account qua text
-      const accountText = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
-      let messageText = `✅ Mua thành công!\n\n`;
-      messageText += `🎁 Sản phẩm: ${product.name}\n`;
-      messageText += `📦 Số lượng: ${quantity}\n`;
-      messageText += `💰 Giá: ${formatCurrency(totalPrice)}\n`;
-      messageText += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
-      messageText += `📋 Danh sách tài khoản:\n\n${accountText}`;
-      await bot.sendMessage(msg.chat.id, messageText);
-    } finally {
-      // Xóa file tạm thời sau khi gửi
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
+      await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
+      console.log(`[BUY_PRODUCT] ✅ Đã gửi tài khoản trực tiếp (số lượng: 1)`);
+    } else {
+      // Mua từ 2 tài khoản trở lên: gửi file TXT
+      const fileContent = purchasedAccounts.map(acc => {
+        let line = `${acc.username}|${acc.password}`;
+        if (acc.extra_data) line += `|${acc.extra_data}`;
+        if (acc.twofa) line += `|${acc.twofa}`;
+        return line;
+      }).join('\n');
+      const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
+      const tempFilePath = path.join(__dirname, '../../temp', fileName);
+
+      // Đảm bảo thư mục temp tồn tại
+      const tempDir = path.dirname(tempFilePath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      // Ghi file tạm thời
+      fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+
+      try {
+        // Gửi file từ đường dẫn
+        const now2 = new Date();
+        const timeStr2 = `${String(now2.getHours()).padStart(2, '0')}:${String(now2.getMinutes()).padStart(2, '0')} ${String(now2.getDate()).padStart(2, '0')}/${String(now2.getMonth() + 1).padStart(2, '0')}/${now2.getFullYear()}`;
+
+        const caption = `✅ **Mua thành công!**\n\n` +
+          `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
+          `🕒 Thời gian: ${timeStr2}\n` +
+          `🎁 Sản phẩm: ${product.name}\n` +
+          `📦 Số lượng: ${quantity}\n` +
+          `💰 Giá: ${formatCurrency(totalPrice)}\n` +
+          `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+
+        await bot.sendDocument(msg.chat.id, tempFilePath, {
+          caption: caption,
+          parse_mode: 'Markdown'
+        });
+        console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công (số lượng: ${quantity})`);
+      } catch (sendError) {
+        console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
+        // Nếu không gửi được file, gửi thông tin account qua text
+        const accountText = purchasedAccounts.map(acc => `${acc.username}|${acc.password}`).join('\n');
+        const now3 = new Date();
+        const timeStr3 = `${String(now3.getHours()).padStart(2, '0')}:${String(now3.getMinutes()).padStart(2, '0')} ${String(now3.getDate()).padStart(2, '0')}/${String(now3.getMonth() + 1).padStart(2, '0')}/${now3.getFullYear()}`;
+        let messageText = `✅ Mua thành công!\n\n`;
+        messageText += `🧾 Mã HĐ: ${orderResult.invoiceCode}\n`;
+        messageText += `🕒 Thời gian: ${timeStr3}\n`;
+        messageText += `🎁 Sản phẩm: ${product.name}\n`;
+        messageText += `📦 Số lượng: ${quantity}\n`;
+        messageText += `💰 Giá: ${formatCurrency(totalPrice)}\n`;
+        messageText += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
+        messageText += `📋 Danh sách tài khoản:\n\n${accountText}`;
+        await bot.sendMessage(msg.chat.id, messageText);
+      } finally {
+        // Xóa file tạm thời sau khi gửi
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
       }
     }
 
@@ -769,7 +817,7 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     }
 
     // Tạo order
-    await createOrder({
+    const orderResult = await createOrder({
       userId: user.id,
       productId: product.id,
       price: totalPrice,
@@ -779,58 +827,88 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     const updatedUser = await getUserByTelegram(telegramId);
     const finalBalance = Number(updatedUser.balance);
 
-    // Tạo file txt với tài khoản và mật khẩu (có 2FA nếu có)
-    const fileContent = purchasedAccounts.map(acc => {
-      let line = `${acc.username}|${acc.password}`;
-      if (acc.extra_data) line += `|${acc.extra_data}`;
-      if (acc.twofa) line += `|${acc.twofa}`;
-      return line;
-    }).join('\n');
-    const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
-    const tempFilePath = path.join(__dirname, '../../temp', fileName);
+    // Nếu chỉ mua 1 tài khoản, hiển thị trực tiếp trong tin nhắn
+    if (quantity === 1) {
+      const acc = purchasedAccounts[0];
+      let accountInfo = `📧 TK: \`${acc.username}\`\n🔑 MK: \`${acc.password}\``;
+      if (acc.extra_data) accountInfo += `\n📩 Mail phụ: \`${acc.extra_data}\``;
+      if (acc.twofa) accountInfo += `\n🔐 2FA: \`${acc.twofa}\``;
 
-    // Đảm bảo thư mục temp tồn tại
-    const tempDir = path.dirname(tempFilePath);
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-    // Ghi file tạm thời
-    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-
-    try {
-      // Gửi file từ đường dẫn
-      const caption = `✅ **Mua thành công!**\n\n` +
+      const content = `✅ **Mua thành công!**\n\n` +
+        `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
+        `🕒 Thời gian: ${timeStr}\n` +
         `🎁 Sản phẩm: ${product.name}\n` +
-        `📦 Số lượng: ${quantity}\n` +
         `💰 Giá: ${formatCurrency(totalPrice)}\n` +
-        `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+        `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
+        `${accountInfo}`;
 
-      await bot.sendDocument(chatId, tempFilePath, {
-        caption: caption,
-        parse_mode: 'Markdown'
-      });
-      console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công`);
-    } catch (sendError) {
-      console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
-      // Nếu không gửi được file, gửi thông tin account qua text
-      const accountText = purchasedAccounts.map(acc => {
-        if (acc.twofa) {
-          return `${acc.username}|${acc.password}|${acc.twofa}`;
-        }
-        return `${acc.username}|${acc.password}`;
+      await bot.sendMessage(chatId, content, { parse_mode: 'Markdown' });
+      console.log(`[BUY_PRODUCT] ✅ Đã gửi tài khoản trực tiếp (số lượng: 1)`);
+    } else {
+      // Mua từ 2 tài khoản trở lên: gửi file TXT
+      const fileContent = purchasedAccounts.map(acc => {
+        let line = `${acc.username}|${acc.password}`;
+        if (acc.extra_data) line += `|${acc.extra_data}`;
+        if (acc.twofa) line += `|${acc.twofa}`;
+        return line;
       }).join('\n');
-      let messageText = `✅ Mua thành công!\n\n`;
-      messageText += `🎁 Sản phẩm: ${product.name}\n`;
-      messageText += `📦 Số lượng: ${quantity}\n`;
-      messageText += `💰 Giá: ${formatCurrency(totalPrice)}\n`;
-      messageText += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
-      messageText += `📋 Danh sách tài khoản:\n\n${accountText}`;
-      await bot.sendMessage(chatId, messageText);
-    } finally {
-      // Xóa file tạm thời sau khi gửi
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
+      const fileName = `product_${product.id}_${quantity}_${Date.now()}.txt`;
+      const tempFilePath = path.join(__dirname, '../../temp', fileName);
+
+      // Đảm bảo thư mục temp tồn tại
+      const tempDir = path.dirname(tempFilePath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      // Ghi file tạm thời
+      fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+
+      try {
+        const now2 = new Date();
+        const timeStr2 = `${String(now2.getHours()).padStart(2, '0')}:${String(now2.getMinutes()).padStart(2, '0')} ${String(now2.getDate()).padStart(2, '0')}/${String(now2.getMonth() + 1).padStart(2, '0')}/${now2.getFullYear()}`;
+
+        const caption = `✅ **Mua thành công!**\n\n` +
+          `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
+          `🕒 Thời gian: ${timeStr2}\n` +
+          `🎁 Sản phẩm: ${product.name}\n` +
+          `📦 Số lượng: ${quantity}\n` +
+          `💰 Giá: ${formatCurrency(totalPrice)}\n` +
+          `💵 Số dư mới: ${formatCurrency(finalBalance)}`;
+
+        await bot.sendDocument(chatId, tempFilePath, {
+          caption: caption,
+          parse_mode: 'Markdown'
+        });
+        console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công (số lượng: ${quantity})`);
+      } catch (sendError) {
+        console.error(`[BUY_PRODUCT] ❌ Lỗi khi gửi file:`, sendError);
+        // Nếu không gửi được file, gửi thông tin account qua text
+        const accountText = purchasedAccounts.map(acc => {
+          if (acc.twofa) {
+            return `${acc.username}|${acc.password}|${acc.twofa}`;
+          }
+          return `${acc.username}|${acc.password}`;
+        }).join('\n');
+        const now3 = new Date();
+        const timeStr3 = `${String(now3.getHours()).padStart(2, '0')}:${String(now3.getMinutes()).padStart(2, '0')} ${String(now3.getDate()).padStart(2, '0')}/${String(now3.getMonth() + 1).padStart(2, '0')}/${now3.getFullYear()}`;
+        let messageText = `✅ Mua thành công!\n\n`;
+        messageText += `🧾 Mã HĐ: ${orderResult.invoiceCode}\n`;
+        messageText += `🕒 Thời gian: ${timeStr3}\n`;
+        messageText += `🎁 Sản phẩm: ${product.name}\n`;
+        messageText += `📦 Số lượng: ${quantity}\n`;
+        messageText += `💰 Giá: ${formatCurrency(totalPrice)}\n`;
+        messageText += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
+        messageText += `📋 Danh sách tài khoản:\n\n${accountText}`;
+        await bot.sendMessage(chatId, messageText);
+      } finally {
+        // Xóa file tạm thời sau khi gửi
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
       }
     }
 

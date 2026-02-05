@@ -717,10 +717,10 @@ export default function StoredAccountsPage() {
                                                         className="h-7"
                                                         onClick={() => {
                                                             const copyData = [
-                                                                `TK: ${parsed.tk}`,
-                                                                `MK: ${parsed.mk}`,
-                                                                parsed.twofa ? `2FA: ${parsed.twofa}` : ''
-                                                            ].filter(Boolean).join('\n');
+                                                                parsed.tk,
+                                                                parsed.mk,
+                                                                parsed.twofa
+                                                            ].filter(Boolean).join('|');
                                                             copyText(copyData, `all-${account.id}`);
                                                         }}
                                                         title="Copy TK, MK, 2FA"

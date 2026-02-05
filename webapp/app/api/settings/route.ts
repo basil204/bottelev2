@@ -37,6 +37,11 @@ export async function GET() {
             gmail_edu_delete_hours: 1,
             // Admin IDs
             admin_ids: [],
+            // Admin login accounts
+            admin_username: '',
+            admin_password: '',
+            admin_username2: '',
+            admin_password2: '',
         };
 
         rows.forEach((row) => {
@@ -83,7 +88,12 @@ export async function POST(request: Request) {
             gmail_edu_domain,
             gmail_edu_delete_hours,
             // Admin IDs
-            admin_ids
+            admin_ids,
+            // Admin login accounts
+            admin_username,
+            admin_password,
+            admin_username2,
+            admin_password2
         } = body;
 
         const connection = await pool.getConnection();
@@ -119,6 +129,11 @@ export async function POST(request: Request) {
             if (gmail_edu_delete_hours !== undefined) await upsertSetting('gmail_edu_delete_hours', gmail_edu_delete_hours);
             // Admin IDs - save as JSON string
             if (admin_ids !== undefined) await upsertSetting('admin_ids', JSON.stringify(admin_ids));
+            // Admin login accounts
+            if (admin_username !== undefined) await upsertSetting('admin_username', admin_username);
+            if (admin_password !== undefined) await upsertSetting('admin_password', admin_password);
+            if (admin_username2 !== undefined) await upsertSetting('admin_username2', admin_username2);
+            if (admin_password2 !== undefined) await upsertSetting('admin_password2', admin_password2);
 
             await connection.commit();
 

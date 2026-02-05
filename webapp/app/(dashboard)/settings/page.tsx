@@ -40,6 +40,11 @@ interface Settings {
     gmail_edu_delete_hours: number;
     // Admin IDs
     admin_ids: number[];
+    // Admin login accounts
+    admin_username: string;
+    admin_password: string;
+    admin_username2: string;
+    admin_password2: string;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -63,6 +68,11 @@ export default function SettingsPage() {
         gmail_edu_delete_hours: 1,
         // Admin IDs
         admin_ids: [],
+        // Admin login accounts
+        admin_username: '',
+        admin_password: '',
+        admin_username2: '',
+        admin_password2: '',
     });
 
     const [newAdminId, setNewAdminId] = useState('');
@@ -385,6 +395,64 @@ export default function SettingsPage() {
                         </TabsContent>
 
                         <TabsContent value="admin" className="space-y-6">
+                            {/* Admin Login Accounts */}
+                            <div className="grid gap-4 p-4 bg-blue-900/20 rounded-lg border border-blue-800">
+                                <div>
+                                    <div className="font-medium text-blue-400 mb-2">👤 Tài khoản Admin 1</div>
+                                    <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập chính vào webapp</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                        <input
+                                            type="text"
+                                            value={settings.admin_username}
+                                            onChange={(e) => handleChange('admin_username', e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="admin"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                        <input
+                                            type="password"
+                                            value={settings.admin_password}
+                                            onChange={(e) => handleChange('admin_password', e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="••••••••"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 p-4 bg-green-900/20 rounded-lg border border-green-800">
+                                <div>
+                                    <div className="font-medium text-green-400 mb-2">👤 Tài khoản Admin 2</div>
+                                    <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập phụ (tùy chọn)</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                        <input
+                                            type="text"
+                                            value={settings.admin_username2}
+                                            onChange={(e) => handleChange('admin_username2', e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="admin2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                        <input
+                                            type="password"
+                                            value={settings.admin_password2}
+                                            onChange={(e) => handleChange('admin_password2', e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="••••••••"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">🔐 {t('settings.change_password')}</div>

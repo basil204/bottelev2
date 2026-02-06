@@ -31,6 +31,14 @@ export async function POST(request: Request) {
                 sameSite: 'lax',
             });
 
+            // Set admin username cookie for logging
+            response.cookies.set('admin_username', username, {
+                expires: expires,
+                httpOnly: false,
+                path: '/',
+                sameSite: 'lax',
+            });
+
             return response;
         } else {
             return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });

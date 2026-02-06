@@ -23,6 +23,7 @@ export type TargetType =
     | 'STORED_ACCOUNT'
     | 'GMAIL_ACCOUNT'
     | 'BROADCAST'
+    | 'ADMIN_ACCOUNT'
     | 'SYSTEM';
 
 interface LogParams {
@@ -82,4 +83,14 @@ export function getRequestInfo(request: Request): { ipAddress: string | null; us
     return { ipAddress, userAgent };
 }
 
-export default { logAdminAction, getRequestInfo };
+/**
+ * Get admin username from cookie
+ */
+export function getAdminFromCookie(request: Request): string | null {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const adminNameMatch = cookieHeader.match(/admin_username=([^;]+)/);
+    return adminNameMatch ? decodeURIComponent(adminNameMatch[1]) : null;
+}
+
+export default { logAdminAction, getRequestInfo, getAdminFromCookie };
+

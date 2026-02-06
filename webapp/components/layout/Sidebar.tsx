@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import {
     LayoutDashboard,
@@ -16,17 +16,32 @@ import {
     Landmark,
     Mail,
     Archive,
-    Activity
+    Activity,
+    UserCog
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 import { useLanguage } from "../../contexts/LanguageContext";
 
 export function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
+    const [adminRole, setAdminRole] = useState<string>('admin');
     const { t, language, setLanguage } = useLanguage();
+
+    useEffect(() => {
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'admin_role') {
+                setAdminRole(value);
+                break;
+            }
+        }
+    }, []);
 
     const navItems = [
         { name: t('sidebar.dashboard'), href: "/", icon: LayoutDashboard },
@@ -39,8 +54,21 @@ export function Sidebar() {
         { name: "Kho", href: "/stored-accounts", icon: Archive },
         { name: "Nhật ký", href: "/admin-logs", icon: Activity },
         { name: t('sidebar.notifications'), href: "/notifications", icon: Bell },
+        { name: "Quản lý Admin", href: "/admin-accounts", icon: UserCog, superAdminOnly: true },
         { name: t('sidebar.settings'), href: "/settings", icon: Settings },
     ];
+
+    const handleLogout = async () => {
+        setLoggingOut(true);
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            router.push('/login');
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            setLoggingOut(false);
+        }
+    };
 
     return (
         <>
@@ -63,25 +91,27 @@ export function Sidebar() {
 
                     <div className="flex-1 overflow-y-auto py-4">
                         <nav className="space-y-1 px-3">
-                            {navItems.map((item) => {
-                                const isActive = pathname === item.href;
-                                return (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        className={clsx(
-                                            "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors",
-                                            isActive
-                                                ? "bg-primary text-primary-foreground"
-                                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                                        )}
-                                        onClick={() => setIsOpen(false)}
-                                    >
-                                        <item.icon className="h-5 w-5" />
-                                        {item.name}
-                                    </Link>
-                                );
-                            })}
+                            {navItems
+                                .filter(item => !(item as any).superAdminOnly || adminRole === 'super_admin')
+                                .map((item) => {
+                                    const isActive = pathname === item.href;
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            className={clsx(
+                                                "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors",
+                                                isActive
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                            )}
+                                            onClick={() => setIsOpen(false)}
+                                        >
+                                            <item.icon className="h-5 w-5" />
+                                            {item.name}
+                                        </Link>
+                                    );
+                                })}
                         </nav>
                     </div>
 
@@ -93,9 +123,14 @@ export function Sidebar() {
                         >
                             {language === 'vi' ? '🇻🇳 Tiếng Việt' : '🇺🇸 English'}
                         </Button>
-                        <Button variant="ghost" className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10">
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
+                            onClick={handleLogout}
+                            disabled={loggingOut}
+                        >
                             <LogOut className="h-5 w-5" />
-                            {t('sidebar.logout')}
+                            {loggingOut ? 'Đang đăng xuất...' : t('sidebar.logout')}
                         </Button>
                     </div>
                 </div>
@@ -111,3 +146,4 @@ export function Sidebar() {
         </>
     );
 }
+

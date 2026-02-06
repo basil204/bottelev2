@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { exec } from 'child_process';
-import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
+import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
 const restartCoba = () => {
     exec('pm2 restart all', (error, stdout, stderr) => {
@@ -38,8 +38,10 @@ export async function GET() {
             // Admin IDs
             admin_ids: [],
             // Admin login accounts
+            admin_fullname: '',
             admin_username: '',
             admin_password: '',
+            admin_fullname2: '',
             admin_username2: '',
             admin_password2: '',
         };
@@ -80,8 +82,10 @@ export async function POST(request: Request) {
 
         // If not super_admin, remove admin account fields from body
         if (adminRole !== 'super_admin') {
+            delete body.admin_fullname;
             delete body.admin_username;
             delete body.admin_password;
+            delete body.admin_fullname2;
             delete body.admin_username2;
             delete body.admin_password2;
         }
@@ -104,8 +108,10 @@ export async function POST(request: Request) {
             // Admin IDs
             admin_ids,
             // Admin login accounts
+            admin_fullname,
             admin_username,
             admin_password,
+            admin_fullname2,
             admin_username2,
             admin_password2
         } = body;
@@ -144,8 +150,10 @@ export async function POST(request: Request) {
             // Admin IDs - save as JSON string
             if (admin_ids !== undefined) await upsertSetting('admin_ids', JSON.stringify(admin_ids));
             // Admin login accounts
+            if (admin_fullname !== undefined) await upsertSetting('admin_fullname', admin_fullname);
             if (admin_username !== undefined) await upsertSetting('admin_username', admin_username);
             if (admin_password !== undefined) await upsertSetting('admin_password', admin_password);
+            if (admin_fullname2 !== undefined) await upsertSetting('admin_fullname2', admin_fullname2);
             if (admin_username2 !== undefined) await upsertSetting('admin_username2', admin_username2);
             if (admin_password2 !== undefined) await upsertSetting('admin_password2', admin_password2);
 
@@ -156,7 +164,9 @@ export async function POST(request: Request) {
             }
 
             // Log admin action
+            const adminName = getAdminFromCookie(request);
             await logAdminAction({
+                adminName: adminName || 'System',
                 action: 'UPDATE',
                 targetType: 'SETTING',
                 details: Object.keys(body).filter(k => body[k] !== undefined),

@@ -116,6 +116,7 @@ export default function StoredAccountsPage() {
     const [showAddTypeDialog, setShowAddTypeDialog] = useState(false);
     const [newTypeName, setNewTypeName] = useState('');
     const [addingType, setAddingType] = useState(false);
+    const [copiedAll, setCopiedAll] = useState(false);
 
     const fetchTypes = async () => {
         try {
@@ -301,6 +302,13 @@ export default function StoredAccountsPage() {
         uploaded: accounts.filter(a => a.bot_status === 'uploaded').length,
     };
 
+    const copyAllFiltered = () => {
+        const allData = accounts.map(account => account.data).join('\n');
+        navigator.clipboard.writeText(allData);
+        setCopiedAll(true);
+        setTimeout(() => setCopiedAll(false), 2000);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -484,6 +492,20 @@ export default function StoredAccountsPage() {
                                     <SelectItem value="uploaded">Đã lên</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="flex items-end">
+                            <Button
+                                variant="outline"
+                                onClick={copyAllFiltered}
+                                disabled={accounts.length === 0}
+                                className={copiedAll ? 'border-green-500 text-green-500' : ''}
+                            >
+                                {copiedAll ? (
+                                    <><Check className="w-4 h-4 mr-2" /> Đã copy {accounts.length} tài khoản</>
+                                ) : (
+                                    <><Copy className="w-4 h-4 mr-2" /> Copy tất cả ({accounts.length})</>
+                                )}
+                            </Button>
                         </div>
                     </div>
                 </CardContent>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
+import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
 export async function GET() {
     try {
@@ -25,7 +25,9 @@ export async function POST(request: Request) {
         );
 
         // Log action
+        const adminName = getAdminFromCookie(request);
         await logAdminAction({
+            adminName: adminName || 'System',
             action: 'CREATE',
             targetType: 'PRODUCT',
             targetId: result.insertId,
@@ -53,7 +55,9 @@ export async function PUT(request: Request) {
         );
 
         // Log action
+        const adminName = getAdminFromCookie(request);
         await logAdminAction({
+            adminName: adminName || 'System',
             action: 'UPDATE',
             targetType: 'PRODUCT',
             targetId: id,
@@ -80,7 +84,9 @@ export async function DELETE(request: Request) {
         await pool.query('DELETE FROM products WHERE id = ?', [id]);
 
         // Log action
+        const adminName = getAdminFromCookie(request);
         await logAdminAction({
+            adminName: adminName || 'System',
             action: 'DELETE',
             targetType: 'PRODUCT',
             targetId: id,

@@ -164,14 +164,15 @@ export async function POST(request: Request) {
             }
 
             // Log admin action
-            const adminName = getAdminFromCookie(request);
+            const adminName = await getAdminFromCookie(request);
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
                 targetType: 'SETTING',
                 details: Object.keys(body).filter(k => body[k] !== undefined),
                 ipAddress,
-                userAgent
+                userAgent,
+                request
             });
 
             return NextResponse.json({ success: true });

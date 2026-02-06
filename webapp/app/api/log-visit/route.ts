@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
+import { verifyJWT } from '@/lib-edge/jwt';
 
 export async function POST(request: Request) {
     try {
@@ -7,15 +8,24 @@ export async function POST(request: Request) {
         const { lat, lon, display_name, address } = body;
 
         const { ipAddress, userAgent } = getRequestInfo(request);
-        const adminName = getAdminFromCookie(request) || 'Visitor';
+        const adminName = (await getAdminFromCookie(request)) || 'Visitor';
 
-        // Build location details
-        const locationDetails = {
-            lat,
-            lon,
-            display_name,
-            address,
-        };
+        // Check role from JWT
+        let role = 'admin';
+        const cookieHeader = request.headers.get('cookie') || '';
+        const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/);
+        if (tokenMatch) {
+            const token = decodeURIComponent(tokenMatch[1]);
+            if (token && token !== 'true') {
+                const payload = await verifyJWT(token);
+                if (payload) {
+                    role = payload.role;
+                }
+            }
+        }
+
+        // Build location details - full details for all admins
+        const locationDetails = { lat, lon, display_name, address };
 
         await logAdminAction({
             adminId: null,
@@ -26,6 +36,7 @@ export async function POST(request: Request) {
             details: locationDetails,
             ipAddress,
             userAgent,
+            request
         });
 
         return NextResponse.json({ success: true });

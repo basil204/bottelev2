@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Activity, Filter, CalendarDays, RefreshCw } from 'lucide-react';
+import { Activity, Filter, CalendarDays, RefreshCw, Trash2 } from 'lucide-react';
 
 interface AdminLog {
     id: number;
@@ -67,12 +67,26 @@ export default function AdminLogsPage() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [adminRole, setAdminRole] = useState<string>('admin');
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     // Filters
     const [filterAction, setFilterAction] = useState('');
     const [filterTarget, setFilterTarget] = useState('');
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
+
+    // Get admin role from cookie
+    useEffect(() => {
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'admin_role') {
+                setAdminRole(value);
+                break;
+            }
+        }
+    }, []);
 
     const fetchLogs = async () => {
         setLoading(true);
@@ -128,6 +142,80 @@ export default function AdminLogsPage() {
         }
     };
 
+    // Delete functions - only for super_admin
+    const handleDeleteLog = async (id: number) => {
+        if (!confirm('Bạn có chắc muốn xóa log này?')) return;
+        try {
+            const res = await fetch('/api/admin-logs', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                fetchLogs();
+            } else {
+                alert(data.error || 'Lỗi khi xóa');
+            }
+        } catch (err) {
+            alert('Lỗi kết nối server');
+        }
+    };
+
+    const handleDeleteSelected = async () => {
+        if (selectedIds.length === 0) return;
+        if (!confirm(`Bạn có chắc muốn xóa ${selectedIds.length} log đã chọn?`)) return;
+        try {
+            const res = await fetch('/api/admin-logs', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: selectedIds })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSelectedIds([]);
+                fetchLogs();
+            } else {
+                alert(data.error || 'Lỗi khi xóa');
+            }
+        } catch (err) {
+            alert('Lỗi kết nối server');
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        if (!confirm('⚠️ BẠN CÓ CHẮC MUỐN XÓA TẤT CẢ LOG? Hành động này không thể hoàn tác!')) return;
+        try {
+            const res = await fetch('/api/admin-logs', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deleteAll: true })
+            });
+            const data = await res.json();
+            if (data.success) {
+                fetchLogs();
+            } else {
+                alert(data.error || 'Lỗi khi xóa');
+            }
+        } catch (err) {
+            alert('Lỗi kết nối server');
+        }
+    };
+
+    const toggleSelectLog = (id: number) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === logs.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(logs.map(l => l.id));
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -135,10 +223,24 @@ export default function AdminLogsPage() {
                     <Activity className="w-6 h-6" />
                     Nhật ký hoạt động Admin
                 </h1>
-                <Button onClick={fetchLogs} variant="outline" size="sm">
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Làm mới
-                </Button>
+                <div className="flex gap-2">
+                    {adminRole === 'super_admin' && selectedIds.length > 0 && (
+                        <Button onClick={handleDeleteSelected} variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Xóa {selectedIds.length} đã chọn
+                        </Button>
+                    )}
+                    {adminRole === 'super_admin' && (
+                        <Button onClick={handleDeleteAll} variant="outline" size="sm" className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Xóa tất cả
+                        </Button>
+                    )}
+                    <Button onClick={fetchLogs} variant="outline" size="sm">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Làm mới
+                    </Button>
+                </div>
             </div>
 
             {/* Stats */}
@@ -217,12 +319,25 @@ export default function AdminLogsPage() {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b bg-muted/50">
+                                        {adminRole === 'super_admin' && (
+                                            <th className="py-3 px-2 text-center w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.length === logs.length && logs.length > 0}
+                                                    onChange={toggleSelectAll}
+                                                    className="rounded"
+                                                />
+                                            </th>
+                                        )}
                                         <th className="text-left py-3 px-4 text-sm font-medium">Thời gian</th>
                                         <th className="text-left py-3 px-4 text-sm font-medium">Admin</th>
                                         <th className="text-center py-3 px-4 text-sm font-medium">Hành động</th>
                                         <th className="text-left py-3 px-4 text-sm font-medium">Đối tượng</th>
                                         <th className="text-left py-3 px-4 text-sm font-medium">Chi tiết</th>
                                         <th className="text-left py-3 px-4 text-sm font-medium">IP</th>
+                                        {adminRole === 'super_admin' && (
+                                            <th className="py-3 px-2 text-center w-16"></th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -230,6 +345,16 @@ export default function AdminLogsPage() {
                                         const details = parseDetails(log.details);
                                         return (
                                             <tr key={log.id} className={`border-b ${idx % 2 === 0 ? 'bg-muted/20' : ''}`}>
+                                                {adminRole === 'super_admin' && (
+                                                    <td className="py-3 px-2 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedIds.includes(log.id)}
+                                                            onChange={() => toggleSelectLog(log.id)}
+                                                            className="rounded"
+                                                        />
+                                                    </td>
+                                                )}
                                                 <td className="py-3 px-4 text-sm text-muted-foreground whitespace-nowrap">
                                                     {formatDate(log.created_at)}
                                                 </td>
@@ -255,6 +380,18 @@ export default function AdminLogsPage() {
                                                 <td className="py-3 px-4 text-xs text-muted-foreground">
                                                     {log.ip_address || '-'}
                                                 </td>
+                                                {adminRole === 'super_admin' && (
+                                                    <td className="py-3 px-2 text-center">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                            onClick={() => handleDeleteLog(log.id)}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })}

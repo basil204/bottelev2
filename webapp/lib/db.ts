@@ -42,6 +42,20 @@ async function initAccountStorageTables() {
         INDEX idx_sale_status (sale_status)
       )
     `);
+
+    // Add invoice_code column to orders table if not exists
+    try {
+      await pool.query(`
+        ALTER TABLE orders ADD COLUMN invoice_code VARCHAR(50) NULL AFTER status
+      `);
+      console.log('[DB] Added invoice_code column to orders table');
+    } catch (e: any) {
+      // Column already exists, ignore error
+      if (e.code !== 'ER_DUP_FIELDNAME') {
+        console.log('[DB] invoice_code column already exists or table not ready');
+      }
+    }
+
     console.log('[DB] Account storage tables initialized');
   } catch (error) {
     console.error('[DB] Error initializing account storage tables:', error);

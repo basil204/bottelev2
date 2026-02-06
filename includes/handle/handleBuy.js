@@ -291,13 +291,18 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
 
   // Xóa account sau khi mua (mua đến đâu xóa đến đó)
   await deleteAccountAfterPurchase(account.id, product.id);
-  await createOrder({ userId: user.id, productId: product.id, price: productPrice, status: 'completed' });
+  const orderResult = await createOrder({ userId: user.id, productId: product.id, price: productPrice, status: 'completed' });
 
   // Lấy lại user để có số dư chính xác
   const updatedUser = await getUserByTelegram(fromUser.id);
   const finalBalance = Number(updatedUser.balance);
 
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
   const content = `✅ **Mua thành công!**\n\n` +
+    `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
+    `🕒 Thời gian: ${timeStr}\n` +
     `🎁 Sản phẩm: ${product.name}\n` +
     `💰 Giá: ${formatCurrency(productPrice)}\n` +
     `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
@@ -308,7 +313,7 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
   if (adminIds.length > 0) {
     notifyAdminAboutPurchase(bot, adminIds, {
-      orderId: 'AUTO',
+      orderId: orderResult.invoiceCode || orderResult.insertId || 'AUTO',
       productName: product.name,
       username: user.username,
       telegramId: user.telegram_id,

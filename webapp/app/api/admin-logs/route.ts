@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { RowDataPacket } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { verifyJWT } from '@/lib-edge/jwt';
 
 /**
  * API Route để xem Admin Activity Logs
@@ -81,6 +82,49 @@ export async function GET(request: Request) {
         });
     } catch (error) {
         console.error('Error fetching admin logs:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+/**
+ * DELETE - Xóa log (chỉ super_admin mới có quyền)
+ */
+export async function DELETE(request: Request) {
+    try {
+        // Check if user is super_admin
+        const cookieHeader = request.headers.get('cookie') || '';
+        const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/);
+
+        if (!tokenMatch) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const token = decodeURIComponent(tokenMatch[1]);
+        const payload = await verifyJWT(token);
+
+        if (!payload || payload.role !== 'super_admin') {
+            return NextResponse.json({ error: 'Chỉ Super Admin mới có quyền xóa log' }, { status: 403 });
+        }
+
+        const { id, ids, deleteAll } = await request.json();
+
+        if (deleteAll) {
+            // Delete all logs
+            await pool.query<ResultSetHeader>('DELETE FROM admin_logs');
+            return NextResponse.json({ success: true, message: 'Đã xóa tất cả log' });
+        } else if (ids && Array.isArray(ids) && ids.length > 0) {
+            // Bulk delete
+            await pool.query<ResultSetHeader>('DELETE FROM admin_logs WHERE id IN (?)', [ids]);
+            return NextResponse.json({ success: true, message: `Đã xóa ${ids.length} log` });
+        } else if (id) {
+            // Single delete
+            await pool.query<ResultSetHeader>('DELETE FROM admin_logs WHERE id = ?', [id]);
+            return NextResponse.json({ success: true, message: 'Đã xóa log' });
+        }
+
+        return NextResponse.json({ error: 'Thiếu tham số' }, { status: 400 });
+    } catch (error) {
+        console.error('Error deleting admin logs:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

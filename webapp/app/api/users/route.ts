@@ -130,8 +130,7 @@ export async function PUT(request: Request) {
             targetType: 'USER',
             targetId: id,
             details: { type, amount, reason: reason || 'Admin thay đổi' },
-            ipAddress,
-            userAgent
+            request
         });
 
         return NextResponse.json({ success: true });

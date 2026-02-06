@@ -104,14 +104,15 @@ export async function POST(request: Request) {
             [fullname || '', username, password, role || 'admin']
         );
 
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'CREATE',
             targetType: 'ADMIN_ACCOUNT',
             details: { username, role },
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ success: true });
@@ -161,7 +162,7 @@ export async function PUT(request: Request) {
             );
         }
 
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'UPDATE',
@@ -169,7 +170,8 @@ export async function PUT(request: Request) {
             targetId: Number(id),
             details: { username, role },
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ success: true });
@@ -210,14 +212,15 @@ export async function DELETE(request: Request) {
 
         await pool.query('DELETE FROM admin_accounts WHERE id = ?', [id]);
 
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'DELETE',
             targetType: 'ADMIN_ACCOUNT',
             targetId: Number(id),
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ success: true });

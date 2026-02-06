@@ -49,11 +49,13 @@ CREATE TABLE IF NOT EXISTS orders (
   email VARCHAR(255) NULL,
   note TEXT NULL,
   status ENUM('pending', 'completed') DEFAULT 'completed',
+  invoice_code VARCHAR(50) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  INDEX idx_status (status)
+  INDEX idx_status (status),
+  INDEX idx_invoice_code (invoice_code)
 );
 
 CREATE TABLE IF NOT EXISTS balance_logs (

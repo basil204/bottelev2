@@ -105,8 +105,7 @@ export async function POST(request: Request) {
                 action: 'CREATE',
                 targetType: 'STORED_ACCOUNT',
                 details: { account_type_id, count: insertCount, skipped: skipCount },
-                ipAddress,
-                userAgent
+                request
             });
         }
 
@@ -200,8 +199,7 @@ export async function PUT(request: Request) {
             targetType: 'STORED_ACCOUNT',
             targetId: id,
             details: changedFields,
-            ipAddress,
-            userAgent
+            request
         });
 
         return NextResponse.json({
@@ -235,8 +233,7 @@ export async function DELETE(request: Request) {
                 action: 'DELETE',
                 targetType: 'STORED_ACCOUNT',
                 details: { count: ids.length, ids },
-                ipAddress,
-                userAgent
+                request
             });
 
             return NextResponse.json({
@@ -252,8 +249,7 @@ export async function DELETE(request: Request) {
                 action: 'DELETE',
                 targetType: 'STORED_ACCOUNT',
                 targetId: id,
-                ipAddress,
-                userAgent
+                request
             });
 
             return NextResponse.json({

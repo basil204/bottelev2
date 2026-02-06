@@ -1,5 +1,7 @@
 import pool from './db';
 import { RowDataPacket } from 'mysql2';
+export { signJWT, verifyJWT } from '../lib-edge/jwt';
+export type { JWTPayload } from '../lib-edge/jwt';
 
 export type AdminRole = 'super_admin' | 'admin' | null;
 

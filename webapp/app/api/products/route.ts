@@ -25,7 +25,7 @@ export async function POST(request: Request) {
         );
 
         // Log action
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'CREATE',
@@ -33,7 +33,8 @@ export async function POST(request: Request) {
             targetId: result.insertId,
             details: { name, price, type: type || 'stock' },
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ id: result.insertId, message: 'Product created' });
@@ -55,7 +56,7 @@ export async function PUT(request: Request) {
         );
 
         // Log action
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'UPDATE',
@@ -63,7 +64,8 @@ export async function PUT(request: Request) {
             targetId: id,
             details: { name, price, type },
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ message: 'Product updated' });
@@ -84,14 +86,15 @@ export async function DELETE(request: Request) {
         await pool.query('DELETE FROM products WHERE id = ?', [id]);
 
         // Log action
-        const adminName = getAdminFromCookie(request);
+        const adminName = await getAdminFromCookie(request);
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'DELETE',
             targetType: 'PRODUCT',
             targetId: id,
             ipAddress,
-            userAgent
+            userAgent,
+            request
         });
 
         return NextResponse.json({ message: 'Product deleted' });

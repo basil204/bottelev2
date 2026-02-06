@@ -6,11 +6,11 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { username, password } = body;
 
-        const isValid = await validateAdminCredentials(username, password);
+        const authResult = await validateAdminCredentials(username, password);
 
-        if (isValid) {
+        if (authResult.isValid) {
             // Set Cookie
-            const response = NextResponse.json({ success: true });
+            const response = NextResponse.json({ success: true, role: authResult.role });
 
             // Set cookie for 1 day
             const expires = new Date();
@@ -18,14 +18,17 @@ export async function POST(request: Request) {
 
             response.cookies.set('auth_token', 'true', {
                 expires: expires,
-                httpOnly: false, // Accessible by JS for middleware check usually fine if HttpOnly is true but here middleware checks cookie existence.
-                // Wait, middleware reads request.cookies. But if HttpOnly is true, client JS cannot see it.
-                // Middleware runs on server, so it CAN see HttpOnly cookies.
-                // But if we want Client to know it is logged in (e.g. for UI state), we might need another cookie or just trust API response.
-                // For security, HttpOnly is better.
+                httpOnly: false,
                 path: '/',
                 sameSite: 'lax',
-                // secure: process.env.NODE_ENV === 'production' // Only HTTPS in prod
+            });
+
+            // Set admin role cookie
+            response.cookies.set('admin_role', authResult.role || 'admin', {
+                expires: expires,
+                httpOnly: false,
+                path: '/',
+                sameSite: 'lax',
             });
 
             return response;

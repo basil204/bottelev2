@@ -82,6 +82,9 @@ export default function SettingsPage() {
 
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Admin role state - to check if current admin is super_admin
+    const [adminRole, setAdminRole] = useState<string>('admin');
+
     // Promotion states
     const [promotions, setPromotions] = useState<any[]>([]);
     const [promoLoading, setPromoLoading] = useState(false);
@@ -95,6 +98,16 @@ export default function SettingsPage() {
     useEffect(() => {
         let mounted = true;
         setLoading(true);
+
+        // Read admin role from cookie
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'admin_role') {
+                setAdminRole(value);
+                break;
+            }
+        }
 
         const fetchData = async () => {
             try {
@@ -395,64 +408,76 @@ export default function SettingsPage() {
                         </TabsContent>
 
                         <TabsContent value="admin" className="space-y-6">
-                            {/* Admin Login Accounts */}
-                            <div className="grid gap-4 p-4 bg-blue-900/20 rounded-lg border border-blue-800">
-                                <div>
-                                    <div className="font-medium text-blue-400 mb-2">👤 Tài khoản Admin 1</div>
-                                    <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập chính vào webapp</div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
-                                        <input
-                                            type="text"
-                                            value={settings.admin_username}
-                                            onChange={(e) => handleChange('admin_username', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="admin"
-                                        />
+                            {/* Admin Login Accounts - Only visible to Super Admin */}
+                            {adminRole === 'super_admin' && (
+                                <>
+                                    <div className="grid gap-4 p-4 bg-blue-900/20 rounded-lg border border-blue-800">
+                                        <div>
+                                            <div className="font-medium text-blue-400 mb-2">👤 Tài khoản Admin 1 (Super Admin)</div>
+                                            <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập chính - có toàn quyền quản trị</div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.admin_username}
+                                                    onChange={(e) => handleChange('admin_username', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="admin"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                                <input
+                                                    type="password"
+                                                    value={settings.admin_password}
+                                                    onChange={(e) => handleChange('admin_password', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="••••••••"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
-                                        <input
-                                            type="password"
-                                            value={settings.admin_password}
-                                            onChange={(e) => handleChange('admin_password', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="••••••••"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div className="grid gap-4 p-4 bg-green-900/20 rounded-lg border border-green-800">
-                                <div>
-                                    <div className="font-medium text-green-400 mb-2">👤 Tài khoản Admin 2</div>
-                                    <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập phụ (tùy chọn)</div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
-                                        <input
-                                            type="text"
-                                            value={settings.admin_username2}
-                                            onChange={(e) => handleChange('admin_username2', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="admin2"
-                                        />
+                                    <div className="grid gap-4 p-4 bg-green-900/20 rounded-lg border border-green-800">
+                                        <div>
+                                            <div className="font-medium text-green-400 mb-2">👤 Tài khoản Admin 2 (Admin thường)</div>
+                                            <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập phụ - không có quyền quản lý tài khoản admin</div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.admin_username2}
+                                                    onChange={(e) => handleChange('admin_username2', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="admin2"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                                <input
+                                                    type="password"
+                                                    value={settings.admin_password2}
+                                                    onChange={(e) => handleChange('admin_password2', e.target.value)}
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    placeholder="••••••••"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
-                                        <input
-                                            type="password"
-                                            value={settings.admin_password2}
-                                            onChange={(e) => handleChange('admin_password2', e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="••••••••"
-                                        />
-                                    </div>
+                                </>
+                            )}
+
+                            {/* Message for regular admin */}
+                            {adminRole !== 'super_admin' && (
+                                <div className="p-4 bg-yellow-900/20 rounded-lg border border-yellow-800">
+                                    <div className="font-medium text-yellow-400 mb-2">⚠️ Quyền hạn giới hạn</div>
+                                    <div className="text-sm text-slate-400">Bạn đang đăng nhập với tài khoản Admin thường. Chỉ Super Admin mới có quyền quản lý tài khoản đăng nhập admin.</div>
                                 </div>
-                            </div>
+                            )}
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">🔐 {t('settings.change_password')}</div>

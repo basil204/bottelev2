@@ -72,6 +72,20 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
+
+        // Check admin role from cookie - only super_admin can modify admin accounts
+        const cookieHeader = request.headers.get('cookie') || '';
+        const adminRoleMatch = cookieHeader.match(/admin_role=([^;]+)/);
+        const adminRole = adminRoleMatch ? adminRoleMatch[1] : 'admin';
+
+        // If not super_admin, remove admin account fields from body
+        if (adminRole !== 'super_admin') {
+            delete body.admin_username;
+            delete body.admin_password;
+            delete body.admin_username2;
+            delete body.admin_password2;
+        }
+
         const {
             mb_auto_deposit,
             viettel_token,

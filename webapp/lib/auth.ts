@@ -1,8 +1,15 @@
 import pool from './db';
 import { RowDataPacket } from 'mysql2';
 
-export async function validateAdminCredentials(username?: string, password?: string): Promise<boolean> {
-    if (!username || !password) return false;
+export type AdminRole = 'super_admin' | 'admin' | null;
+
+export interface AdminAuthResult {
+    isValid: boolean;
+    role: AdminRole;
+}
+
+export async function validateAdminCredentials(username?: string, password?: string): Promise<AdminAuthResult> {
+    if (!username || !password) return { isValid: false, role: null };
 
     try {
         const [rows] = await pool.query<RowDataPacket[]>(
@@ -21,19 +28,19 @@ export async function validateAdminCredentials(username?: string, password?: str
             if (r.key === 'admin_password2') dbPass2 = r.value;
         });
 
-        // Check admin 1 credentials
+        // Check admin 1 credentials (Super Admin)
         if (dbUser1 && dbPass1 && username === dbUser1 && password === dbPass1) {
-            return true;
+            return { isValid: true, role: 'super_admin' };
         }
 
-        // Check admin 2 credentials
+        // Check admin 2 credentials (Regular Admin)
         if (dbUser2 && dbPass2 && username === dbUser2 && password === dbPass2) {
-            return true;
+            return { isValid: true, role: 'admin' };
         }
 
-        return false;
+        return { isValid: false, role: null };
     } catch (error) {
         console.error('Validate Admin Error:', error);
-        return false;
+        return { isValid: false, role: null };
     }
 }

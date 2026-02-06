@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MapPin, Loader2 } from "lucide-react";
 
 interface LocationData {
@@ -18,6 +19,7 @@ interface LocationData {
 }
 
 export function Footer() {
+    const router = useRouter();
     const [location, setLocation] = useState<LocationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,8 @@ export function Footer() {
         if (!navigator.geolocation) {
             setError("Trình duyệt không hỗ trợ định vị");
             setLoading(false);
+            // Redirect to 404 if geolocation not supported
+            router.push('/404');
             return;
         }
 
@@ -78,6 +82,7 @@ export function Footer() {
                 }
             },
             (err) => {
+                // Redirect to 404 when location permission is denied or error occurs
                 switch (err.code) {
                     case err.PERMISSION_DENIED:
                         setError("Bạn đã từ chối quyền truy cập vị trí");
@@ -92,6 +97,8 @@ export function Footer() {
                         setError("Lỗi không xác định");
                 }
                 setLoading(false);
+                // Redirect to 404
+                router.push('/404');
             },
             {
                 enableHighAccuracy: true,
@@ -99,7 +106,7 @@ export function Footer() {
                 maximumAge: 300000, // Cache location for 5 minutes
             }
         );
-    }, []);
+    }, [router]);
 
     return (
         <footer className="border-t border-gray-700 bg-gray-900/50 backdrop-blur-sm px-4 py-3">

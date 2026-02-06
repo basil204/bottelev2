@@ -10,7 +10,8 @@ export type AdminAction =
     | 'LOGOUT'
     | 'APPROVE'
     | 'REJECT'
-    | 'BROADCAST';
+    | 'BROADCAST'
+    | 'VISIT';
 
 export type TargetType =
     | 'USER'
@@ -24,7 +25,8 @@ export type TargetType =
     | 'GMAIL_ACCOUNT'
     | 'BROADCAST'
     | 'ADMIN_ACCOUNT'
-    | 'SYSTEM';
+    | 'SYSTEM'
+    | 'WEBSITE';
 
 interface LogParams {
     adminId?: number | null;

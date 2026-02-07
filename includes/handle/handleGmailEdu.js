@@ -368,14 +368,16 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         // Gửi kết quả
         let resultMessage;
         if (lang === 'en') {
-            resultMessage = `✅ **Gmail EDU purchased successfully!**\n\n`;
-            resultMessage += `📧 Quantity: ${createdAccounts.length}\n`;
+            resultMessage = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n`;
+            resultMessage += `📧 Product: **Gmail EDU**\n`;
+            resultMessage += `📦 Quantity: ${createdAccounts.length}\n`;
             resultMessage += `💰 Price: ${formatCurrency(actualPrice)}\n`;
             resultMessage += `💵 New balance: ${formatCurrency(finalBalance)}\n\n`;
             resultMessage += `⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`;
         } else {
-            resultMessage = `✅ **Mua Gmail EDU thành công!**\n\n`;
-            resultMessage += `📧 Số lượng: ${createdAccounts.length}\n`;
+            resultMessage = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n`;
+            resultMessage += `🎁 Sản phẩm: **Gmail EDU**\n`;
+            resultMessage += `📦 Số lượng: ${createdAccounts.length}\n`;
             resultMessage += `💰 Giá: ${formatCurrency(actualPrice)}\n`;
             resultMessage += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
             resultMessage += `⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`;
@@ -387,8 +389,8 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         for (let i = 0; i < createdAccounts.length; i++) {
             const acc = createdAccounts[i];
             const accountMsg = lang === 'en'
-                ? `📧 **Account ${i + 1}:**\n\n🔹 **TK:**\n\`${acc.email}\`\n\n🔹 **MK:**\n\`${acc.password}\``
-                : `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:**\n\`${acc.email}\`\n\n🔹 **MK:**\n\`${acc.password}\``;
+                ? `📧 **Account ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``
+                : `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``;
 
             await bot.sendMessage(chatId, accountMsg, { parse_mode: 'Markdown' });
         }

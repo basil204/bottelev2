@@ -292,13 +292,13 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   // Xóa account sau khi mua (mua đến đâu xóa đến đó)
   await deleteAccountAfterPurchase(account.id, product.id);
 
-  const accountInfo = `${account.username}|${account.password}${account.extra_data ? `|${account.extra_data}` : ''}${account.twofa ? `|${account.twofa}` : ''}`;
+  const accountDataForOrder = `${account.username}|${account.password}${account.extra_data ? `|${account.extra_data}` : ''}${account.twofa ? `|${account.twofa}` : ''}`;
   const orderResult = await createOrder({
     userId: user.id,
     productId: product.id,
     price: productPrice,
     status: 'completed',
-    email: accountInfo
+    email: accountDataForOrder
   });
 
   // Lấy lại user để có số dư chính xác
@@ -308,13 +308,23 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-  const content = `✅ **Mua thành công!**\n\n` +
+  let accountInfo;
+  if (!account.password && !account.twofa && !account.extra_data) {
+    const isEmail = account.username.includes('@');
+    accountInfo = isEmail ? `📧 **Email:** \`${account.username}\`` : `🔑 **Key:** \`${account.username}\``;
+  } else {
+    accountInfo = `📧 **TK:** \`${account.username}\`\n🔑 **MK:** \`${account.password}\``;
+    if (account.twofa) accountInfo += `\n🔐 **2FA:** \`${account.twofa}\``;
+    if (account.extra_data) accountInfo += `\n📩 **Extra:** \`${account.extra_data}\``;
+  }
+
+  const content = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n` +
     `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
     `🕒 Thời gian: ${timeStr}\n` +
     `🎁 Sản phẩm: ${product.name}\n` +
     `💰 Giá: ${formatCurrency(productPrice)}\n` +
     `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n` +
-    `📧 Tài khoản: \`${account.username}\` | \`${account.password}\`${account.extra_data ? ` | Extra: \`${account.extra_data}\`` : ''}${account.twofa ? ` | 2FA: \`${account.twofa}\`` : ''}`;
+    `${accountInfo}`;
   await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
 
   // Notify admins - fetch from database
@@ -654,14 +664,20 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     // Nếu chỉ mua 1 tài khoản, hiển thị trực tiếp trong tin nhắn
     if (quantity === 1) {
       const acc = purchasedAccounts[0];
-      let accountInfo = `📧 TK: \`${acc.username}\`\n🔑 MK: \`${acc.password}\``;
-      if (acc.extra_data) accountInfo += `\n📩 Mail phụ: \`${acc.extra_data}\``;
-      if (acc.twofa) accountInfo += `\n🔐 2FA: \`${acc.twofa}\``;
+      let accountInfo;
+      if (!acc.password && !acc.twofa && !acc.extra_data) {
+        const isEmail = acc.username.includes('@');
+        accountInfo = isEmail ? `📧 **Email:** \`${acc.username}\`` : `🔑 **Key:** \`${acc.username}\``;
+      } else {
+        accountInfo = `📧 **TK:** \`${acc.username}\`\n🔑 **MK:** \`${acc.password}\``;
+        if (acc.twofa) accountInfo += `\n🔐 **2FA:** \`${acc.twofa}\``;
+        if (acc.extra_data) accountInfo += `\n📩 **Extra:** \`${acc.extra_data}\``;
+      }
 
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-      const content = `✅ **Mua thành công!**\n\n` +
+      const content = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n` +
         `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
         `🕒 Thời gian: ${timeStr}\n` +
         `🎁 Sản phẩm: ${product.name}\n` +
@@ -859,14 +875,20 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     // Nếu chỉ mua 1 tài khoản, hiển thị trực tiếp trong tin nhắn
     if (quantity === 1) {
       const acc = purchasedAccounts[0];
-      let accountInfo = `📧 TK: \`${acc.username}\`\n🔑 MK: \`${acc.password}\``;
-      if (acc.extra_data) accountInfo += `\n📩 Mail phụ: \`${acc.extra_data}\``;
-      if (acc.twofa) accountInfo += `\n🔐 2FA: \`${acc.twofa}\``;
+      let accountInfo;
+      if (!acc.password && !acc.twofa && !acc.extra_data) {
+        const isEmail = acc.username.includes('@');
+        accountInfo = isEmail ? `📧 **Email:** \`${acc.username}\`` : `🔑 **Key:** \`${acc.username}\``;
+      } else {
+        accountInfo = `📧 **TK:** \`${acc.username}\`\n🔑 **MK:** \`${acc.password}\``;
+        if (acc.twofa) accountInfo += `\n🔐 **2FA:** \`${acc.twofa}\``;
+        if (acc.extra_data) accountInfo += `\n📩 **Extra:** \`${acc.extra_data}\``;
+      }
 
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
 
-      const content = `✅ **Mua thành công!**\n\n` +
+      const content = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n` +
         `🧾 Mã HĐ: \`${orderResult.invoiceCode}\`\n` +
         `🕒 Thời gian: ${timeStr}\n` +
         `🎁 Sản phẩm: ${product.name}\n` +

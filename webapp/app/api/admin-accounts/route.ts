@@ -23,59 +23,19 @@ export async function GET(request: Request) {
         );
         return NextResponse.json(rows);
     } catch (error: any) {
+        console.error('Error fetching admin accounts:', error);
 
-        // If table doesn't exist, create it
-        if (error.code === 'ER_NO_SUCH_TABLE') {
-            await pool.query(`
-                CREATE TABLE admin_accounts (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    fullname VARCHAR(255),
-                    username VARCHAR(255) NOT NULL UNIQUE,
-                    password VARCHAR(255) NOT NULL,
-                    telegram_id VARCHAR(50),
-                    role ENUM('super_admin', 'admin') NOT NULL DEFAULT 'admin',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                )
-
-            `);
-
-            // Migrate existing admin accounts from settings
-            const [settings] = await pool.query<RowDataPacket[]>(
-                "SELECT `key`, `value` FROM settings WHERE `key` IN ('admin_fullname', 'admin_username', 'admin_password', 'admin_fullname2', 'admin_username2', 'admin_password2')"
-            );
-
-            const settingsMap: Record<string, string> = {};
-            settings.forEach((row: any) => {
-                settingsMap[row.key] = row.value;
-            });
-
-            // Insert super admin
-            if (settingsMap['admin_username'] && settingsMap['admin_password']) {
-                await pool.query(
-                    'INSERT INTO admin_accounts (fullname, username, password, role) VALUES (?, ?, ?, ?)',
-                    [settingsMap['admin_fullname'] || '', settingsMap['admin_username'], settingsMap['admin_password'], 'super_admin']
-                );
-            }
-
-            // Insert admin 2
-            if (settingsMap['admin_username2'] && settingsMap['admin_password2']) {
-                await pool.query(
-                    'INSERT INTO admin_accounts (fullname, username, password, role) VALUES (?, ?, ?, ?)',
-                    [settingsMap['admin_fullname2'] || '', settingsMap['admin_username2'], settingsMap['admin_password2'], 'admin']
-                );
-            }
-
-            const [newRows] = await pool.query<RowDataPacket[]>(
-                'SELECT id, fullname, username, telegram_id, role FROM admin_accounts ORDER BY id ASC'
-            );
-
-            return NextResponse.json(newRows);
+        // Return a more descriptive error if possible
+        if (error.code === 'ER_BAD_FIELD_ERROR' && error.message.includes('telegram_id')) {
+            return NextResponse.json({
+                error: 'Database schema mismatch. Please wait for migration or contact admin.',
+                details: 'Column telegram_id is missing'
+            }, { status: 500 });
         }
 
-        console.error('Error fetching admin accounts:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
+
 }
 
 // POST - Create new admin account

@@ -111,13 +111,17 @@ export async function logAdminAction(params: LogParams): Promise<boolean> {
  * Get request info for logging
  */
 export function getRequestInfo(request: Request): { ipAddress: string | null; userAgent: string | null } {
-    const ipAddress = request.headers.get('x-forwarded-for')
+    const rawIp = request.headers.get('x-forwarded-for')
         || request.headers.get('x-real-ip')
         || null;
+
+    // Take the first IP if it's a comma-separated list (from proxies like Cloudflare/Nginx)
+    const ipAddress = rawIp ? rawIp.split(',')[0].trim() : null;
     const userAgent = request.headers.get('user-agent') || null;
 
     return { ipAddress, userAgent };
 }
+
 
 /**
  * Get admin username from JWT or legacy cookie

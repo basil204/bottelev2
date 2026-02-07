@@ -56,6 +56,32 @@ async function initAccountStorageTables() {
       }
     }
 
+    // Add telegram_id column to admin_accounts if not exists
+    try {
+      await pool.query(`
+        ALTER TABLE admin_accounts ADD COLUMN telegram_id VARCHAR(50) NULL AFTER password
+      `);
+      console.log('[DB] Added telegram_id column to admin_accounts table');
+    } catch (e: any) {
+      if (e.code !== 'ER_DUP_FIELDNAME' && e.code !== 'ER_NO_SUCH_TABLE') {
+        console.error('[DB] Error adding telegram_id to admin_accounts:', e);
+      }
+    }
+
+    // Expand ip_address column in admin_logs
+    try {
+      await pool.query(`
+        ALTER TABLE admin_logs MODIFY COLUMN ip_address VARCHAR(255)
+      `);
+      console.log('[DB] Expanded ip_address column in admin_logs table');
+    } catch (e: any) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') {
+        console.error('[DB] Error expanding ip_address in admin_logs:', e);
+      }
+    }
+
+
+
     console.log('[DB] Account storage tables initialized');
   } catch (error) {
     console.error('[DB] Error initializing account storage tables:', error);

@@ -1,7 +1,9 @@
 import pool from './db';
 import { RowDataPacket } from 'mysql2';
-export { signJWT, verifyJWT } from '../lib-edge/jwt';
-export type { JWTPayload } from '../lib-edge/jwt';
+import { signJWT, verifyJWT, JWTPayload } from '../lib-edge/jwt';
+export { signJWT, verifyJWT };
+export type { JWTPayload };
+
 
 export type AdminRole = 'super_admin' | 'admin' | null;
 
@@ -96,4 +98,22 @@ export async function validateAdminCredentials(username?: string, password?: str
         return { isValid: false, role: null };
     }
 }
+
+/**
+ * Check if the session version in JWT is still valid
+ */
+export async function checkSessionVersion(payload: JWTPayload): Promise<boolean> {
+    try {
+        const [rows] = await pool.query<RowDataPacket[]>(
+            "SELECT `value` FROM settings WHERE `key` = 'admin_auth_version'"
+        );
+        const currentVersion = rows.length > 0 ? parseInt(rows[0].value) || 0 : 0;
+        return payload.auth_version === currentVersion;
+    } catch (e) {
+        console.error('Check Session Version Error:', e);
+        // Default to true to avoid locking out if DB has issues temporarily
+        return true;
+    }
+}
+
 

@@ -17,8 +17,10 @@ import {
     Mail,
     Archive,
     Activity,
-    UserCog
+    UserCog,
+    BarChart3
 } from "lucide-react";
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -53,8 +55,10 @@ export function Sidebar() {
         { name: "Lịch sử Bank", href: "/bank-history", icon: Landmark },
         { name: "Kho", href: "/stored-accounts", icon: Archive },
         { name: "Nhật ký", href: "/admin-logs", icon: Activity },
+        { name: "Thống kê Admin", href: "/admin-stats", icon: BarChart3 },
         { name: t('sidebar.notifications'), href: "/notifications", icon: Bell },
         { name: "Quản lý Admin", href: "/admin-accounts", icon: UserCog, superAdminOnly: true },
+
         { name: t('sidebar.settings'), href: "/settings", icon: Settings },
     ];
 

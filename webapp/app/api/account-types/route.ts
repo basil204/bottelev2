@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
+
 
 // GET - List all account types
 export async function GET() {
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
 // DELETE - Delete account type
 export async function DELETE(request: Request) {
     try {
-        const { id } = await request.json();
+        const { id, reason } = await request.json();
 
         if (!id) {
             return NextResponse.json(
@@ -62,7 +64,26 @@ export async function DELETE(request: Request) {
             );
         }
 
+        if (!reason || reason.trim().length === 0) {
+            return NextResponse.json(
+                { success: false, error: 'Lý do xóa là bắt buộc' },
+                { status: 400 }
+            );
+        }
+
         await pool.query('DELETE FROM account_types WHERE id = ?', [id]);
+
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'DELETE',
+            targetType: 'ACCOUNT_TYPE',
+            targetId: id,
+            details: { reason },
+            request
+        });
+
 
         return NextResponse.json({
             success: true,

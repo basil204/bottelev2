@@ -1,11 +1,23 @@
-
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { sendMessage } from '@/lib/telegram';
+import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
+
 
 export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'DEPOSIT',
+            details: 'Viewed deposit requests list',
+            request
+        });
+
         const { searchParams } = new URL(request.url);
+
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
         const type = searchParams.get('type'); // 'usdt' | 'bank' | null (all)
@@ -56,7 +68,19 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
         }
 
+        // Log starting action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: action === 'approve' ? 'APPROVE' : 'REJECT',
+            targetType: 'DEPOSIT',
+            targetId: depositId,
+            details: `Processing deposit ${action}: ID ${depositId}`,
+            request
+        });
+
         const connection = await pool.getConnection();
+
         try {
             await connection.beginTransaction();
 

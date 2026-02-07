@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
+import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'SYSTEM',
+            details: 'Viewed Viettel bank history',
+            request
+        });
+
         // Get Viettel token from settings
         const [rows] = await pool.query<RowDataPacket[]>(
             "SELECT `value` FROM settings WHERE `key` = 'viettel_token'"

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
+
 
 interface Transaction {
     msisdn: string;
@@ -19,7 +21,18 @@ interface Transaction {
 // GET: Lấy lịch sử đã lưu trong database
 export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'SYSTEM',
+            details: 'Viewed bank transactions history',
+            request
+        });
+
         const { searchParams } = new URL(request.url);
+
         const date = searchParams.get('date'); // Format: YYYY-MM-DD
         const month = searchParams.get('month'); // Format: YYYY-MM
         const type = searchParams.get('type'); // CREDIT or DEBIT
@@ -99,9 +112,20 @@ export async function GET(request: Request) {
 }
 
 // POST: Sync transactions từ Viettel API vào database
-export async function POST() {
+export async function POST(request: Request) {
     try {
+        // Log start of sync
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'UPDATE',
+            targetType: 'SYSTEM',
+            details: 'Started bank transactions sync',
+            request
+        });
+
         // Get Viettel token from settings
+
         const [tokenRows] = await pool.query<RowDataPacket[]>(
             "SELECT `value` FROM settings WHERE `key` = 'viettel_token'"
         );

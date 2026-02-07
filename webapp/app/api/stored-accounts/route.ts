@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
+import { logAdminAction, getAdminFromCookie, getRequestInfo } from '@/lib/adminLog';
+
 
 // GET - List stored accounts with filters
 export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'STORED_ACCOUNT',
+            details: 'Viewed stored accounts list',
+            request
+        });
+
         const { searchParams } = new URL(request.url);
+
         const typeId = searchParams.get('type');
         const paymentStatus = searchParams.get('payment_status');
         const saleStatus = searchParams.get('sale_status');
@@ -225,8 +237,13 @@ export async function PUT(request: Request) {
 // DELETE - Delete stored account(s)
 export async function DELETE(request: Request) {
     try {
-        const { id, ids } = await request.json();
+        const { id, ids, reason } = await request.json();
         const { ipAddress, userAgent } = getRequestInfo(request);
+
+        if (!reason || reason.trim().length === 0) {
+            return NextResponse.json({ success: false, error: 'Lý do xóa là bắt buộc' }, { status: 400 });
+        }
+
 
         if (ids && Array.isArray(ids) && ids.length > 0) {
             // Bulk delete
@@ -239,9 +256,10 @@ export async function DELETE(request: Request) {
             await logAdminAction({
                 action: 'DELETE',
                 targetType: 'STORED_ACCOUNT',
-                details: { count: ids.length, ids },
+                details: { count: ids.length, ids, reason },
                 request
             });
+
 
             return NextResponse.json({
                 success: true,
@@ -256,8 +274,10 @@ export async function DELETE(request: Request) {
                 action: 'DELETE',
                 targetType: 'STORED_ACCOUNT',
                 targetId: id,
+                details: { reason },
                 request
             });
+
 
             return NextResponse.json({
                 success: true,

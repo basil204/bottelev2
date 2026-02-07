@@ -19,10 +19,11 @@ export async function GET(request: Request) {
 
     try {
         const [rows] = await pool.query<RowDataPacket[]>(
-            'SELECT id, fullname, username, role FROM admin_accounts ORDER BY id ASC'
+            'SELECT id, fullname, username, telegram_id, role FROM admin_accounts ORDER BY id ASC'
         );
         return NextResponse.json(rows);
     } catch (error: any) {
+
         // If table doesn't exist, create it
         if (error.code === 'ER_NO_SUCH_TABLE') {
             await pool.query(`
@@ -31,10 +32,12 @@ export async function GET(request: Request) {
                     fullname VARCHAR(255),
                     username VARCHAR(255) NOT NULL UNIQUE,
                     password VARCHAR(255) NOT NULL,
+                    telegram_id VARCHAR(50),
                     role ENUM('super_admin', 'admin') NOT NULL DEFAULT 'admin',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
+
             `);
 
             // Migrate existing admin accounts from settings
@@ -64,8 +67,9 @@ export async function GET(request: Request) {
             }
 
             const [newRows] = await pool.query<RowDataPacket[]>(
-                'SELECT id, fullname, username, role FROM admin_accounts ORDER BY id ASC'
+                'SELECT id, fullname, username, telegram_id, role FROM admin_accounts ORDER BY id ASC'
             );
+
             return NextResponse.json(newRows);
         }
 
@@ -82,8 +86,9 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { fullname, username, password, role } = body;
+        const { fullname, username, password, telegram_id, role } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
+
 
         if (!username || !password) {
             return NextResponse.json({ error: 'Username và password là bắt buộc' }, { status: 400 });
@@ -100,9 +105,10 @@ export async function POST(request: Request) {
         }
 
         await pool.query(
-            'INSERT INTO admin_accounts (fullname, username, password, role) VALUES (?, ?, ?, ?)',
-            [fullname || '', username, password, role || 'admin']
+            'INSERT INTO admin_accounts (fullname, username, password, telegram_id, role) VALUES (?, ?, ?, ?, ?)',
+            [fullname || '', username, password, telegram_id || null, role || 'admin']
         );
+
 
         const adminName = await getAdminFromCookie(request);
         await logAdminAction({
@@ -132,8 +138,9 @@ export async function PUT(request: Request) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const body = await request.json();
-        const { fullname, username, password, role } = body;
+        const { fullname, username, password, telegram_id, role } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
+
 
         if (!id) {
             return NextResponse.json({ error: 'ID is required' }, { status: 400 });
@@ -152,15 +159,16 @@ export async function PUT(request: Request) {
         // If password is provided, update it too
         if (password) {
             await pool.query(
-                'UPDATE admin_accounts SET fullname = ?, username = ?, password = ?, role = ? WHERE id = ?',
-                [fullname || '', username, password, role || 'admin', id]
+                'UPDATE admin_accounts SET fullname = ?, username = ?, password = ?, telegram_id = ?, role = ? WHERE id = ?',
+                [fullname || '', username, password, telegram_id || null, role || 'admin', id]
             );
         } else {
             await pool.query(
-                'UPDATE admin_accounts SET fullname = ?, username = ?, role = ? WHERE id = ?',
-                [fullname || '', username, role || 'admin', id]
+                'UPDATE admin_accounts SET fullname = ?, username = ?, telegram_id = ?, role = ? WHERE id = ?',
+                [fullname || '', username, telegram_id || null, role || 'admin', id]
             );
         }
+
 
         const adminName = await getAdminFromCookie(request);
         await logAdminAction({
@@ -190,11 +198,17 @@ export async function DELETE(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
+        const reason = searchParams.get('reason');
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) {
             return NextResponse.json({ error: 'ID is required' }, { status: 400 });
         }
+
+        if (!reason || reason.trim().length === 0) {
+            return NextResponse.json({ error: 'Lý do xóa là bắt buộc' }, { status: 400 });
+        }
+
 
         // Prevent deleting the last super_admin
         const [superAdmins] = await pool.query<RowDataPacket[]>(
@@ -218,9 +232,11 @@ export async function DELETE(request: Request) {
             action: 'DELETE',
             targetType: 'ADMIN_ACCOUNT',
             targetId: Number(id),
+            details: { reason },
             ipAddress,
             userAgent,
             request
+
         });
 
         return NextResponse.json({ success: true });

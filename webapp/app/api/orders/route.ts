@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
+
 
 export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'ORDER',
+            details: 'Viewed orders list',
+            request
+        });
+
         const { searchParams } = new URL(request.url);
+
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
         const offset = (page - 1) * limit;

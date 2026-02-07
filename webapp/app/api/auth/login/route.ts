@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { validateAdminCredentials, signJWT } from '@/lib/auth';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
+import { logAdminAction } from '@/lib/adminLog';
 
 export async function POST(request: Request) {
     try {
@@ -22,6 +23,15 @@ export async function POST(request: Request) {
                 username,
                 role: authResult.role || 'admin',
                 auth_version: authVersion
+            });
+
+            // Log successful login
+            await logAdminAction({
+                adminName: username,
+                action: 'LOGIN',
+                targetType: 'SYSTEM',
+                details: `Login successful as ${authResult.role}`,
+                request
             });
 
             // Set Cookie
@@ -55,6 +65,14 @@ export async function POST(request: Request) {
 
             return response;
         } else {
+            // Log failed login attempt
+            await logAdminAction({
+                adminName: username || 'Unknown',
+                action: 'LOGIN',
+                targetType: 'SYSTEM',
+                details: `Failed login attempt for user: ${username}`,
+                request
+            });
             return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
         }
     } catch (e: any) {

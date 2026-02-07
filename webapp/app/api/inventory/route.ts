@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
+import { logAdminAction, getAdminFromCookie, getRequestInfo } from '@/lib/adminLog';
+
 
 export async function GET(request: Request) {
     try {
@@ -50,6 +52,14 @@ export async function DELETE(request: Request) {
         const accountIds = searchParams.get('accountIds'); // comma-separated IDs for bulk delete
         const productId = searchParams.get('productId');
         const status = searchParams.get('status'); // 'available' | 'sold' | 'all'
+        const reason = searchParams.get('reason');
+
+        if (!reason || reason.trim().length === 0) {
+            return NextResponse.json({ error: 'Lý do xóa là bắt buộc' }, { status: 400 });
+        }
+
+        const { ipAddress, userAgent } = getRequestInfo(request);
+
 
         const connection = await pool.getConnection();
         try {
@@ -125,7 +135,28 @@ export async function DELETE(request: Request) {
             }
 
             await connection.commit();
+
+            // Log action
+            const adminName = await getAdminFromCookie(request);
+            await logAdminAction({
+                adminName: adminName || 'System',
+                action: 'DELETE',
+                targetType: 'PRODUCT', // Inventory is linked to product
+                details: {
+                    accountId,
+                    accountIds,
+                    productId,
+                    status,
+                    deletedCount,
+                    reason
+                },
+                ipAddress,
+                userAgent,
+                request
+            });
+
             return NextResponse.json({ success: true, deletedCount });
+
         } catch (error) {
             await connection.rollback();
             throw error;

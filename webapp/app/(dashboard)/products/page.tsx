@@ -93,10 +93,22 @@ export default function ProductsPage() {
     }, []);
 
     const handleDelete = async (id: number) => {
-        if (!confirm(t('products.delete_confirm'))) return;
-        await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
-        fetchProducts();
+        const reason = window.prompt(t('products.delete_reason_prompt') || 'Nhập lý do xóa sản phẩm này (bắt buộc):');
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Bạn phải nhập lý do xóa!');
+            return;
+        }
+
+        const res = await fetch(`/api/products?id=${id}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
+        if (res.ok) {
+            fetchProducts();
+        } else {
+            const data = await res.json();
+            alert(data.error || 'Lỗi khi xóa sản phẩm');
+        }
     };
+
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '-';
@@ -254,8 +266,14 @@ export default function ProductsPage() {
     };
 
     const handleDeleteAccount = async (accountId: number) => {
-        if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
-        const res = await fetch(`/api/inventory?accountId=${accountId}`, { method: 'DELETE' });
+        const reason = window.prompt('Nhập lý do xóa tài khoản này (bắt buộc):');
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Bạn phải nhập lý do xóa!');
+            return;
+        }
+
+        const res = await fetch(`/api/inventory?accountId=${accountId}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
         if (res.ok) {
             setAccounts(prev => prev.filter(acc => acc.id !== accountId));
             setSelectedAccountIds(prev => {
@@ -266,15 +284,24 @@ export default function ProductsPage() {
             setInventoryTotal(prev => prev - 1);
             fetchProducts();
         } else {
-            alert('Lỗi khi xóa tài khoản!');
+            const data = await res.json();
+            alert(data.error || 'Lỗi khi xóa tài khoản!');
         }
     };
 
+
     const handleDeleteSelectedAccounts = async () => {
         if (selectedAccountIds.size === 0) return;
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedAccountIds.size} tài khoản đã chọn?`)) return;
+
+        const reason = window.prompt(`Nhập lý do xóa ${selectedAccountIds.size} tài khoản đã chọn (bắt buộc):`);
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Bạn phải nhập lý do xóa!');
+            return;
+        }
+
         const ids = Array.from(selectedAccountIds).join(',');
-        const res = await fetch(`/api/inventory?accountIds=${ids}`, { method: 'DELETE' });
+        const res = await fetch(`/api/inventory?accountIds=${ids}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
         if (res.ok) {
             const result = await res.json();
             alert(`Đã xóa ${result.deletedCount} tài khoản!`);
@@ -284,9 +311,11 @@ export default function ProductsPage() {
             }
             fetchProducts();
         } else {
-            alert('Lỗi khi xóa tài khoản!');
+            const data = await res.json();
+            alert(data.error || 'Lỗi khi xóa tài khoản!');
         }
     };
+
 
     const toggleAccountSelection = (accountId: number) => {
         setSelectedAccountIds(prev => {
@@ -321,8 +350,15 @@ export default function ProductsPage() {
     const handleDeleteAccountsByStatus = async (status: 'available' | 'sold' | 'all') => {
         if (!currentProductId) return;
         const statusLabel = status === 'all' ? 'tất cả' : (status === 'available' ? 'còn hàng' : 'đã bán');
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${statusLabel} tài khoản?`)) return;
-        const res = await fetch(`/api/inventory?productId=${currentProductId}&status=${status}`, { method: 'DELETE' });
+
+        const reason = window.prompt(`Nhập lý do xóa ${statusLabel} tài khoản (bắt buộc):`);
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Bạn phải nhập lý do xóa!');
+            return;
+        }
+
+        const res = await fetch(`/api/inventory?productId=${currentProductId}&status=${status}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
         if (res.ok) {
             const result = await res.json();
             alert(`Đã xóa ${result.deletedCount} tài khoản!`);
@@ -331,9 +367,11 @@ export default function ProductsPage() {
             await fetchInventory(currentProductId, 1);
             fetchProducts();
         } else {
-            alert('Lỗi khi xóa tài khoản!');
+            const data = await res.json();
+            alert(data.error || 'Lỗi khi xóa tài khoản!');
         }
     };
+
 
     return (
         <div className="space-y-6">

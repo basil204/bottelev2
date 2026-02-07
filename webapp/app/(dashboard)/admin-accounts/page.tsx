@@ -20,8 +20,10 @@ interface AdminAccount {
     id: number;
     fullname: string;
     username: string;
+    telegram_id: string | null;
     role: 'super_admin' | 'admin';
 }
+
 
 export default function AdminAccountsPage() {
     const router = useRouter();
@@ -34,8 +36,10 @@ export default function AdminAccountsPage() {
         fullname: '',
         username: '',
         password: '',
+        telegram_id: '',
         role: 'admin' as 'super_admin' | 'admin'
     });
+
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -100,8 +104,9 @@ export default function AdminAccountsPage() {
                 setMessage({ type: 'success', text: editingAccount ? 'Cập nhật thành công!' : 'Tạo tài khoản thành công!' });
                 setShowDialog(false);
                 setEditingAccount(null);
-                setFormData({ fullname: '', username: '', password: '', role: 'admin' });
+                setFormData({ fullname: '', username: '', password: '', telegram_id: '', role: 'admin' });
                 fetchAccounts();
+
             } else {
                 const data = await res.json();
                 setMessage({ type: 'error', text: data.error || 'Có lỗi xảy ra' });
@@ -114,10 +119,15 @@ export default function AdminAccountsPage() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
+        const reason = window.prompt('Nhập lý do xóa tài khoản này (bắt buộc):');
+        if (reason === null) return; // Cancelled
+        if (!reason.trim()) {
+            alert('Bạn phải nhập lý do xóa!');
+            return;
+        }
 
         try {
-            const res = await fetch(`/api/admin-accounts?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/admin-accounts?id=${id}&reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
             if (res.ok) {
                 setMessage({ type: 'success', text: 'Xóa tài khoản thành công!' });
                 fetchAccounts();
@@ -130,22 +140,26 @@ export default function AdminAccountsPage() {
         }
     };
 
+
     const openEditDialog = (account: AdminAccount) => {
         setEditingAccount(account);
         setFormData({
             fullname: account.fullname,
             username: account.username,
             password: '',
+            telegram_id: account.telegram_id || '',
             role: account.role
         });
+
         setShowDialog(true);
     };
 
     const openCreateDialog = () => {
         setEditingAccount(null);
-        setFormData({ fullname: '', username: '', password: '', role: 'admin' });
+        setFormData({ fullname: '', username: '', password: '', telegram_id: '', role: 'admin' });
         setShowDialog(true);
     };
+
 
     if (adminRole !== 'super_admin') {
         return (
@@ -193,8 +207,10 @@ export default function AdminAccountsPage() {
                                 <TableRow>
                                     <TableHead>Họ tên</TableHead>
                                     <TableHead>Username</TableHead>
+                                    <TableHead>Telegram ID</TableHead>
                                     <TableHead>Quyền hạn</TableHead>
                                     <TableHead className="text-right">Thao tác</TableHead>
+
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -213,10 +229,12 @@ export default function AdminAccountsPage() {
                                         <TableRow key={account.id}>
                                             <TableCell className="font-medium">{account.fullname || 'N/A'}</TableCell>
                                             <TableCell>{account.username}</TableCell>
+                                            <TableCell className="font-mono text-sm">{account.telegram_id || '-'}</TableCell>
                                             <TableCell>
+
                                                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${account.role === 'super_admin'
-                                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500'
-                                                        : 'bg-blue-500/20 text-blue-400 border border-blue-500'
+                                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500'
+                                                    : 'bg-blue-500/20 text-blue-400 border border-blue-500'
                                                     }`}>
                                                     {account.role === 'super_admin' ? (
                                                         <><ShieldCheck className="w-3 h-3" /> Super Admin</>
@@ -266,6 +284,15 @@ export default function AdminAccountsPage() {
                             placeholder="admin"
                         />
                     </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Telegram ID <span className="text-muted-foreground text-xs">(để thống kê chi tiêu)</span></label>
+                        <Input
+                            value={formData.telegram_id}
+                            onChange={(e) => setFormData({ ...formData, telegram_id: e.target.value })}
+                            placeholder="123456789"
+                        />
+                    </div>
+
                     <div className="space-y-2">
                         <label className="text-sm font-medium">
                             Password {!editingAccount && <span className="text-red-500">*</span>}

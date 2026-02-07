@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { logAdminAction, getRequestInfo } from '@/lib/adminLog';
+import { logAdminAction, getAdminFromCookie, getRequestInfo } from '@/lib/adminLog';
+
 
 export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'USER',
+            details: 'Viewed users list',
+            request
+        });
+
         const { searchParams } = new URL(request.url);
+
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
         const search = searchParams.get('search') || '';

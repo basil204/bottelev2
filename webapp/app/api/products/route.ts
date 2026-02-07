@@ -3,8 +3,18 @@ import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        // Log action
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'VIEW',
+            targetType: 'PRODUCT',
+            details: 'Viewed products list',
+            request
+        });
+
         const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products ORDER BY id DESC');
         return NextResponse.json(rows);
     } catch (error) {
@@ -79,9 +89,12 @@ export async function DELETE(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
+        const reason = searchParams.get('reason');
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
+        if (!reason || reason.trim().length === 0) return NextResponse.json({ error: 'Lý do xóa là bắt buộc' }, { status: 400 });
+
 
         await pool.query('DELETE FROM products WHERE id = ?', [id]);
 
@@ -92,9 +105,11 @@ export async function DELETE(request: Request) {
             action: 'DELETE',
             targetType: 'PRODUCT',
             targetId: id,
+            details: { reason },
             ipAddress,
             userAgent,
             request
+
         });
 
         return NextResponse.json({ message: 'Product deleted' });

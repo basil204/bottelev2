@@ -282,13 +282,18 @@ export default function StoredAccountsPage() {
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Bạn có chắc muốn xóa tài khoản này?')) return;
+        const reason = window.prompt('Nhập lý do xóa tài khoản này (bắt buộc):');
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Lý do xóa là bắt buộc!');
+            return;
+        }
 
         try {
             const res = await fetch('/api/stored-accounts', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id })
+                body: JSON.stringify({ id, reason })
             });
             const data = await res.json();
             if (data.success) {
@@ -300,6 +305,7 @@ export default function StoredAccountsPage() {
             console.error('Error deleting account:', error);
         }
     };
+
 
     const copyText = (text: string, fieldId: string) => {
         navigator.clipboard.writeText(text);

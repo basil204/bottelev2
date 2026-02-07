@@ -326,11 +326,13 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         try {
             const actualPrice = pricePerGmail * createdAccounts.length;
             let orderId = 'GMAIL_EDU';
+            const accountsData = createdAccounts.map(acc => `${acc.email}|${acc.password}`).join('\n');
             const orderResult = await createOrder({
                 userId: currentUser.id,
                 productId: 0, // 0 for Gmail EDU
                 price: actualPrice,
                 status: 'completed',
+                email: accountsData,
                 note: `Mua ${createdAccounts.length} Gmail EDU`
             });
             if (orderResult && orderResult.insertId) orderId = orderResult.insertId;

@@ -291,7 +291,15 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
 
   // Xóa account sau khi mua (mua đến đâu xóa đến đó)
   await deleteAccountAfterPurchase(account.id, product.id);
-  const orderResult = await createOrder({ userId: user.id, productId: product.id, price: productPrice, status: 'completed' });
+
+  const accountInfo = `${account.username}|${account.password}${account.extra_data ? `|${account.extra_data}` : ''}${account.twofa ? `|${account.twofa}` : ''}`;
+  const orderResult = await createOrder({
+    userId: user.id,
+    productId: product.id,
+    price: productPrice,
+    status: 'completed',
+    email: accountInfo
+  });
 
   // Lấy lại user để có số dư chính xác
   const updatedUser = await getUserByTelegram(fromUser.id);
@@ -609,12 +617,20 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       await deleteAccountAfterPurchase(account.id, product.id);
     }
 
+    const accountsData = purchasedAccounts.map(acc => {
+      let line = `${acc.username}|${acc.password}`;
+      if (acc.extra_data) line += `|${acc.extra_data}`;
+      if (acc.twofa) line += `|${acc.twofa}`;
+      return line;
+    }).join('\n');
+
     // Tạo order
     const orderResult = await createOrder({
       userId: user.id,
       productId: product.id,
       price: totalPrice,
-      status: 'completed'
+      status: 'completed',
+      email: accountsData
     });
 
     const updatedUser = await getUserByTelegram(msg.from.id);
@@ -821,12 +837,20 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
       await deleteAccountAfterPurchase(account.id, product.id);
     }
 
+    const accountsData = purchasedAccounts.map(acc => {
+      let line = `${acc.username}|${acc.password}`;
+      if (acc.extra_data) line += `|${acc.extra_data}`;
+      if (acc.twofa) line += `|${acc.twofa}`;
+      return line;
+    }).join('\n');
+
     // Tạo order
     const orderResult = await createOrder({
       userId: user.id,
       productId: product.id,
       price: totalPrice,
-      status: 'completed'
+      status: 'completed',
+      email: accountsData
     });
 
     const updatedUser = await getUserByTelegram(telegramId);

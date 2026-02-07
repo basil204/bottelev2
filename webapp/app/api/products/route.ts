@@ -16,12 +16,12 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, price, description, type } = body;
+        const { name, price, description, type, code } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO products (name, price, description, type) VALUES (?, ?, ?, ?)',
-            [name, price, description, type || 'stock']
+            'INSERT INTO products (name, price, description, type, code) VALUES (?, ?, ?, ?, ?)',
+            [name, price, description, type || 'stock', code || null]
         );
 
         // Log action
@@ -47,12 +47,12 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, name, price, description, type } = body;
+        const { id, name, price, description, type, code } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         await pool.query(
-            'UPDATE products SET name = ?, price = ?, description = ?, type = ? WHERE id = ?',
-            [name, price, description, type, id]
+            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ? WHERE id = ?',
+            [name, price, description, type, code || null, id]
         );
 
         // Log action

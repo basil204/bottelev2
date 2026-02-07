@@ -13,9 +13,10 @@ export async function GET(request: Request) {
         const botStatus = searchParams.get('bot_status');
 
         let query = `
-            SELECT sa.*, at.name as type_name 
+            SELECT sa.*, at.name as type_name, u.username as buyer_username 
             FROM stored_accounts sa
             LEFT JOIN account_types at ON sa.account_type_id = at.id
+            LEFT JOIN users u ON sa.sold_to_user_id = u.id
             WHERE 1=1
         `;
         const params: (string | number)[] = [];
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
 // POST - Create new stored account(s)
 export async function POST(request: Request) {
     try {
-        const { account_type_id, data, note } = await request.json();
+        const { account_type_id, data, note, code } = await request.json();
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!account_type_id) {
@@ -93,8 +94,8 @@ export async function POST(request: Request) {
             }
 
             await pool.query<ResultSetHeader>(
-                'INSERT INTO stored_accounts (account_type_id, data, note) VALUES (?, ?, ?)',
-                [account_type_id, accountData, note || null]
+                'INSERT INTO stored_accounts (account_type_id, data, note, code) VALUES (?, ?, ?, ?)',
+                [account_type_id, accountData, note || null, code || null]
             );
             insertCount++;
         }
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
 // PUT - Update account status
 export async function PUT(request: Request) {
     try {
-        const { id, payment_status, sale_status, bot_status, note } = await request.json();
+        const { id, payment_status, sale_status, bot_status, note, code } = await request.json();
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) {
@@ -178,6 +179,12 @@ export async function PUT(request: Request) {
             updates.push('note = ?');
             params.push(note);
             changedFields.note = note;
+        }
+
+        if (code !== undefined) {
+            updates.push('code = ?');
+            params.push(code);
+            changedFields.code = code;
         }
 
         if (updates.length === 0) {

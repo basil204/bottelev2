@@ -3,7 +3,7 @@
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight, User, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Dialog } from '@/components/ui/dialog';
 interface Product {
     id: number;
     name: string;
+    code: string | null;
     price: number;
     description: string;
     stock: number;
@@ -25,6 +26,19 @@ interface Account {
     username: string;
     status: string;
     created_at: string;
+}
+
+interface SoldAccount {
+    order_id: number;
+    invoice_code: string;
+    account_data: string;
+    price: number;
+    sold_at: string;
+    user_id: number;
+    buyer_username: string;
+    buyer_telegram_id: string;
+    product_id: number;
+    product_name: string;
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -51,6 +65,15 @@ export default function ProductsPage() {
     const [selectedAccountIds, setSelectedAccountIds] = useState<Set<number>>(new Set());
     const [inventoryLoading, setInventoryLoading] = useState(false);
 
+    // Tab state
+    const [activeTab, setActiveTab] = useState<'products' | 'sold'>('products');
+    const [soldAccounts, setSoldAccounts] = useState<SoldAccount[]>([]);
+    const [soldLoading, setSoldLoading] = useState(false);
+    const [soldPage, setSoldPage] = useState(1);
+    const [soldTotalPages, setSoldTotalPages] = useState(1);
+    const [soldTotal, setSoldTotal] = useState(0);
+    const [searchTelegramId, setSearchTelegramId] = useState('');
+
     const fetchProducts = () => {
         setLoading(true);
         fetch('/api/products')
@@ -74,6 +97,51 @@ export default function ProductsPage() {
         await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
         fetchProducts();
     };
+
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const fetchSoldInventory = async (page: number = 1, telegramId: string = '') => {
+        setSoldLoading(true);
+        try {
+            let url = `/api/sold-inventory?page=${page}&limit=10`;
+            if (telegramId) {
+                url += `&telegramId=${encodeURIComponent(telegramId)}`;
+            }
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.data) {
+                setSoldAccounts(data.data);
+                setSoldPage(data.pagination.page);
+                setSoldTotalPages(data.pagination.totalPages);
+                setSoldTotal(data.pagination.total);
+            }
+        } catch (error) {
+            console.error('Error fetching sold inventory:', error);
+        } finally {
+            setSoldLoading(false);
+        }
+    };
+
+    const handleSearchSold = () => {
+        setSoldPage(1);
+        fetchSoldInventory(1, searchTelegramId);
+    };
+
+    useEffect(() => {
+        if (activeTab === 'sold') {
+            fetchSoldInventory();
+        }
+    }, [activeTab]);
 
     const handleSave = async () => {
         if (!editingProduct?.name || !editingProduct?.price) return;
@@ -280,62 +348,225 @@ export default function ProductsPage() {
                 </Button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>{t('products.list')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>{t('users.id')}</TableHead>
-                                    <TableHead>{t('products.name')}</TableHead>
-                                    <TableHead>{t('products.price')}</TableHead>
-                                    <TableHead>{t('products.type')}</TableHead>
-                                    <TableHead>{t('products.stock')}</TableHead>
-                                    <TableHead className="text-right">{t('products.actions')}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
+            {/* Tabs */}
+            <div className="flex gap-2 border-b">
+                <button
+                    onClick={() => setActiveTab('products')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'products'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                >
+                    <Package className="w-4 h-4 inline mr-2" />
+                    {t('products.list')}
+                </button>
+                <button
+                    onClick={() => setActiveTab('sold')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sold'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                >
+                    <User className="w-4 h-4 inline mr-2" />
+                    Đã bán ({soldTotal})
+                </button>
+            </div>
+
+            {activeTab === 'products' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>{t('products.list')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                        <TableHead>{t('users.id')}</TableHead>
+                                        <TableHead>{t('products.name')}</TableHead>
+                                        <TableHead>Code</TableHead>
+                                        <TableHead>{t('products.price')}</TableHead>
+                                        <TableHead>{t('products.type')}</TableHead>
+                                        <TableHead>{t('products.stock')}</TableHead>
+                                        <TableHead className="text-right">{t('products.actions')}</TableHead>
                                     </TableRow>
-                                ) : (
-                                    products.map((product) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell>#{product.id}</TableCell>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(product.price)}</TableCell>
-                                            <TableCell>
-                                                <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                                                    {product.type === 'order' ? t('products.manual') : t('products.auto')}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="font-bold">{product.stock}</TableCell>
-                                            <TableCell className="text-right flex justify-end gap-2">
-                                                <Button size="icon" variant="ghost" onClick={() => openViewStockModal(product)} title={t('products.view_accounts')}>
-                                                    <List className="w-4 h-4" />
-                                                </Button>
-                                                <Button size="icon" variant="ghost" className="text-green-600" onClick={() => openStockModal(product)} title={t('products.add_stock')}>
-                                                    <Database className="w-4 h-4" />
-                                                </Button>
-                                                <Button size="icon" variant="ghost" className="text-blue-600" onClick={() => openModal(product)}>
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
-                                                <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDelete(product.id)}>
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </TableCell>
+                                </TableHeader>
+                                <TableBody>
+                                    {loading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="h-24 text-center">{t('common.loading')}</TableCell>
                                         </TableRow>
-                                    ))
+                                    ) : (
+                                        products.map((product) => (
+                                            <TableRow key={product.id}>
+                                                <TableCell>#{product.id}</TableCell>
+                                                <TableCell className="font-medium">{product.name}</TableCell>
+                                                <TableCell className="text-muted-foreground text-sm">{product.code || '-'}</TableCell>
+                                                <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(product.price)}</TableCell>
+                                                <TableCell>
+                                                    <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                                        {product.type === 'order' ? t('products.manual') : t('products.auto')}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="font-bold">{product.stock}</TableCell>
+                                                <TableCell className="text-right flex justify-end gap-2">
+                                                    <Button size="icon" variant="ghost" onClick={() => openViewStockModal(product)} title={t('products.view_accounts')}>
+                                                        <List className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="text-green-600" onClick={() => openStockModal(product)} title={t('products.add_stock')}>
+                                                        <Database className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="text-blue-600" onClick={() => openModal(product)}>
+                                                        <Edit className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDelete(product.id)}>
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Sold Accounts Tab */}
+            {activeTab === 'sold' && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <User className="w-5 h-5" />
+                            Tài khoản đã bán ({soldTotal})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {/* Search */}
+                        <div className="flex gap-2 mb-4">
+                            <Input
+                                placeholder="Tìm theo Telegram ID..."
+                                value={searchTelegramId}
+                                onChange={(e) => setSearchTelegramId(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearchSold()}
+                                className="max-w-xs"
+                            />
+                            <Button onClick={handleSearchSold} variant="outline">
+                                Tìm kiếm
+                            </Button>
+                            {searchTelegramId && (
+                                <Button
+                                    onClick={() => {
+                                        setSearchTelegramId('');
+                                        fetchSoldInventory(1, '');
+                                    }}
+                                    variant="ghost"
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            )}
+                        </div>
+                        {soldLoading ? (
+                            <div className="text-center py-8">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                                <p className="mt-2 text-muted-foreground">Đang tải...</p>
+                            </div>
+                        ) : soldAccounts.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>Chưa có tài khoản nào được bán</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="max-h-[600px] overflow-auto rounded-md border">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="w-[100px]">Mã HĐ</TableHead>
+                                                <TableHead>Sản phẩm</TableHead>
+                                                <TableHead>Tài khoản</TableHead>
+                                                <TableHead className="w-[100px]">Giá</TableHead>
+                                                <TableHead className="w-[120px]">Người mua</TableHead>
+                                                <TableHead className="w-[100px]">Telegram ID</TableHead>
+                                                <TableHead className="w-[140px]">Ngày bán</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {soldAccounts.map((item) => (
+                                                <TableRow key={item.order_id}>
+                                                    <TableCell>
+                                                        <span className="text-xs font-mono text-muted-foreground">
+                                                            {item.invoice_code || `#${item.order_id}`}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                            {item.product_name}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[200px] truncate block">
+                                                            {item.account_data || '-'}
+                                                        </code>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-green-600 dark:text-green-400 font-bold text-sm">
+                                                            {formatCurrency(item.price)}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                                            <User className="w-3 h-3" />
+                                                            {item.buyer_username || 'N/A'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs font-mono text-muted-foreground">
+                                                            {item.buyer_telegram_id || '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatDate(item.sold_at)}
+                                                        </span>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                {/* Pagination */}
+                                {soldTotalPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <span className="text-sm text-muted-foreground">
+                                            Trang {soldPage} / {soldTotalPages} (Tổng: {soldTotal})
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => fetchSoldInventory(soldPage - 1, searchTelegramId)}
+                                                disabled={soldPage <= 1}
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => fetchSoldInventory(soldPage + 1, searchTelegramId)}
+                                                disabled={soldPage >= soldTotalPages}
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
                                 )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Edit Product Modal */}
             <Dialog
@@ -349,6 +580,14 @@ export default function ProductsPage() {
                         <Input
                             value={editingProduct?.name || ''}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, name: e.target.value }))}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Code (tùy chọn)</label>
+                        <Input
+                            value={editingProduct?.code || ''}
+                            onChange={(e) => setEditingProduct(prev => ({ ...prev!, code: e.target.value || null }))}
+                            placeholder="Mã code sản phẩm..."
                         />
                     </div>
                     <div className="space-y-2">

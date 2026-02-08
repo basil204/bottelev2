@@ -214,9 +214,11 @@ export const registerListeners = (bot, config) => {
     // Xử lý nút Huỷ (ưu tiên cao)
     if (text === '❌ Huỷ' || text === '❌ Cancel') {
       const { cancelUploadState } = await import('./handle/handleDeposit.js');
-      // Also clear USDT amount waiting state
+      // Also clear USDT amount waiting state and ChatGPT waiting state
       const { delCache } = await import('../lib/cache/index.js');
       delCache(`waiting_usdt_amount_${msg.from.id}`);
+      delCache(`chatgpt_waiting_${msg.from.id}`);
+      delCache(`gmail_edu_waiting_${msg.from.id}`);
       return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
     }
 

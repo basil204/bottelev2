@@ -212,24 +212,51 @@ export async function moveRentalToFam(rentalId, newFamId) {
     await updateFamSlots(newFamId);
 }
 
-// ==================== CHATGPT API ====================
-
 /**
  * Invite email vào FAM qua ChatGPT API
+ * Cần authorization và workspace_id từ FAM
  */
 export async function inviteEmailToFam(fam, email) {
     try {
+        // Parse authorization để lấy thông tin cần thiết cho cookie
+        // Authorization là access_token (JWT) - từ đó extract thông tin
+        const accessToken = fam.authorization;
+        const accountId = fam.workspace_id;
+
+        // Tạo random device ID nếu cần
+        const deviceId = generateDeviceId();
+
+        // Tạo puid từ JWT payload nếu có thể
+        let puid = '';
+        try {
+            const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString());
+            const userId = payload['https://api.openai.com/auth']?.user_id || '';
+            if (userId) {
+                puid = `${userId}:${Date.now()}-placeholder`;
+            }
+        } catch (e) {
+            console.log('[ChatGPT API] Could not parse JWT for puid');
+        }
+
+        // Cookie cần thiết để bypass Cloudflare
+        const cookie = `oai-did=${deviceId}; _account=${accountId}${puid ? `; _puid=${puid}` : ''}`;
+
         const response = await fetch(
-            `https://chatgpt.com/backend-api/accounts/${fam.workspace_id}/invites`,
+            `https://chatgpt.com/backend-api/accounts/${accountId}/invites`,
             {
                 method: 'POST',
                 headers: {
                     'accept': '*/*',
                     'accept-language': 'vi',
-                    'authorization': `Bearer ${fam.authorization}`,
-                    'chatgpt-account-id': fam.workspace_id,
+                    'authorization': `Bearer ${accessToken}`,
+                    'chatgpt-account-id': accountId,
                     'content-type': 'application/json',
+                    'cookie': cookie,
+                    'oai-device-id': deviceId,
                     'oai-language': 'vi-VN',
+                    'origin': 'https://chatgpt.com',
+                    'referer': 'https://chatgpt.com/',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36'
                 },
                 body: JSON.stringify({
                     email_addresses: [email],
@@ -241,12 +268,12 @@ export async function inviteEmailToFam(fam, email) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[ChatGPT API] Invite failed:', response.status, errorText);
+            console.error('[ChatGPT API] Invite failed:', response.status, errorText.substring(0, 200));
             return { success: false, error: errorText };
         }
 
         const data = await response.json();
-        console.log('[ChatGPT API] Invite success:', data);
+        console.log('[ChatGPT API] Invite success:', JSON.stringify(data));
         return { success: true, data };
     } catch (error) {
         console.error('[ChatGPT API] Invite error:', error);
@@ -255,23 +282,50 @@ export async function inviteEmailToFam(fam, email) {
 }
 
 /**
+ * Generate random device ID (UUID v4 format)
+ */
+function generateDeviceId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
  * Lấy danh sách members trong FAM
  */
 export async function getFamMembers(fam) {
     try {
+        const accessToken = fam.authorization;
+        const accountId = fam.workspace_id;
+        const deviceId = generateDeviceId();
+
+        // Cookie cần thiết
+        const cookie = `oai-did=${deviceId}; _account=${accountId}`;
+
         const response = await fetch(
-            `https://chatgpt.com/backend-api/accounts/${fam.workspace_id}/users?offset=0&limit=100`,
+            `https://chatgpt.com/backend-api/accounts/${accountId}/users?offset=0&limit=100`,
             {
                 method: 'GET',
                 headers: {
                     'accept': '*/*',
-                    'authorization': `Bearer ${fam.authorization}`,
-                    'chatgpt-account-id': fam.workspace_id,
+                    'accept-language': 'vi',
+                    'authorization': `Bearer ${accessToken}`,
+                    'chatgpt-account-id': accountId,
+                    'cookie': cookie,
+                    'oai-device-id': deviceId,
+                    'oai-language': 'vi-VN',
+                    'origin': 'https://chatgpt.com',
+                    'referer': 'https://chatgpt.com/',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36'
                 }
             }
         );
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[ChatGPT API] Get members failed:', response.status, errorText.substring(0, 200));
             return { success: false, error: 'Failed to get members' };
         }
 
@@ -280,6 +334,58 @@ export async function getFamMembers(fam) {
     } catch (error) {
         console.error('[ChatGPT API] Get members error:', error);
         return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Check if FAM account is live (có thể request được)
+ */
+export async function checkFamLive(fam) {
+    try {
+        const accessToken = fam.authorization;
+        const accountId = fam.workspace_id;
+        const deviceId = generateDeviceId();
+
+        const cookie = `oai-did=${deviceId}; _account=${accountId}`;
+
+        const response = await fetch(
+            `https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27`,
+            {
+                method: 'GET',
+                headers: {
+                    'accept': '*/*',
+                    'accept-language': 'vi',
+                    'authorization': `Bearer ${accessToken}`,
+                    'chatgpt-account-id': accountId,
+                    'cookie': cookie,
+                    'oai-device-id': deviceId,
+                    'oai-language': 'vi-VN',
+                    'origin': 'https://chatgpt.com',
+                    'referer': 'https://chatgpt.com/',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            console.error('[ChatGPT API] Check account failed:', response.status);
+            return { success: false, isLive: false };
+        }
+
+        const data = await response.json();
+        const accountInfo = data.accounts?.[accountId]?.account;
+
+        return {
+            success: true,
+            isLive: !!accountInfo && !accountInfo.is_deactivated,
+            accountId: accountInfo?.account_id,
+            planType: accountInfo?.plan_type,
+            isDeactivated: accountInfo?.is_deactivated || false,
+            data
+        };
+    } catch (error) {
+        console.error('[ChatGPT API] Check account error:', error);
+        return { success: false, isLive: false, error: error.message };
     }
 }
 

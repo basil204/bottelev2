@@ -177,7 +177,6 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
       stock: stock,
       type: productType
     });
-    console.log(`[BUY_DEBUG] Set waitingForProductQuantity for user ${userIdStr}:`, waitingForProductQuantity.get(userIdStr));
 
     const quantityPrompt = lang === 'en'
       ? `\n\nPlease enter quantity to buy (less than or equal to stock):`
@@ -457,10 +456,8 @@ export const handleProductQuantityInput = async (bot, msg, quantityStr, config) 
   const chatId = msg.chat.id;
 
   const waitingState = waitingForProductQuantity.get(userIdStr);
-  console.log(`[BUY_DEBUG] Checking waitingForProductQuantity for user ${userIdStr}:`, waitingState);
 
   if (!waitingState) {
-    console.log(`[BUY_DEBUG] Waiting state not found inside waitingForProductQuantity map`);
     return false; // Không phải input quantity cho sản phẩm, bỏ qua
   }
 

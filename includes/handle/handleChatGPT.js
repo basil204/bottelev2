@@ -9,7 +9,7 @@ import {
     updateRentalInviteStatus,
     checkAndRenewFam
 } from '../controllers/chatgptController.js';
-import { getUserByTelegramId, updateBalance } from '../controllers/userController.js';
+import { getUserByTelegram, updateBalance } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { formatCurrency } from '../../utils/index.js';
 import { setCache, getCache, delCache } from '../../lib/cache/index.js';
@@ -89,7 +89,7 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
         return true;
     }
 
-    const user = await getUserByTelegramId(msg.from.id);
+    const user = await getUserByTelegram(msg.from.id);
     const lang = user?.language || 'vi';
 
     // Check if email already has active rental
@@ -233,7 +233,7 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
  */
 export async function handleChatGPTCallback(bot, query, data, config) {
     const chatId = query.message.chat.id;
-    const user = await getUserByTelegramId(query.from.id);
+    const user = await getUserByTelegram(query.from.id);
 
     switch (data.action) {
         case 'chatgpt_info':

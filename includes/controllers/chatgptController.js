@@ -212,6 +212,30 @@ export async function moveRentalToFam(rentalId, newFamId) {
     await updateFamSlots(newFamId);
 }
 
+// ==================== CHATGPT API ====================
+
+// Cookie Hardcoded để fix lỗi ngay lập tức cho user (nếu DB chưa có cookie)
+const FALLBACK_COOKIE = `oai-did=56773f1b-073b-494a-868f-c09365bef2f1; _account=26c08774-651a-48fd-a53c-92e0e565f564; _puid=user-IyOMNQrHfsvIItYt4fSffk9f:1770529820-9qrLCajRzWj%2FHpfMBJmHXTl55qTd%2BNF4n38qabIIZtM%3D`;
+
+/**
+ * Helper lấy cookie
+ */
+function getCookie(fam) {
+    if (fam.cookie) return fam.cookie;
+
+    // Nếu không có cookie trong DB, thử generate hoặc dùng fallback
+    const accountId = fam.workspace_id;
+    const deviceId = generateDeviceId();
+
+    // Fallback cho user cụ thể này (check accountId)
+    if (accountId === '26c08774-651a-48fd-a53c-92e0e565f564') {
+        return FALLBACK_COOKIE;
+    }
+
+    // Default generation (thường không đủ để bypass cloudflare nếu thiếu puid)
+    return `oai-did=${deviceId}; _account=${accountId}`;
+}
+
 /**
  * Invite email vào FAM qua ChatGPT API
  * Cần authorization và workspace_id từ FAM
@@ -226,20 +250,8 @@ export async function inviteEmailToFam(fam, email) {
         // Tạo random device ID nếu cần
         const deviceId = generateDeviceId();
 
-        // Tạo puid từ JWT payload nếu có thể
-        let puid = '';
-        try {
-            const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString());
-            const userId = payload['https://api.openai.com/auth']?.user_id || '';
-            if (userId) {
-                puid = `${userId}:${Date.now()}-placeholder`;
-            }
-        } catch (e) {
-            console.log('[ChatGPT API] Could not parse JWT for puid');
-        }
-
-        // Cookie cần thiết để bypass Cloudflare
-        const cookie = `oai-did=${deviceId}; _account=${accountId}${puid ? `; _puid=${puid}` : ''}`;
+        // Ưu tiên cookie từ DB hoặc fallback
+        const cookie = getCookie(fam);
 
         const response = await fetch(
             `https://chatgpt.com/backend-api/accounts/${accountId}/invites`,
@@ -301,8 +313,7 @@ export async function getFamMembers(fam) {
         const accountId = fam.workspace_id;
         const deviceId = generateDeviceId();
 
-        // Cookie cần thiết
-        const cookie = `oai-did=${deviceId}; _account=${accountId}`;
+        const cookie = getCookie(fam);
 
         const response = await fetch(
             `https://chatgpt.com/backend-api/accounts/${accountId}/users?offset=0&limit=100`,
@@ -346,7 +357,7 @@ export async function checkFamLive(fam) {
         const accountId = fam.workspace_id;
         const deviceId = generateDeviceId();
 
-        const cookie = `oai-did=${deviceId}; _account=${accountId}`;
+        const cookie = getCookie(fam);
 
         const response = await fetch(
             `https://chatgpt.com/backend-api/accounts/check/v4-2023-04-27`,

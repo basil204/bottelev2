@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { name, workspace_id, authorization, max_slots = 5 } = body;
+        const { name, workspace_id, authorization, cookie, max_slots = 5 } = body;
 
         if (!name || !workspace_id || !authorization) {
             return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -116,8 +116,8 @@ export async function POST(request: NextRequest) {
         }
 
         const [result] = await pool.query<any>(
-            'INSERT INTO chatgpt_fams (name, workspace_id, authorization, max_slots) VALUES (?, ?, ?, ?)',
-            [name, workspace_id, authorization, max_slots]
+            'INSERT INTO chatgpt_fams (name, workspace_id, authorization, cookie, max_slots) VALUES (?, ?, ?, ?, ?)',
+            [name, workspace_id, authorization, cookie, max_slots]
         );
 
         return NextResponse.json({ success: true, id: result.insertId });
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { id, name, authorization, status } = body;
+        const { id, name, authorization, cookie, status } = body;
 
         if (!id) {
             return NextResponse.json({ success: false, error: 'Missing FAM ID' }, { status: 400 });
@@ -150,6 +150,10 @@ export async function PUT(request: NextRequest) {
         if (authorization !== undefined) {
             updates.push('authorization = ?');
             params.push(authorization);
+        }
+        if (cookie !== undefined) {
+            updates.push('cookie = ?');
+            params.push(cookie);
         }
         if (status !== undefined) {
             updates.push('status = ?');
@@ -189,10 +193,12 @@ export async function DELETE(request: NextRequest) {
             [id, 'active']
         );
 
-        if (rentals[0]?.count > 0) {
+        const activeCount = rentals[0]?.count || 0;
+        if (activeCount > 0) {
+            console.log(`[ChatGPT API] DELETE failed: FAM ${id} has ${activeCount} active rentals`);
             return NextResponse.json({
                 success: false,
-                error: 'Cannot delete FAM with active rentals'
+                error: `Cannot delete FAM: has ${activeCount} active rentals`
             }, { status: 400 });
         }
 

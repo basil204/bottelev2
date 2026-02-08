@@ -175,6 +175,17 @@ export const initDb = async (config) => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       console.log('✅ ChatGPT FAM table ready');
+
+      // Ensure cookie column exists
+      try {
+        const [columns] = await pool.execute("SHOW COLUMNS FROM chatgpt_fams LIKE 'cookie'");
+        if (columns.length === 0) {
+          await pool.execute('ALTER TABLE chatgpt_fams ADD COLUMN cookie TEXT NULL AFTER authorization');
+          console.log('✅ Added cookie column to chatgpt_fams');
+        }
+      } catch (e) {
+        console.error('Migration error for chatgpt_fams.cookie:', e.message);
+      }
     } catch (e) {
       if (!e.message.includes('already exists')) {
         console.error('Migration error for chatgpt_fams:', e.message);

@@ -157,6 +157,66 @@ export const initDb = async (config) => {
         console.error('Migration error for settings table:', e.message);
       }
     }
+
+    // ensure ChatGPT FAM table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS chatgpt_fams (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          workspace_id VARCHAR(100) NOT NULL UNIQUE,
+          authorization TEXT NOT NULL,
+          max_slots INT DEFAULT 5,
+          used_slots INT DEFAULT 0,
+          status ENUM('active', 'full', 'inactive') DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('✅ ChatGPT FAM table ready');
+    } catch (e) {
+      if (!e.message.includes('already exists')) {
+        console.error('Migration error for chatgpt_fams:', e.message);
+      }
+    }
+
+    // ensure ChatGPT rentals table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS chatgpt_rentals (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          fam_id INT NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          price DECIMAL(18,2) NOT NULL DEFAULT 0,
+          start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          end_date TIMESTAMP NOT NULL,
+          status ENUM('active', 'expired', 'cancelled') DEFAULT 'active',
+          invite_status ENUM('pending', 'sent', 'accepted', 'failed') DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_user (user_id),
+          INDEX idx_fam (fam_id),
+          INDEX idx_email (email),
+          INDEX idx_status (status),
+          INDEX idx_end_date (end_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('✅ ChatGPT rentals table ready');
+    } catch (e) {
+      if (!e.message.includes('already exists')) {
+        console.error('Migration error for chatgpt_rentals:', e.message);
+      }
+    }
+
+    // Insert default ChatGPT settings
+    try {
+      await pool.execute(`INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('chatgpt_slot_price', '60000')`);
+      await pool.execute(`INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('chatgpt_slot_days', '30')`);
+    } catch (e) {
+      // ignore
+    }
   } catch (err) {
     // Error handling without logging
   }

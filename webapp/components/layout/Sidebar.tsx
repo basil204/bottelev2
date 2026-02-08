@@ -18,7 +18,8 @@ import {
     Archive,
     Activity,
     UserCog,
-    BarChart3
+    BarChart3,
+    Bot
 } from "lucide-react";
 
 import { useState, useEffect } from "react";
@@ -50,6 +51,7 @@ export function Sidebar() {
         { name: t('sidebar.users'), href: "/users", icon: Users },
         { name: t('sidebar.products'), href: "/products", icon: Package },
         { name: "Gmail EDU", href: "/gmail-edu", icon: Mail },
+        { name: "ChatGPT", href: "/chatgpt", icon: Bot },
         { name: t('sidebar.orders'), href: "/orders", icon: ShoppingCart },
         { name: t('sidebar.deposits'), href: "/deposits", icon: Wallet },
         { name: "Lịch sử Bank", href: "/bank-history", icon: Landmark },

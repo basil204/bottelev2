@@ -2,6 +2,7 @@ import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/h
 import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
 import { sendProductList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
+import { showChatGPTInfo, handleChatGPTEmailInput } from './handle/handleChatGPT.js';
 
 import {
   adminMenu,
@@ -84,8 +85,9 @@ export const registerListeners = (bot, config) => {
       reply_markup: {
         keyboard: [
           [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-          [{ text: lang === 'en' ? '📧 Gmail EDU' : '📧 Gmail EDU' }, { text: t('history', lang) }],
-          [{ text: t('admin_group', lang) }, { text: t('change_language', lang) }]
+          [{ text: lang === 'en' ? '📧 Gmail EDU' : '📧 Gmail EDU' }, { text: lang === 'en' ? '🤖 ChatGPT Pro' : '🤖 ChatGPT Pro' }],
+          [{ text: t('history', lang) }, { text: t('admin_group', lang) }],
+          [{ text: t('change_language', lang) }]
         ],
         resize_keyboard: true
       }
@@ -165,6 +167,12 @@ export const registerListeners = (bot, config) => {
     await showGmailEduInfo(bot, msg.chat.id, user);
   });
 
+  // Command /chatgpt để mua slot ChatGPT Team
+  bot.onText(/^\/chatgpt/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await showChatGPTInfo(bot, msg.chat.id, user);
+  });
+
   // Command /buymail gmail <số lượng> để mua Gmail nhanh
   bot.onText(/^\/buymail\s+gmail(?:\s+(\d+))?/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
@@ -233,6 +241,10 @@ export const registerListeners = (bot, config) => {
     const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
     if (handledGmailEdu) return; // Đã xử lý input số lượng Gmail EDU
 
+    // Kiểm tra input email ChatGPT
+    const handledChatGPT = await handleChatGPTEmailInput(bot, msg, config);
+    if (handledChatGPT) return; // Đã xử lý input email ChatGPT
+
     // Kiểm tra manual order input (email/note)
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
@@ -240,6 +252,7 @@ export const registerListeners = (bot, config) => {
     if (text === '➕ Nạp tiền' || text === '➕ Deposit') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
     if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (text === '🤖 ChatGPT Pro') return showChatGPTInfo(bot, msg.chat.id, user);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Xử lý nút đổi ngôn ngữ
@@ -474,8 +487,9 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', selectedLang) }, { text: t('buy_product', selectedLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: t('history', selectedLang) }],
-                  [{ text: t('admin_group', selectedLang) }, { text: t('change_language', selectedLang) }]
+                  [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+                  [{ text: t('history', selectedLang) }, { text: t('admin_group', selectedLang) }],
+                  [{ text: t('change_language', selectedLang) }]
                 ],
                 resize_keyboard: true
               }
@@ -504,8 +518,9 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', newLang) }, { text: t('buy_product', newLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: t('history', newLang) }],
-                  [{ text: t('admin_group', newLang) }, { text: t('change_language', newLang) }]
+                  [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+                  [{ text: t('history', newLang) }, { text: t('admin_group', newLang) }],
+                  [{ text: t('change_language', newLang) }]
                 ],
                 resize_keyboard: true
               }

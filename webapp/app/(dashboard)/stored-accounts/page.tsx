@@ -21,7 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Dialog } from '@/components/ui/dialog';
-import { RefreshCw, Plus, Trash2, Package, Copy, Check, Edit2, Save, X, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, Package, Copy, Check, Edit2, Save, X, User, ChevronLeft, ChevronRight, KeyRound, Loader2 } from 'lucide-react';
 
 interface AccountType {
     id: number;
@@ -104,6 +104,10 @@ export default function StoredAccountsPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editNote, setEditNote] = useState('');
 
+    // 2FA token state
+    const [twoFaTokens, setTwoFaTokens] = useState<Record<string, string>>({});
+    const [loadingTwoFa, setLoadingTwoFa] = useState<Record<string, boolean>>({});
+
     // Form state
     const [selectedType, setSelectedType] = useState<string>('');
     const [accountData, setAccountData] = useState('');
@@ -126,6 +130,18 @@ export default function StoredAccountsPage() {
     const [activeTab, setActiveTab] = useState<'all' | 'sold'>('all');
     const [soldPage, setSoldPage] = useState(1);
     const soldPageSize = 10;
+
+    // Main list pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 10;
+
+    const paginatedData = useMemo(() => {
+        const total = accounts.length;
+        const totalPages = Math.ceil(total / pageSize);
+        const startIndex = (currentPage - 1) * pageSize;
+        const paginated = accounts.slice(startIndex, startIndex + pageSize);
+        return { total, totalPages, paginated, startIndex };
+    }, [accounts, currentPage, pageSize]);
 
     // Sold accounts pagination
     const soldAccountsData = useMemo(() => {
@@ -595,268 +611,307 @@ export default function StoredAccountsPage() {
                                     <p>Không có tài khoản nào</p>
                                 </div>
                             ) : (
-                                <div className="max-h-[600px] overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-[80px]">Loại</TableHead>
-                                                <TableHead className="w-[80px]">Code</TableHead>
-                                                <TableHead>TK</TableHead>
-                                                <TableHead>MK</TableHead>
-                                                <TableHead>2FA</TableHead>
-                                                <TableHead className="w-[95px]">Tình trạng</TableHead>
-                                                <TableHead className="w-[85px]">Ngày pay</TableHead>
-                                                <TableHead className="w-[85px]">Ngày thêm</TableHead>
-                                                <TableHead className="w-[90px]">Trạng thái</TableHead>
-                                                <TableHead className="w-[90px]">Lên Bot</TableHead>
-                                                <TableHead className="w-[100px]">Người mua</TableHead>
-                                                <TableHead className="w-[120px]">Note</TableHead>
-                                                <TableHead className="w-[60px]">Copy</TableHead>
-                                                <TableHead className="w-[60px]">Xóa</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {accounts.map((account) => {
-                                                const parsed = parseAccountData(account.data);
-                                                return (
-                                                    <TableRow key={account.id}>
-                                                        <TableCell>
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                                                {account.type_name}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.code || '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-1">
+                                <>
+                                    <div className="max-h-[600px] overflow-y-auto">
+                                        <Table className="[&_th]:px-1.5 [&_th]:py-2 [&_td]:px-1.5 [&_td]:py-1.5 text-xs">
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Loại</TableHead>
+                                                    <TableHead>Code</TableHead>
+                                                    <TableHead>TK</TableHead>
+                                                    <TableHead>MK</TableHead>
+                                                    <TableHead>2FA</TableHead>
+                                                    <TableHead>Pay</TableHead>
+                                                    <TableHead>Ngày pay</TableHead>
+                                                    <TableHead>Ngày thêm</TableHead>
+                                                    <TableHead>Bán</TableHead>
+                                                    <TableHead>Bot</TableHead>
+                                                    <TableHead>Người mua</TableHead>
+                                                    <TableHead>Note</TableHead>
+                                                    <TableHead></TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {paginatedData.paginated.map((account) => {
+                                                    const parsed = parseAccountData(account.data);
+                                                    return (
+                                                        <TableRow key={account.id}>
+                                                            <TableCell>
+                                                                <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
+                                                                    {account.type_name}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-[11px] text-muted-foreground">
+                                                                    {account.code || '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
                                                                 <code
-                                                                    className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate cursor-pointer hover:bg-muted/80"
+                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[110px] truncate block cursor-pointer hover:bg-muted/80"
                                                                     title={parsed.tk ? `Click để copy: ${parsed.tk}` : ''}
                                                                     onClick={() => parsed.tk && copyText(parsed.tk, `tk-${account.id}`)}
                                                                 >
-                                                                    {parsed.tk || '-'}
+                                                                    {copiedField === `tk-${account.id}` ? '✓ Copied' : (parsed.tk || '-')}
                                                                 </code>
-                                                                {parsed.tk && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => copyText(parsed.tk, `tk-${account.id}`)}
-                                                                    >
-                                                                        {copiedField === `tk-${account.id}` ? (
-                                                                            <Check className="w-3 h-3 text-green-500" />
-                                                                        ) : (
-                                                                            <Copy className="w-3 h-3" />
-                                                                        )}
-                                                                    </Button>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-1">
+                                                            </TableCell>
+                                                            <TableCell>
                                                                 <code
-                                                                    className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80"
+                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[90px] truncate block cursor-pointer hover:bg-muted/80"
                                                                     title={parsed.mk ? `Click để copy: ${parsed.mk}` : ''}
                                                                     onClick={() => parsed.mk && copyText(parsed.mk, `mk-${account.id}`)}
                                                                 >
-                                                                    {parsed.mk || '-'}
+                                                                    {copiedField === `mk-${account.id}` ? '✓ Copied' : (parsed.mk || '-')}
                                                                 </code>
-                                                                {parsed.mk && (
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => copyText(parsed.mk, `mk-${account.id}`)}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-0.5">
+                                                                    <code
+                                                                        className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[60px] truncate block cursor-pointer hover:bg-muted/80"
+                                                                        title={parsed.twofa ? `Click để copy: ${parsed.twofa}` : ''}
+                                                                        onClick={() => parsed.twofa && copyText(parsed.twofa, `2fa-${account.id}`)}
                                                                     >
-                                                                        {copiedField === `mk-${account.id}` ? (
-                                                                            <Check className="w-3 h-3 text-green-500" />
-                                                                        ) : (
-                                                                            <Copy className="w-3 h-3" />
-                                                                        )}
-                                                                    </Button>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-1">
-                                                                <code
-                                                                    className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[80px] truncate cursor-pointer hover:bg-muted/80"
-                                                                    title={parsed.twofa ? `Click để copy: ${parsed.twofa}` : ''}
-                                                                    onClick={() => parsed.twofa && copyText(parsed.twofa, `2fa-${account.id}`)}
+                                                                        {copiedField === `2fa-${account.id}` ? '✓' : (parsed.twofa ? parsed.twofa.substring(0, 8) + '...' : '-')}
+                                                                    </code>
+                                                                    {parsed.twofa && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-7 w-7 p-0"
+                                                                            title="Lấy mã 2FA"
+                                                                            disabled={loadingTwoFa[account.id]}
+                                                                            onClick={async () => {
+                                                                                const secret = parsed.twofa!.replace(/\s/g, '');
+                                                                                setLoadingTwoFa(prev => ({ ...prev, [account.id]: true }));
+                                                                                try {
+                                                                                    const res = await fetch(`/api/2fa-token?secret=${secret}`);
+                                                                                    const data = await res.json();
+                                                                                    if (data.token) {
+                                                                                        setTwoFaTokens(prev => ({ ...prev, [account.id]: data.token }));
+                                                                                        navigator.clipboard.writeText(data.token);
+                                                                                        setCopiedField(`2fa-token-${account.id}`);
+                                                                                        setTimeout(() => {
+                                                                                            setCopiedField(prev => prev === `2fa-token-${account.id}` ? null : prev);
+                                                                                        }, 3000);
+                                                                                        setTimeout(() => {
+                                                                                            setTwoFaTokens(prev => { const n = { ...prev }; delete n[account.id]; return n; });
+                                                                                        }, 30000);
+                                                                                    }
+                                                                                } catch (e) {
+                                                                                    console.error('2FA error:', e);
+                                                                                } finally {
+                                                                                    setLoadingTwoFa(prev => ({ ...prev, [account.id]: false }));
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {loadingTwoFa[account.id] ? (
+                                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                                            ) : (
+                                                                                <KeyRound className="w-4 h-4 text-orange-500" />
+                                                                            )}
+                                                                        </Button>
+                                                                    )}
+                                                                    {twoFaTokens[account.id] && (
+                                                                        <span
+                                                                            className="text-[11px] font-mono font-bold text-green-500 cursor-pointer"
+                                                                            title="Click để copy mã 2FA"
+                                                                            onClick={() => {
+                                                                                navigator.clipboard.writeText(twoFaTokens[account.id]);
+                                                                                setCopiedField(`2fa-token-${account.id}`);
+                                                                                setTimeout(() => setCopiedField(prev => prev === `2fa-token-${account.id}` ? null : prev), 2000);
+                                                                            }}
+                                                                        >
+                                                                            {copiedField === `2fa-token-${account.id}` ? '✓' : twoFaTokens[account.id]}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            {/* Tình trạng pay */}
+                                                            <TableCell>
+                                                                <Select
+                                                                    value={account.payment_status}
+                                                                    onValueChange={(val: string) => handleUpdateStatus(account.id, 'payment_status', val)}
                                                                 >
-                                                                    {parsed.twofa || '-'}
-                                                                </code>
-                                                                {parsed.twofa && (
+                                                                    <SelectTrigger className={`w-[72px] h-6 text-[11px] ${account.payment_status === 'paid' ? 'border-green-500 text-green-600' :
+                                                                        account.payment_status === 'invalid' ? 'border-red-500 text-red-600' :
+                                                                            'border-yellow-500 text-yellow-600'
+                                                                        }`}>
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="pending">Chưa pay</SelectItem>
+                                                                        <SelectItem value="paid">Đã pay</SelectItem>
+                                                                        <SelectItem value="invalid">Sai TT</SelectItem>
+                                                                        <SelectItem value="package_error">Lỗi gói</SelectItem>
+                                                                        <SelectItem value="wrong_info">Sai TT tin</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </TableCell>
+                                                            {/* Ngày pay */}
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {account.paid_at ? formatDate(account.paid_at) : '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                            {/* Ngày thêm */}
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {formatDate(account.created_at)}
+                                                                </span>
+                                                            </TableCell>
+                                                            {/* Trạng thái bán */}
+                                                            <TableCell>
+                                                                <Select
+                                                                    value={account.sale_status}
+                                                                    onValueChange={(val: string) => handleUpdateStatus(account.id, 'sale_status', val)}
+                                                                >
+                                                                    <SelectTrigger className={`w-[72px] h-6 text-[11px] ${account.sale_status === 'sold' ? 'border-purple-500 text-purple-600' :
+                                                                        'border-blue-500 text-blue-600'
+                                                                        }`}>
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="in_stock">Còn hàng</SelectItem>
+                                                                        <SelectItem value="sold">Đã bán</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </TableCell>
+                                                            {/* Lên Bot */}
+                                                            <TableCell>
+                                                                <Select
+                                                                    value={account.bot_status || 'not_uploaded'}
+                                                                    onValueChange={(val: string) => handleUpdateStatus(account.id, 'bot_status', val)}
+                                                                >
+                                                                    <SelectTrigger className={`w-[72px] h-6 text-[11px] ${account.bot_status === 'uploaded' ? 'border-teal-500 text-teal-600' :
+                                                                        'border-orange-500 text-orange-600'
+                                                                        }`}>
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="not_uploaded">Chưa lên</SelectItem>
+                                                                        <SelectItem value="uploaded">Đã lên</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </TableCell>
+                                                            {/* Người mua */}
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {account.buyer_username || '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {editingId === account.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Input
+                                                                            value={editNote}
+                                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditNote(e.target.value)}
+                                                                            className="h-7 text-xs w-24"
+                                                                        />
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-9 w-9 p-0"
+                                                                            onClick={() => handleSaveNote(account.id)}
+                                                                            title="Lưu"
+                                                                        >
+                                                                            <Save className="w-5 h-5" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-9 w-9 p-0"
+                                                                            onClick={() => setEditingId(null)}
+                                                                            title="Hủy"
+                                                                        >
+                                                                            <X className="w-5 h-5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs truncate max-w-[100px]" title={account.note || ''}>
+                                                                            {account.note || '-'}
+                                                                        </span>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-9 w-9 p-0"
+                                                                            onClick={() => startEditNote(account)}
+                                                                            title="Sửa ghi chú"
+                                                                        >
+                                                                            <Edit2 className="w-5 h-5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-0.5">
                                                                     <Button
-                                                                        variant="ghost"
+                                                                        variant="outline"
                                                                         size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => copyText(parsed.twofa, `2fa-${account.id}`)}
+                                                                        className="h-9 w-9 p-0"
+                                                                        onClick={() => {
+                                                                            const copyData = [
+                                                                                parsed.tk,
+                                                                                parsed.mk,
+                                                                                parsed.twofa
+                                                                            ].filter(Boolean).join('|');
+                                                                            copyText(copyData, `all-${account.id}`);
+                                                                        }}
+                                                                        title="Copy TK|MK|2FA"
                                                                     >
-                                                                        {copiedField === `2fa-${account.id}` ? (
-                                                                            <Check className="w-3 h-3 text-green-500" />
+                                                                        {copiedField === `all-${account.id}` ? (
+                                                                            <Check className="w-5 h-5 text-green-500" />
                                                                         ) : (
-                                                                            <Copy className="w-3 h-3" />
+                                                                            <Copy className="w-5 h-5" />
                                                                         )}
                                                                     </Button>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        {/* Tình trạng pay */}
-                                                        <TableCell>
-                                                            <Select
-                                                                value={account.payment_status}
-                                                                onValueChange={(val: string) => handleUpdateStatus(account.id, 'payment_status', val)}
-                                                            >
-                                                                <SelectTrigger className={`w-[90px] h-7 text-xs ${account.payment_status === 'paid' ? 'border-green-500 text-green-600' :
-                                                                    account.payment_status === 'invalid' ? 'border-red-500 text-red-600' :
-                                                                        'border-yellow-500 text-yellow-600'
-                                                                    }`}>
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="pending">Chưa pay</SelectItem>
-                                                                    <SelectItem value="paid">Đã pay</SelectItem>
-                                                                    <SelectItem value="invalid">Sai TT</SelectItem>
-                                                                    <SelectItem value="package_error">Lỗi gói</SelectItem>
-                                                                    <SelectItem value="wrong_info">Sai TT tin</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </TableCell>
-                                                        {/* Ngày pay */}
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.paid_at ? formatDate(account.paid_at) : '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                        {/* Ngày thêm */}
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {formatDate(account.created_at)}
-                                                            </span>
-                                                        </TableCell>
-                                                        {/* Trạng thái bán */}
-                                                        <TableCell>
-                                                            <Select
-                                                                value={account.sale_status}
-                                                                onValueChange={(val: string) => handleUpdateStatus(account.id, 'sale_status', val)}
-                                                            >
-                                                                <SelectTrigger className={`w-[90px] h-7 text-xs ${account.sale_status === 'sold' ? 'border-purple-500 text-purple-600' :
-                                                                    'border-blue-500 text-blue-600'
-                                                                    }`}>
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="in_stock">Còn hàng</SelectItem>
-                                                                    <SelectItem value="sold">Đã bán</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </TableCell>
-                                                        {/* Lên Bot */}
-                                                        <TableCell>
-                                                            <Select
-                                                                value={account.bot_status || 'not_uploaded'}
-                                                                onValueChange={(val: string) => handleUpdateStatus(account.id, 'bot_status', val)}
-                                                            >
-                                                                <SelectTrigger className={`w-[90px] h-7 text-xs ${account.bot_status === 'uploaded' ? 'border-teal-500 text-teal-600' :
-                                                                    'border-orange-500 text-orange-600'
-                                                                    }`}>
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="not_uploaded">Chưa lên</SelectItem>
-                                                                    <SelectItem value="uploaded">Đã lên</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </TableCell>
-                                                        {/* Người mua */}
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.buyer_username || '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {editingId === account.id ? (
-                                                                <div className="flex items-center gap-1">
-                                                                    <Input
-                                                                        value={editNote}
-                                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditNote(e.target.value)}
-                                                                        className="h-7 text-xs w-24"
-                                                                    />
                                                                     <Button
-                                                                        variant="ghost"
+                                                                        variant="destructive"
                                                                         size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => handleSaveNote(account.id)}
+                                                                        className="h-9 w-9 p-0"
+                                                                        onClick={() => handleDelete(account.id)}
+                                                                        title="Xóa tài khoản"
                                                                     >
-                                                                        <Save className="w-3 h-3" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => setEditingId(null)}
-                                                                    >
-                                                                        <X className="w-3 h-3" />
+                                                                        <Trash2 className="w-5 h-5" />
                                                                     </Button>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs truncate max-w-[100px]" title={account.note || ''}>
-                                                                        {account.note || '-'}
-                                                                    </span>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-6 w-6 p-0"
-                                                                        onClick={() => startEditNote(account)}
-                                                                    >
-                                                                        <Edit2 className="w-3 h-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="h-7"
-                                                                onClick={() => {
-                                                                    const copyData = [
-                                                                        parsed.tk,
-                                                                        parsed.mk,
-                                                                        parsed.twofa
-                                                                    ].filter(Boolean).join('|');
-                                                                    copyText(copyData, `all-${account.id}`);
-                                                                }}
-                                                                title="Copy TK, MK, 2FA"
-                                                            >
-                                                                {copiedField === `all-${account.id}` ? (
-                                                                    <Check className="w-4 h-4 text-green-500" />
-                                                                ) : (
-                                                                    <Copy className="w-4 h-4" />
-                                                                )}
-                                                            </Button>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="h-7"
-                                                                onClick={() => handleDelete(account.id)}
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                    {/* Pagination */}
+                                    {paginatedData.totalPages > 1 && (
+                                        <div className="flex items-center justify-between mt-4 px-2">
+                                            <span className="text-sm text-muted-foreground">
+                                                Hiển thị {paginatedData.startIndex + 1}-{Math.min(paginatedData.startIndex + pageSize, paginatedData.total)} / {paginatedData.total}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                    disabled={currentPage === 1}
+                                                >
+                                                    <ChevronLeft className="w-4 h-4" />
+                                                </Button>
+                                                <span className="text-sm font-medium">
+                                                    {currentPage} / {paginatedData.totalPages}
+                                                </span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage(p => Math.min(paginatedData.totalPages, p + 1))}
+                                                    disabled={currentPage === paginatedData.totalPages}
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </CardContent>
                     </Card>
@@ -864,130 +919,131 @@ export default function StoredAccountsPage() {
             )}
 
             {/* Sold Accounts Tab */}
-            {activeTab === 'sold' && (
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <User className="w-5 h-5" />
-                            Tài khoản đã bán ({accounts.filter(a => a.sale_status === 'sold').length})
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {loading ? (
-                            <div className="text-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                                <p className="mt-2 text-muted-foreground">Đang tải...</p>
-                            </div>
-                        ) : accounts.filter(a => a.sale_status === 'sold').length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>Chưa có tài khoản nào được bán</p>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="max-h-[600px] overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-[80px]">Loại</TableHead>
-                                                <TableHead className="w-[80px]">Code</TableHead>
-                                                <TableHead>TK</TableHead>
-                                                <TableHead>MK</TableHead>
-                                                <TableHead>2FA</TableHead>
-                                                <TableHead className="w-[120px]">Người mua</TableHead>
-                                                <TableHead className="w-[100px]">Ngày bán</TableHead>
-                                                <TableHead className="w-[100px]">Ngày thêm</TableHead>
-                                                <TableHead>Note</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {soldAccountsData.paginatedSold.map((account) => {
-                                                const parsed = parseAccountData(account.data);
-                                                return (
-                                                    <TableRow key={account.id}>
-                                                        <TableCell>
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                                                {account.type_name}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.code || '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate cursor-pointer hover:bg-muted/80" title={parsed.tk} onClick={() => copyText(parsed.tk, `sold-tk-${account.id}`)}>
-                                                                {parsed.tk || '-'}
-                                                            </code>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.mk} onClick={() => copyText(parsed.mk, `sold-mk-${account.id}`)}>
-                                                                {parsed.mk || '-'}
-                                                            </code>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.twofa} onClick={() => copyText(parsed.twofa, `sold-2fa-${account.id}`)}>
-                                                                {parsed.twofa || '-'}
-                                                            </code>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-                                                                <User className="w-3 h-3" />
-                                                                {account.buyer_username || 'N/A'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.sold_at ? formatDate(account.sold_at) : '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {formatDate(account.created_at)}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {account.note || '-'}
-                                                            </span>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
+            {
+                activeTab === 'sold' && (
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <User className="w-5 h-5" />
+                                Tài khoản đã bán ({accounts.filter(a => a.sale_status === 'sold').length})
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {loading ? (
+                                <div className="text-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                                    <p className="mt-2 text-muted-foreground">Đang tải...</p>
                                 </div>
-                                {/* Pagination */}
-                                {soldAccountsData.totalPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <span className="text-sm text-muted-foreground">
-                                            Trang {soldPage} / {soldAccountsData.totalPages} (Tổng: {soldAccountsData.totalSold})
-                                        </span>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setSoldPage(p => Math.max(1, p - 1))}
-                                                disabled={soldPage <= 1}
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setSoldPage(p => Math.min(soldAccountsData.totalPages, p + 1))}
-                                                disabled={soldPage >= soldAccountsData.totalPages}
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Button>
-                                        </div>
+                            ) : accounts.filter(a => a.sale_status === 'sold').length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                    <p>Chưa có tài khoản nào được bán</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="max-h-[600px] overflow-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead className="w-[80px]">Loại</TableHead>
+                                                    <TableHead className="w-[80px]">Code</TableHead>
+                                                    <TableHead>TK</TableHead>
+                                                    <TableHead>MK</TableHead>
+                                                    <TableHead>2FA</TableHead>
+                                                    <TableHead className="w-[120px]">Người mua</TableHead>
+                                                    <TableHead className="w-[100px]">Ngày bán</TableHead>
+                                                    <TableHead className="w-[100px]">Ngày thêm</TableHead>
+                                                    <TableHead>Note</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {soldAccountsData.paginatedSold.map((account) => {
+                                                    const parsed = parseAccountData(account.data);
+                                                    return (
+                                                        <TableRow key={account.id}>
+                                                            <TableCell>
+                                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                                    {account.type_name}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {account.code || '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate cursor-pointer hover:bg-muted/80" title={parsed.tk} onClick={() => copyText(parsed.tk, `sold-tk-${account.id}`)}>
+                                                                    {parsed.tk || '-'}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.mk} onClick={() => copyText(parsed.mk, `sold-mk-${account.id}`)}>
+                                                                    {parsed.mk || '-'}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.twofa} onClick={() => copyText(parsed.twofa, `sold-2fa-${account.id}`)}>
+                                                                    {parsed.twofa || '-'}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                                                    <User className="w-3 h-3" />
+                                                                    {account.buyer_username || 'N/A'}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {account.sold_at ? formatDate(account.sold_at) : '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {formatDate(account.created_at)}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {account.note || '-'}
+                                                                </span>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
                                     </div>
-                                )}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
+                                    {/* Pagination */}
+                                    {soldAccountsData.totalPages > 1 && (
+                                        <div className="flex items-center justify-between mt-4">
+                                            <span className="text-sm text-muted-foreground">
+                                                Trang {soldPage} / {soldAccountsData.totalPages} (Tổng: {soldAccountsData.totalSold})
+                                            </span>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setSoldPage(p => Math.max(1, p - 1))}
+                                                    disabled={soldPage <= 1}
+                                                >
+                                                    <ChevronLeft className="w-4 h-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setSoldPage(p => Math.min(soldAccountsData.totalPages, p + 1))}
+                                                    disabled={soldPage >= soldAccountsData.totalPages}
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
 
             {/* Add Type Dialog */}
             <Dialog
@@ -1010,14 +1066,16 @@ export default function StoredAccountsPage() {
                 </div>
                 <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setShowAddTypeDialog(false)}>
+                        <X className="w-4 h-4 mr-1" />
                         Hủy
                     </Button>
                     <Button onClick={handleAddType} disabled={addingType || !newTypeName.trim()}>
+                        <Plus className="w-4 h-4 mr-1" />
                         {addingType ? 'Đang thêm...' : 'Thêm'}
                     </Button>
                 </div>
             </Dialog>
-        </div>
+        </div >
     );
 }
 

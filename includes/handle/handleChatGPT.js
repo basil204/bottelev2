@@ -2,12 +2,14 @@ import {
     getAllFams,
     getAvailableFam,
     getRentalByEmail,
+    getRentalsByUserId,
     createRental,
     getSlotPrice,
     getSlotDays,
     inviteEmailToFam,
     updateRentalInviteStatus,
-    checkAndRenewFam
+    checkAndRenewFam,
+    checkWarrantyForUser
 } from '../controllers/chatgptController.js';
 import { getUserByTelegram, updateBalance } from '../controllers/userController.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
@@ -24,24 +26,72 @@ export async function showChatGPTInfo(bot, chatId, user) {
     const price = await getSlotPrice();
     const days = await getSlotDays();
 
+    // Check user rentals
+    const rentals = await getRentalsByUserId(user.id);
+    const activeRentals = rentals.filter(r => r.status === 'active');
+
     const availableFam = await getAvailableFam();
     const hasSlot = !!availableFam;
 
     let message = '';
+
+    // Header info
     if (lang === 'en') {
         message = `🤖 *ChatGPT Pro (Team Slot)*\n\n`;
         message += `💰 Price: *${formatCurrency(price)}* / ${days} days\n`;
         message += `📊 Available: ${hasSlot ? '✅ Yes' : '❌ No slots available'}\n\n`;
-        message += hasSlot
-            ? `📧 Enter your email to rent a ChatGPT Team slot:`
-            : `⚠️ Currently no slots available. Please try again later.`;
     } else {
         message = `🤖 *ChatGPT Pro (Team Slot)*\n\n`;
         message += `💰 Giá: *${formatCurrency(price)}* / ${days} ngày\n`;
         message += `📊 Còn slot: ${hasSlot ? '✅ Có' : '❌ Hết slot'}\n\n`;
+    }
+
+    // Display active rentals
+    if (activeRentals.length > 0) {
+        if (lang === 'en') {
+            message += `📋 *YOUR SUBSCRIPTIONS:*\n`;
+        } else {
+            message += `📋 *GÓI CƯỚC CỦA BẠN:*\n`;
+        }
+
+        activeRentals.forEach((rental, index) => {
+            const endDate = new Date(rental.end_date);
+            const now = new Date();
+            const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+            const statusIcon = daysLeft > 0 ? '🟢' : '🔴';
+
+            message += `\n${index + 1}. 📧 \`${rental.email}\`\n`;
+            message += `   📅 Expire: ${endDate.toLocaleDateString('vi-VN')}\n`;
+            message += `   ⏳ Remaining: *${daysLeft} days* ${statusIcon}\n`;
+        });
+        message += '\n-------------------\n\n';
+    }
+
+    // Call to action
+    if (lang === 'en') {
         message += hasSlot
-            ? `📧 Nhập email của bạn để thuê slot ChatGPT Team:`
-            : `⚠️ Hiện tại hết slot. Vui lòng thử lại sau.`;
+            ? `📧 Enter your email to rent a NEW ChatGPT Team slot:`
+            : `⚠️ Currently no slots available for new purchase.`;
+    } else {
+        message += hasSlot
+            ? `📧 Nhập email để thuê thêm slot ChatGPT Team MỚI:`
+            : `⚠️ Hiện tại hết slot đăng ký mới.`;
+    }
+
+    const { createCallbackData } = await import('../../utils/index.js'); // Import helper
+
+    // Build inline keyboard with warranty button if user has active rentals
+    const inlineKeyboard = [
+        [
+            { text: lang === 'en' ? '📅 Check Expiry' : '📅 Kiểm tra hạn', callback_data: createCallbackData({ action: 'chatgpt_check_expiry' }) }
+        ]
+    ];
+
+    // Add warranty button if user has active rentals
+    if (activeRentals.length > 0) {
+        inlineKeyboard.push([
+            { text: lang === 'en' ? '🛡️ Warranty Check' : '🛡️ Bảo hành', callback_data: createCallbackData({ action: 'chatgpt_warranty' }) }
+        ]);
     }
 
     if (hasSlot) {
@@ -54,6 +104,7 @@ export async function showChatGPTInfo(bot, chatId, user) {
         await bot.sendMessage(chatId, message, {
             parse_mode: 'Markdown',
             reply_markup: {
+                inline_keyboard: inlineKeyboard,
                 keyboard: [
                     [{ text: '❌ Huỷ' }]
                 ],
@@ -61,7 +112,12 @@ export async function showChatGPTInfo(bot, chatId, user) {
             }
         });
     } else {
-        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: inlineKeyboard
+            }
+        });
     }
 }
 
@@ -229,6 +285,154 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
 }
 
 /**
+ * Hiển thị trạng thái gói thuê
+ */
+export async function showRentalStatus(bot, chatId, user) {
+    const lang = user.language || 'vi';
+    const rentals = await getRentalsByUserId(user.id);
+    const activeRentals = rentals.filter(r => r.status === 'active');
+
+    if (activeRentals.length === 0) {
+        const msg = lang === 'en'
+            ? '❌ You do not have any active ChatGPT subscription.'
+            : '❌ Bạn chưa đăng ký gói ChatGPT nào đang hoạt động.';
+        await bot.sendMessage(chatId, msg);
+        return;
+    }
+
+    let message = '';
+    if (lang === 'en') {
+        message += `📋 *YOUR SUBSCRIPTIONS:*\n`;
+    } else {
+        message += `📋 *GÓI CƯỚC CỦA BẠN:*\n`;
+    }
+
+    activeRentals.forEach((rental, index) => {
+        const endDate = new Date(rental.end_date);
+        const now = new Date();
+        const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+        const statusIcon = daysLeft > 0 ? '🟢' : '🔴';
+
+        message += `\n${index + 1}. 📧 \`${rental.email}\`\n`;
+        message += `   📅 Expire: ${endDate.toLocaleDateString('vi-VN')}\n`;
+        message += `   ⏳ Remaining: *${daysLeft} days* ${statusIcon}\n`;
+    });
+
+    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+}
+
+/**
+ * Xử lý bảo hành - check tất cả email của user và chuyển FAM nếu cần
+ */
+export async function handleWarrantyCheck(bot, chatId, user, config) {
+    const lang = user.language || 'vi';
+
+    // Show loading message
+    const loadingMsg = lang === 'en'
+        ? '⏳ Checking warranty status for all your emails...'
+        : '⏳ Đang kiểm tra bảo hành cho tất cả email của bạn...';
+    await bot.sendMessage(chatId, loadingMsg);
+
+    try {
+        const results = await checkWarrantyForUser(user.id);
+
+        let message = '';
+
+        if (results.noRentals) {
+            message = lang === 'en'
+                ? '❌ You do not have any active ChatGPT subscription to check.'
+                : '❌ Bạn chưa có gói ChatGPT nào đang hoạt động để kiểm tra.';
+            await bot.sendMessage(chatId, message);
+            return;
+        }
+
+        if (results.allOk && results.needsSupport.length === 0) {
+            message = lang === 'en'
+                ? '✅ *WARRANTY CHECK COMPLETE*\n\nAll your subscriptions are working correctly!'
+                : '✅ *KIỂM TRA BẢO HÀNH HOÀN TẤT*\n\nTất cả gói cước của bạn đều hoạt động bình thường!';
+
+            // List all OK emails
+            const okEmails = results.processed.filter(p => p.status === 'ok');
+            if (okEmails.length > 0) {
+                message += '\n\n📧 *Emails OK:*';
+                okEmails.forEach((item, i) => {
+                    message += `\n${i + 1}. \`${item.email}\` (${item.fam})`;
+                });
+            }
+
+            await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+            return;
+        }
+
+        // Some changes were made
+        message = lang === 'en'
+            ? '🛡️ *WARRANTY CHECK RESULT*\n\n'
+            : '🛡️ *KẾT QUẢ KIỂM TRA BẢO HÀNH*\n\n';
+
+        // Show moved emails
+        const movedEmails = results.processed.filter(p => p.status === 'moved');
+        if (movedEmails.length > 0) {
+            message += lang === 'en' ? '✅ *SUCCESSFULLY MOVED:*\n' : '✅ *ĐÃ CHUYỂN THÀNH CÔNG:*\n';
+            movedEmails.forEach((item, i) => {
+                message += `${i + 1}. \`${item.email}\`\n`;
+                message += `   ${item.oldFam} → ${item.newFam}\n`;
+            });
+            message += lang === 'en'
+                ? '\n📨 New invitations have been sent. Please check your email.\n\n'
+                : '\n📨 Lời mời mới đã được gửi. Vui lòng kiểm tra email.\n\n';
+        }
+
+        // Show OK emails
+        const okEmails = results.processed.filter(p => p.status === 'ok');
+        if (okEmails.length > 0) {
+            message += lang === 'en' ? '✅ *WORKING OK:*\n' : '✅ *HOẠT ĐỘNG TỐT:*\n';
+            okEmails.forEach((item, i) => {
+                message += `${i + 1}. \`${item.email}\` (${item.fam})\n`;
+            });
+            message += '\n';
+        }
+
+        // Show emails needing support
+        if (results.needsSupport.length > 0) {
+            message += lang === 'en'
+                ? '⚠️ *NEEDS ADMIN SUPPORT:*\n'
+                : '⚠️ *CẦN LIÊN HỆ ADMIN:*\n';
+            results.needsSupport.forEach((item, i) => {
+                message += `${i + 1}. \`${item.email}\`\n`;
+                message += lang === 'en'
+                    ? `   Reason: No available FAM to switch\n`
+                    : `   Lý do: Hết FAM để chuyển\n`;
+            });
+            message += lang === 'en'
+                ? '\n📞 Please contact admin for manual support.'
+                : '\n📞 Vui lòng liên hệ admin để được hỗ trợ thủ công.';
+
+            // Notify admins about warranty issues
+            if (config.ADMIN_IDS && config.ADMIN_IDS.length > 0) {
+                const adminMsg = `🛡️ *WARRANTY SUPPORT NEEDED*\n\n👤 User: ${user.username || user.telegram_id}\n\n` +
+                    results.needsSupport.map(item => `📧 ${item.email} - ${item.reason}`).join('\n');
+                for (const adminId of config.ADMIN_IDS) {
+                    try {
+                        await bot.sendMessage(adminId, adminMsg, { parse_mode: 'Markdown' });
+                    } catch (e) {
+                        console.error('[ChatGPT Warranty] Failed to notify admin:', e);
+                    }
+                }
+            }
+        }
+
+        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+
+    } catch (error) {
+        console.error('[ChatGPT Warranty] Error:', error);
+        const errorMsg = lang === 'en'
+            ? '❌ An error occurred while checking warranty. Please try again or contact support.'
+            : '❌ Có lỗi xảy ra khi kiểm tra bảo hành. Vui lòng thử lại hoặc liên hệ hỗ trợ.';
+        await bot.sendMessage(chatId, errorMsg);
+    }
+}
+
+/**
  * Xử lý callback từ inline button
  */
 export async function handleChatGPTCallback(bot, query, data, config) {
@@ -241,6 +445,12 @@ export async function handleChatGPTCallback(bot, query, data, config) {
 
         case 'chatgpt_buy':
             return showChatGPTInfo(bot, chatId, user);
+
+        case 'chatgpt_check_expiry':
+            return showRentalStatus(bot, chatId, user);
+
+        case 'chatgpt_warranty':
+            return handleWarrantyCheck(bot, chatId, user, config);
 
         default:
             return false;

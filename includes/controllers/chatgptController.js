@@ -29,13 +29,13 @@ export async function getFamById(famId) {
 }
 
 /**
- * Lấy FAM có slot trống
+ * Lấy FAM có slot trống (ưu tiên FAM gần đầy trước - mời đầy FAM này rồi mới sang FAM khác)
  */
 export async function getAvailableFam() {
     const rows = await query(`
     SELECT * FROM chatgpt_fams 
     WHERE status = 'active' AND used_slots < max_slots - 1
-    ORDER BY used_slots ASC
+    ORDER BY used_slots DESC
     LIMIT 1
   `);
     return rows[0] || null;
@@ -469,4 +469,119 @@ export async function checkAndRenewFam(email) {
     }
 
     return { active: true, rental, fam };
+}
+
+// ==================== WARRANTY CHECK ====================
+
+/**
+ * Kiểm tra bảo hành cho tất cả email của user
+ * Check từng FAM còn sống không, nếu die thì chuyển sang FAM mới
+ * @param userId - ID của user trong DB
+ * @returns { processed: [], needsSupport: [], allOk: boolean }
+ */
+export async function checkWarrantyForUser(userId) {
+    const rentals = await query(
+        'SELECT r.*, f.name as fam_name FROM chatgpt_rentals r LEFT JOIN chatgpt_fams f ON r.fam_id = f.id WHERE r.user_id = ? AND r.status = ?',
+        [userId, 'active']
+    );
+
+    const results = {
+        processed: [],      // Các email đã được xử lý thành công (chuyển FAM hoặc vẫn OK)
+        needsSupport: [],   // Các email cần liên hệ admin (hết FAM để chuyển)
+        allOk: true         // Tất cả email đều OK, không cần xử lý gì
+    };
+
+    if (rentals.length === 0) {
+        return { ...results, noRentals: true };
+    }
+
+    for (const rental of rentals) {
+        const fam = await getFamById(rental.fam_id);
+
+        // Check if FAM is dead (inactive or null)
+        if (!fam || fam.status === 'inactive') {
+            results.allOk = false;
+
+            // Kiểm tra FAM qua API (nếu có thể)
+            let isLive = false;
+            if (fam) {
+                const liveCheck = await checkFamLive(fam);
+                isLive = liveCheck.isLive;
+            }
+
+            if (!isLive) {
+                // FAM die - tìm FAM mới
+                const newFam = await getAvailableFam();
+
+                if (newFam) {
+                    // Chuyển email sang FAM mới
+                    await moveRentalToFam(rental.id, newFam.id);
+
+                    // Gửi lời mời mới
+                    const inviteResult = await inviteEmailToFam(newFam, rental.email);
+                    if (inviteResult.success) {
+                        await updateRentalInviteStatus(rental.id, 'sent');
+                    }
+
+                    results.processed.push({
+                        email: rental.email,
+                        oldFam: fam?.name || 'Unknown',
+                        newFam: newFam.name,
+                        status: 'moved'
+                    });
+                } else {
+                    // Hết FAM để chuyển - cần liên hệ admin
+                    results.needsSupport.push({
+                        email: rental.email,
+                        oldFam: fam?.name || 'Unknown',
+                        reason: 'no_fam_available'
+                    });
+                }
+            }
+        } else {
+            // FAM vẫn active - check xem còn sống không qua API
+            const liveCheck = await checkFamLive(fam);
+
+            if (!liveCheck.isLive) {
+                results.allOk = false;
+
+                // FAM die - tìm FAM mới
+                const newFam = await getAvailableFam();
+
+                if (newFam && newFam.id !== fam.id) {
+                    await moveRentalToFam(rental.id, newFam.id);
+
+                    const inviteResult = await inviteEmailToFam(newFam, rental.email);
+                    if (inviteResult.success) {
+                        await updateRentalInviteStatus(rental.id, 'sent');
+                    }
+
+                    // Mark old FAM as inactive
+                    await query('UPDATE chatgpt_fams SET status = ? WHERE id = ?', ['inactive', fam.id]);
+
+                    results.processed.push({
+                        email: rental.email,
+                        oldFam: fam.name,
+                        newFam: newFam.name,
+                        status: 'moved'
+                    });
+                } else {
+                    results.needsSupport.push({
+                        email: rental.email,
+                        oldFam: fam.name,
+                        reason: 'no_fam_available'
+                    });
+                }
+            } else {
+                // FAM vẫn sống - OK
+                results.processed.push({
+                    email: rental.email,
+                    fam: fam.name,
+                    status: 'ok'
+                });
+            }
+        }
+    }
+
+    return results;
 }

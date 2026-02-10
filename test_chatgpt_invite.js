@@ -7,7 +7,8 @@ const testChatGPTInvite = async () => {
     const cookie = `oai-did=56773f1b-073b-494a-868f-c09365bef2f1; _account=${accountId}; _puid=user-IyOMNQrHfsvIItYt4fSffk9f:1770529820-9qrLCajRzWj%2FHpfMBJmHXTl55qTd%2BNF4n38qabIIZtM%3D`;
 
     const email = "manhnlpp02832@fpt.edu.vn";
-
+//  401 (không dc phép truy cập qua token)
+// =>> Cloudflare => fake cookie pass qua Cloudflare => 
     try {
         const response = await fetch(`https://chatgpt.com/backend-api/accounts/${accountId}/invites`, {
             method: "POST",

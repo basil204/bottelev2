@@ -39,6 +39,7 @@ import {
     Clock,
     Settings
 } from "lucide-react";
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface Fam {
     id: number;
@@ -83,6 +84,7 @@ interface Stats {
 }
 
 export default function ChatGPTPage() {
+    const { formatPrice } = useCurrency();
     const [fams, setFams] = useState<Fam[]>([]);
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [settings, setSettings] = useState<SettingsType>({ slot_price: 60000, slot_days: 30 });
@@ -207,9 +209,7 @@ export default function ChatGPTPage() {
         }
     };
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-    };
+
 
     const getDaysRemaining = (endDate: string) => {
         const days = Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -280,7 +280,7 @@ export default function ChatGPTPage() {
                             <CardTitle className="text-sm font-medium text-muted-foreground">Doanh thu</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalRevenue)}</div>
+                            Hiện tại: {formatPrice(settings.slot_price)}
                             <p className="text-xs text-muted-foreground">từ rentals</p>
                         </CardContent>
                     </Card>
@@ -412,7 +412,7 @@ export default function ChatGPTPage() {
                                             {rental.username || rental.telegram_id}
                                         </TableCell>
                                         <TableCell>{rental.fam_name}</TableCell>
-                                        <TableCell>{formatCurrency(rental.price)}</TableCell>
+                                        <TableCell>{formatPrice(rental.price)}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-1">
                                                 <Clock className="h-4 w-4" />
@@ -462,7 +462,7 @@ export default function ChatGPTPage() {
                                 onChange={(e) => setNewSettings({ ...newSettings, slot_price: parseInt(e.target.value) || 0 })}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                                Hiện tại: {formatCurrency(settings.slot_price)}
+                                Hiện tại: {formatPrice(settings.slot_price)}
                             </p>
                         </div>
                         <div>

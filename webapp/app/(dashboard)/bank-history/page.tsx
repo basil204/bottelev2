@@ -12,7 +12,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { RefreshCw, ArrowUpCircle, ArrowDownCircle, Filter, Calendar, TrendingUp, DollarSign } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -46,6 +47,7 @@ interface MonthlySummary {
 
 export default function BankHistoryPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -271,7 +273,7 @@ export default function BankHistoryPage() {
                         <Calendar className="h-4 w-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-500">+{formatCurrency(todaySummary.totalCredit)}</div>
+                        <div className="text-2xl font-bold text-green-500">+{formatPrice(todaySummary.totalCredit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             {todaySummary.count} giao dịch nhận
                         </p>
@@ -284,7 +286,7 @@ export default function BankHistoryPage() {
                         <TrendingUp className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-500">+{formatCurrency(thisMonthSummary.totalCredit)}</div>
+                        <div className="text-2xl font-bold text-blue-500">+{formatPrice(thisMonthSummary.totalCredit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             {thisMonthSummary.count} giao dịch nhận
                         </p>
@@ -297,7 +299,7 @@ export default function BankHistoryPage() {
                         <ArrowUpCircle className="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-red-500">-{formatCurrency(todaySummary.totalDebit)}</div>
+                        <div className="text-2xl font-bold text-red-500">-{formatPrice(todaySummary.totalDebit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             Tổng chi tiêu hôm nay
                         </p>
@@ -310,7 +312,7 @@ export default function BankHistoryPage() {
                         <DollarSign className="h-4 w-4 text-purple-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-purple-500">+{formatCurrency(filteredSummary.totalCredit)}</div>
+                        <div className="text-2xl font-bold text-purple-500">+{formatPrice(filteredSummary.totalCredit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             {filteredSummary.count} giao dịch
                         </p>
@@ -408,8 +410,8 @@ export default function BankHistoryPage() {
                                     {dailySummaries.map((summary) => (
                                         <TableRow key={summary.date}>
                                             <TableCell className="font-medium">{summary.date}</TableCell>
-                                            <TableCell className="text-green-500 font-bold">+{formatCurrency(summary.totalCredit)}</TableCell>
-                                            <TableCell className="text-red-500 font-bold">-{formatCurrency(summary.totalDebit)}</TableCell>
+                                            <TableCell className="text-green-500 font-bold">+{formatPrice(summary.totalCredit)}</TableCell>
+                                            <TableCell className="text-red-500 font-bold">-{formatPrice(summary.totalDebit)}</TableCell>
                                             <TableCell>{summary.count}</TableCell>
                                             <TableCell>
                                                 <Button
@@ -455,8 +457,8 @@ export default function BankHistoryPage() {
                                     {monthlySummaries.map((summary) => (
                                         <TableRow key={summary.month}>
                                             <TableCell className="font-medium">{summary.month}</TableCell>
-                                            <TableCell className="text-green-500 font-bold">+{formatCurrency(summary.totalCredit)}</TableCell>
-                                            <TableCell className="text-red-500 font-bold">-{formatCurrency(summary.totalDebit)}</TableCell>
+                                            <TableCell className="text-green-500 font-bold">+{formatPrice(summary.totalCredit)}</TableCell>
+                                            <TableCell className="text-red-500 font-bold">-{formatPrice(summary.totalDebit)}</TableCell>
                                             <TableCell>{summary.count}</TableCell>
                                             <TableCell>
                                                 <Button
@@ -573,10 +575,10 @@ export default function BankHistoryPage() {
                                                     {tx.transDate}
                                                 </TableCell>
                                                 <TableCell className={`font-bold ${tx.paymentType === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {tx.paymentType === 'CREDIT' ? '+' : '-'}{formatCurrency(Number(tx.amount))}
+                                                    {tx.paymentType === 'CREDIT' ? '+' : '-'}{formatPrice(Number(tx.amount))}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {formatCurrency(Number(tx.balance))}
+                                                    {formatPrice(Number(tx.balance))}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-xs">
                                                     {tx.bankTransId}

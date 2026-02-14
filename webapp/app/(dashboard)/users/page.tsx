@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Search, UserCog, Package, ShoppingCart, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function UsersPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [users, setUsers] = useState<User[]>([]);
     // ... (state)
     const [loading, setLoading] = useState(true);
@@ -200,7 +202,7 @@ export default function UsersPage() {
                                             <TableCell className="font-medium">{user.username || 'N/A'}</TableCell>
                                             <TableCell className="text-muted-foreground">{user.telegram_id}</TableCell>
                                             <TableCell className="font-bold text-green-600 dark:text-green-400">
-                                                {formatCurrency(user.balance)}
+                                                {formatPrice(user.balance)}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</TableCell>
                                             <TableCell className="text-right">
@@ -340,7 +342,7 @@ export default function UsersPage() {
                                                 <span className="font-medium">{item.productName}</span>
                                                 <div className="text-right">
                                                     <div className="text-green-600 font-medium">{item.count} lần</div>
-                                                    <div className="text-muted-foreground text-xs">{formatCurrency(item.totalSpent)}</div>
+                                                    <div className="text-muted-foreground text-xs">{formatPrice(item.totalSpent)}</div>
                                                 </div>
                                             </div>
                                         ))}
@@ -372,15 +374,15 @@ export default function UsersPage() {
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className="font-medium">{order.product_name}</span>
                                                 <span className={`text-xs px-2 py-0.5 rounded ${order.status === 'completed'
-                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                                        : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                                                     }`}>
                                                     {order.status === 'completed' ? 'Hoàn thành' : 'Đang xử lý'}
                                                 </span>
                                             </div>
                                             <div className="text-muted-foreground text-xs space-y-0.5">
                                                 {order.invoice_code && <div>🧾 {order.invoice_code}</div>}
-                                                <div>💰 {formatCurrency(order.price)}</div>
+                                                <div>💰 {formatPrice(order.price)}</div>
                                                 <div>🕐 {new Date(order.created_at).toLocaleString('vi-VN')}</div>
                                                 {order.email && <div>📧 {order.email}</div>}
                                             </div>

@@ -19,7 +19,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { BarChart3, Download, Search, UserCheck } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface AdminStat {
     admin_id: number;
@@ -31,6 +32,7 @@ interface AdminStat {
 }
 
 export default function AdminStatsPage() {
+    const { formatPrice } = useCurrency();
     const [stats, setStats] = useState<AdminStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [month, setMonth] = useState<string>(new Date().getMonth() + 1 + '');
@@ -113,7 +115,7 @@ export default function AdminStatsPage() {
                         <BarChart3 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{formatCurrency(totalSpent)}</div>
+                        <div className="text-2xl font-bold text-green-600">{formatPrice(totalSpent)}</div>
                         <p className="text-xs text-muted-foreground">+{stats.length} admin tham gia</p>
                     </CardContent>
                 </Card>
@@ -169,7 +171,7 @@ export default function AdminStatsPage() {
                                             <TableCell className="font-mono text-sm">{stat.telegram_id}</TableCell>
                                             <TableCell className="text-right">{stat.total_orders}</TableCell>
                                             <TableCell className="text-right font-bold text-green-600">
-                                                {formatCurrency(stat.total_spent)}
+                                                {formatPrice(stat.total_spent)}
                                             </TableCell>
                                         </TableRow>
                                     ))

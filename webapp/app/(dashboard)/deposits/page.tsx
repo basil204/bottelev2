@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { clsx } from 'clsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -30,6 +31,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function DepositsPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [deposits, setDeposits] = useState<Deposit[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -121,7 +123,7 @@ export default function DepositsPage() {
                                             <TableCell className="font-medium">{deposit.username || `User #${deposit.user_id}`}</TableCell>
                                             <TableCell className="font-mono text-xs text-muted-foreground">{deposit.tx_ref || '-'}</TableCell>
                                             <TableCell className="font-bold text-green-600 dark:text-green-400">
-                                                {formatCurrency(deposit.amount)}
+                                                {formatPrice(deposit.amount)}
                                             </TableCell>
                                             <TableCell>
                                                 <span className={clsx("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium", getStatusStyles(deposit.status))}>

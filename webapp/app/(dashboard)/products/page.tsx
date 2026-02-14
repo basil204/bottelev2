@@ -2,7 +2,8 @@
 
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Plus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight, User, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ProductsPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [products, setProducts] = useState<Product[]>([]);
     // ... (state)
     const [loading, setLoading] = useState(true);
@@ -440,7 +442,7 @@ export default function ProductsPage() {
                                                 <TableCell>#{product.id}</TableCell>
                                                 <TableCell className="font-medium">{product.name}</TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">{product.code || '-'}</TableCell>
-                                                <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(product.price)}</TableCell>
+                                                <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatPrice(product.price)}</TableCell>
                                                 <TableCell>
                                                     <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                                                         {product.type === 'order' ? t('products.manual') : t('products.auto')}
@@ -550,7 +552,7 @@ export default function ProductsPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <span className="text-green-600 dark:text-green-400 font-bold text-sm">
-                                                            {formatCurrency(item.price)}
+                                                            {formatPrice(item.price)}
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>

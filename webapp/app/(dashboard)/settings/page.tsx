@@ -15,7 +15,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
     Tabs,
     TabsContent,
@@ -51,6 +52,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function SettingsPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [settings, setSettings] = useState<Settings>({
         mb_auto_deposit: true,
         viettel_token: '',
@@ -753,7 +755,7 @@ export default function SettingsPage() {
                                                         <TableCell>{new Date(p.start_time).toLocaleString()}</TableCell>
                                                         <TableCell>{new Date(p.end_time).toLocaleString()}</TableCell>
                                                         <TableCell className="font-bold text-green-500">+{p.bonus_percentage}%</TableCell>
-                                                        <TableCell>{formatCurrency(p.min_amount)}</TableCell>
+                                                        <TableCell>{formatPrice(p.min_amount)}</TableCell>
                                                         <TableCell>{p.status}</TableCell>
                                                         <TableCell>
                                                             <Button variant="ghost" size="sm" onClick={() => handleDeletePromotion(p.id)}>

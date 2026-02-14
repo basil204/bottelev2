@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { Users, CreditCard, ShoppingCart, DollarSign, TrendingUp, Activity, Database, Server, Package, CalendarDays, Filter } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +44,7 @@ export default function Dashboard() {
   const [ramUsage, setRamUsage] = useState<{ usagePercent: number; usedGB: string; totalGB: string; freeGB: string } | null>(null);
   const { theme } = useTheme();
   const { t } = useLanguage();
+  const { formatPrice } = useCurrency();
 
   // Product Revenue Filter States
   const [revenueFilter, setRevenueFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
@@ -182,7 +184,7 @@ export default function Dashboard() {
   const cards = [
     {
       title: t('dashboard.total_revenue'), // Appropriating this key or adding new one
-      value: formatCurrency(stats.todayDeposits),
+      value: formatPrice(stats.todayDeposits),
       icon: DollarSign,
       desc: t('dashboard.today'),
       iconStartColor: 'from-green-500',
@@ -190,7 +192,7 @@ export default function Dashboard() {
     },
     {
       title: 'Total Project Revenue', // Hardcoded or add to lang
-      value: formatCurrency(stats.totalDeposits),
+      value: formatPrice(stats.totalDeposits),
       icon: Database,
       desc: 'All time',
       iconStartColor: 'from-yellow-500',
@@ -198,7 +200,7 @@ export default function Dashboard() {
     },
     {
       title: t('dashboard.month_revenue'),
-      value: formatCurrency(stats.monthDeposits),
+      value: formatPrice(stats.monthDeposits),
       icon: CreditCard,
       desc: t('dashboard.this_month'),
       iconStartColor: 'from-blue-500', // Changed color to distinguish
@@ -242,7 +244,7 @@ export default function Dashboard() {
           <div className="relative z-10">
             <h3 className="text-2xl font-bold mb-2">🎉 {t('dashboard.promotion_active')}</h3>
             <p className="text-lg opacity-90 mb-4">
-              Get <span className="font-bold text-yellow-100">{promotion.bonus_percentage}% bonus</span> on deposits over {formatCurrency(promotion.min_amount)}!
+              Get <span className="font-bold text-yellow-100">{promotion.bonus_percentage}% bonus</span> on deposits over {formatPrice(promotion.min_amount)}!
             </p>
             <div className="text-sm font-medium bg-white/20 inline-block px-3 py-1 rounded-full">
               Ends: {new Date(promotion.end_time).toLocaleString()}
@@ -495,7 +497,7 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
-                        {formatCurrency(product.total_revenue)}
+                        {formatPrice(product.total_revenue)}
                       </td>
                     </tr>
                   ))}
@@ -507,7 +509,7 @@ export default function Dashboard() {
                       {filteredProductRevenue.reduce((sum, p) => sum + Number(p.order_count), 0)}
                     </td>
                     <td className="py-3 px-4 text-right text-green-600 dark:text-green-400">
-                      {formatCurrency(filteredProductRevenue.reduce((sum, p) => sum + Number(p.total_revenue), 0))}
+                      {formatPrice(filteredProductRevenue.reduce((sum, p) => sum + Number(p.total_revenue), 0))}
                     </td>
                   </tr>
                 </tfoot>
@@ -591,11 +593,11 @@ export default function Dashboard() {
               </div>
               <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                 <div className="text-sm text-muted-foreground">Tổng doanh thu</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(gmailSummary.totalRevenue)}</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatPrice(gmailSummary.totalRevenue)}</div>
               </div>
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                 <div className="text-sm text-muted-foreground">Giá/tài khoản</div>
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{formatCurrency(gmailSummary.pricePerAccount)}</div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{formatPrice(gmailSummary.pricePerAccount)}</div>
               </div>
             </div>
           )}
@@ -632,7 +634,7 @@ export default function Dashboard() {
                         {sale.sold_at ? new Date(sale.sold_at).toLocaleDateString('vi-VN') : 'N/A'}
                       </td>
                       <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
-                        {formatCurrency(sale.price)}
+                        {formatPrice(sale.price)}
                       </td>
                     </tr>
                   ))}

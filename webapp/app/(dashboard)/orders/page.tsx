@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { clsx } from 'clsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -29,6 +30,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function OrdersPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const [orders, setOrders] = useState<Order[]>([]);
     // ... (state)
     const [loading, setLoading] = useState(true);
@@ -102,7 +104,7 @@ export default function OrdersPage() {
                                             <TableCell className="text-blue-600 dark:text-blue-400 font-medium">
                                                 {order.product_name || 'N/A'}
                                             </TableCell>
-                                            <TableCell>{formatCurrency(order.price)}</TableCell>
+                                            <TableCell>{formatPrice(order.price)}</TableCell>
                                             <TableCell>
                                                 <span
                                                     className={clsx(
@@ -116,7 +118,7 @@ export default function OrdersPage() {
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right text-muted-foreground">
-                                                {new Date(order.created_at).toLocaleDateString()}
+                                                {formatDate(order.created_at)}
                                             </TableCell>
                                         </TableRow>
                                     ))

@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { SettingsProvider } from '@/contexts/SettingsContext';
 
 export default function RootLayout({
   children,
@@ -27,7 +28,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <LanguageProvider>
-            {children}
+            <SettingsProvider>
+              {children}
+            </SettingsProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

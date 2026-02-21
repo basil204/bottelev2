@@ -140,14 +140,28 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   } catch (e) { }
 
   try {
-    let message = `✅ **Nạp tiền thành công!**\n\n` +
-      `💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`;
+    const { getUserByTelegram } = await import('../controllers/userController.js');
+    const dbUser = await getUserByTelegram(user.telegram_id);
+    const lang = dbUser?.language || 'vi';
+    const L = (l, vi, en, zh) => ({ en, zh }[l] || vi);
+
+    let message = L(lang,
+      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`,
+      `✅ **Deposit successful!**\n\n💰 Amount: ${formatCurrency(promotionResult.originalAmount)}`,
+      `✅ **充值成功！**\n\n💰 金额: ${formatCurrency(promotionResult.originalAmount)}`
+    );
     if (promotionResult.bonusAmount > 0) {
-      message += `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`;
+      message += L(lang,
+        `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
+        `\n🎁 **Bonus: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
+        `\n🎁 **奖金: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`
+      );
     }
-    message += `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**` +
-      `\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**` +
-      `\n📝 Ref: ${ref}`;
+    message += L(lang,
+      `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`,
+      `\n💵 **Amount credited: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **Final balance: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`,
+      `\n💵 **入账金额: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **最终余额: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`
+    );
     await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
 
     // Notify admins - fetch from database
@@ -198,15 +212,22 @@ const getAdminSettings = async () => {
 
 // Exported function for manual check
 export const checkPaymentForUser = async (bot, userId, config) => {
+  // Get user language
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const dbUser = await getUserByTelegram(userId);
+  const lang = dbUser?.language || 'vi';
+
+  const L = (l, vi, en, zh) => ({ en, zh }[l] || vi);
+
   const qrCache = getCache(qrKey(userId));
-  if (!qrCache) return { success: false, message: 'Không tìm thấy giao dịch chờ.' };
+  if (!qrCache) return { success: false, message: L(lang, 'Không tìm thấy giao dịch chờ.', 'No pending transaction found.', '未找到待处理的交易。') };
 
   const { token } = qrCache;
   const cached = getCache(contentKey(token));
-  if (!cached) return { success: false, message: 'Giao dịch đã hết hạn hoặc không tồn tại.' };
+  if (!cached) return { success: false, message: L(lang, 'Giao dịch đã hết hạn hoặc không tồn tại.', 'Transaction expired or not found.', '交易已过期或不存在。') };
 
   const user = await getUserById(cached.userId);
-  if (!user) return { success: false, message: 'Lỗi thông tin user.' };
+  if (!user) return { success: false, message: L(lang, 'Lỗi thông tin user.', 'User info error.', '用户信息错误。') };
 
   const promotion = await getActivePromotion();
 
@@ -218,9 +239,9 @@ export const checkPaymentForUser = async (bot, userId, config) => {
   }
 
   if (success) {
-    return { success: true, message: 'Đã nhận được tiền! Cảm ơn bạn.' };
+    return { success: true, message: L(lang, 'Đã nhận được tiền! Cảm ơn bạn.', 'Payment received! Thank you.', '已收到付款！谢谢您。') };
   } else {
-    return { success: false, message: 'Chưa nhận được tiền. Vui lòng chờ thêm chút nhé!' };
+    return { success: false, message: L(lang, 'Chưa nhận được tiền. Vui lòng chờ thêm chút nhé!', 'Payment not received yet. Please wait a moment!', '尚未收到付款，请稍等！') };
   }
 };
 

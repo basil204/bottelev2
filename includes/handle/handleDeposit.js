@@ -178,7 +178,7 @@ export const showUsdtBybitInfo = async (bot, chatId, userId, config) => {
   }
 
   // Step 1: Ask for USDT amount
-  setCache(`waiting_usdt_amount_${userId}`, true, 5 * 60 * 1000);
+  setCache(`waiting_usdt_amount_${userId}`, true, 15 * 60 * 1000);
 
   const promptMsg = L(lang,
     '💲 **Nhập số tiền USDT** (tối thiểu 1$):',
@@ -322,7 +322,7 @@ export const showTrc20DepositFlow = async (bot, chatId, userId, config) => {
   }
 
   // Store state: waiting for amount
-  setCache(`waiting_trc20_amount_${userId}`, true, 10 * 60 * 1000);
+  setCache(`waiting_trc20_amount_${userId}`, true, 15 * 60 * 1000);
 
   const message = L(lang,
     `💎 **Nạp tiền USDT TRC20**\n\n📍 **Địa chỉ ví:**\n\`${walletAddress}\`\n(Click để copy)\n\n🌐 **Mạng:** TRC20 (TRON)\n\n⚠️ **LƯU Ý QUAN TRỌNG:**\n• Hệ thống đang sử dụng **OKX** để xử lý nạp tiền tự động.\n• Nếu bạn dùng **OKX** để nạp, vui lòng liên hệ admin @tlshop25 để duyệt.\n• Ví khác: Hoàn toàn tự động (không cần duyệt).\n\n💲 **Nhập số tiền USDT** (tối thiểu 1 USDT):`,
@@ -477,7 +477,12 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
         '❌ Transaction not found or not confirmed yet. Please wait and try again.',
         '❌ 未找到交易或尚未确认，请等待并重试。'
       );
-      await bot.sendMessage(msg.chat.id, errorMsg);
+      await bot.sendMessage(msg.chat.id, errorMsg, {
+        reply_markup: {
+          resize_keyboard: true,
+          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
+        }
+      });
       return true;
     }
 
@@ -490,7 +495,12 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
         '❌ This is not a USDT TRC20 transaction.',
         '❌ 这不是 USDT TRC20 交易。'
       );
-      await bot.sendMessage(msg.chat.id, errorMsg);
+      await bot.sendMessage(msg.chat.id, errorMsg, {
+        reply_markup: {
+          resize_keyboard: true,
+          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
+        }
+      });
       return true;
     }
 
@@ -503,7 +513,12 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
         '❌ The recipient address does not match our wallet.',
         '❌ 收款地址与我们的钱包不匹配。'
       );
-      await bot.sendMessage(msg.chat.id, errorMsg);
+      await bot.sendMessage(msg.chat.id, errorMsg, {
+        reply_markup: {
+          resize_keyboard: true,
+          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
+        }
+      });
       return true;
     }
 
@@ -518,7 +533,12 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
         `❌ Amount mismatch!\n\n📝 You entered: ${expectedAmount} USDT\n💰 Actual received: ${usdtAmount} USDT\n\n⚠️ Please enter the EXACT amount shown in your transaction (after network fees).`,
         `❌ 金额不匹配！\n\n📝 您输入: ${expectedAmount} USDT\n💰 实际收到: ${usdtAmount} USDT\n\n⚠️ 请输入交易中显示的准确金额（扣除网络手续费后）。`
       );
-      await bot.sendMessage(msg.chat.id, errorMsg);
+      await bot.sendMessage(msg.chat.id, errorMsg, {
+        reply_markup: {
+          resize_keyboard: true,
+          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
+        }
+      });
       return true;
     }
 
@@ -605,7 +625,12 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
       '❌ Error verifying transaction. Please try again later.',
       '❌ 验证交易出错，请稍后再试。'
     );
-    await bot.sendMessage(msg.chat.id, errorMsg);
+    await bot.sendMessage(msg.chat.id, errorMsg, {
+      reply_markup: {
+        resize_keyboard: true,
+        keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
+      }
+    });
     return true;
   }
 };
@@ -688,15 +713,15 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const accountName = bankConfig.accountName;
 
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
-  const expiresAt = Date.now() + 5 * 60 * 1000;
+  const expiresAt = Date.now() + 15 * 60 * 1000;
   const depositId = await createDeposit(user.id, amount, content);
 
   const bankDisplayName = bankCode;
 
   let caption = L(lang,
-    `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 5 phút.`,
-    `Deposit request created: ${formatCurrency(amount)}.\n\n🏦 Bank: **${bankDisplayName}**\n💳 Account: \`${accountNo}\` (Click to copy)\n📝 Content: \`${content}\` (Click to copy)\n\n⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 5 minutes.`,
-    `已创建充值请求: ${formatCurrency(amount)}。\n\n🏦 银行: **${bankDisplayName}**\n💳 账号: \`${accountNo}\` (点击复制)\n📝 内容: \`${content}\` (点击复制)\n\n⚠️ **注意：** 请输入正确的转账内容以自动到账。QR 将在5分钟后过期。`
+    `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 15 phút.`,
+    `Deposit request created: ${formatCurrency(amount)}.\n\n🏦 Bank: **${bankDisplayName}**\n💳 Account: \`${accountNo}\` (Click to copy)\n📝 Content: \`${content}\` (Click to copy)\n\n⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 15 minutes.`,
+    `已创建充值请求: ${formatCurrency(amount)}。\n\n🏦 银行: **${bankDisplayName}**\n💳 账号: \`${accountNo}\` (点击复制)\n📝 内容: \`${content}\` (点击复制)\n\n⚠️ **注意：** 请输入正确的转账内容以自动到账。QR 将在15分钟后过期。`
   );
 
   if (promotionResult.bonusAmount > 0) {
@@ -721,8 +746,8 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     }
   });
 
-  setCache(qrKey(msg.from.id), { depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 5 * 60 * 1000);
-  setCache(contentKey(token), { userId: user.id, depositId, amount, expiresAt, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 5 * 60 * 1000);
+  setCache(qrKey(msg.from.id), { depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 15 * 60 * 1000);
+  setCache(contentKey(token), { userId: user.id, depositId, amount, expiresAt, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 15 * 60 * 1000);
 };
 
 // Admin functions (Vietnamese-only, admin-facing)
@@ -868,7 +893,9 @@ export const rejectDeposit = async (bot, chatId, depositId, admin) => {
 };
 
 export const cancelQr = async (bot, chatId, from) => {
-  const lang = from.language || 'vi';
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const dbUser = await getUserByTelegram(from.id);
+  const lang = dbUser?.language || 'vi';
   const cancelCount = getCache(qrCancelKey(from.id)) || 0;
   if (cancelCount >= 3) return bot.sendMessage(chatId, L(lang, 'Bạn huỷ quá nhiều, chờ 1 phút rồi thử lại.', 'Too many cancellations, wait 1 minute.', '取消次数过多，请等待1分钟。'));
 
@@ -882,6 +909,12 @@ export const cancelQr = async (bot, chatId, from) => {
   if (cache.token) delCache(contentKey(cache.token));
   if (cache.depositId) await updateDepositStatus(cache.depositId, 'rejected');
   await bot.sendMessage(chatId, L(lang, 'Đã huỷ QR. Bạn có thể tạo lại sau ít phút.', 'QR cancelled. You can create a new one shortly.', 'QR 已取消。您稍后可以重新创建。'));
+
+  // Re-send menu
+  try {
+    const { sendMenu } = await import('./handleUser.js');
+    await sendMenu(bot, chatId, dbUser || { telegram_id: from.id, language: 'vi' });
+  } catch (e) { }
 };
 
 export const deleteQrMessage = async (bot, cache) => {

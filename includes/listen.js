@@ -214,13 +214,17 @@ export const registerListeners = (bot, config) => {
     const user = await ensureUser(bot, msg);
 
     // Xử lý nút Huỷ (ưu tiên cao)
-    if (text === '❌ Huỷ' || text === '❌ Cancel' || text === '❌ 取消') {
+    if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消') {
       const { cancelUploadState } = await import('./handle/handleDeposit.js');
-      // Also clear USDT amount waiting state and ChatGPT waiting state
+      // Clear ALL waiting states
       const { delCache } = await import('../lib/cache/index.js');
       delCache(`waiting_usdt_amount_${msg.from.id}`);
       delCache(`chatgpt_waiting_${msg.from.id}`);
       delCache(`gmail_edu_waiting_${msg.from.id}`);
+      delCache(`waiting_trc20_amount_${msg.from.id}`);
+      delCache(`waiting_trc20_hash_${msg.from.id}`);
+      delCache(`trc20_amount_${msg.from.id}`);
+      delCache(`waiting_payment_proof_${msg.from.id}`);
       return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
     }
 

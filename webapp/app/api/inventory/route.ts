@@ -180,15 +180,24 @@ export async function POST(request: Request) {
         }
 
         const lines = data.split('\n').filter((line: string) => line.trim().length > 0);
-        const addedAccounts = [];
 
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
 
+            // Lấy tất cả username đã tồn tại cho product này (bao gồm cả sold và available)
+            const [existingRows] = await connection.query<RowDataPacket[]>(
+                'SELECT username FROM accounts WHERE product_id = ?',
+                [productId]
+            );
+            const existingUsernames = new Set(existingRows.map((r: RowDataPacket) => r.username));
+
+            const addedAccounts: string[] = [];
+            const skippedAccounts: string[] = [];
+
             for (const line of lines) {
                 const parts = line.split('|').map((s: string) => s.trim());
-                let username, password, twofa, extra_data;
+                let username: string | undefined, password: string | undefined, twofa: string | undefined, extra_data: string | undefined;
 
                 // 1 part: key
                 if (parts.length === 1) {
@@ -220,11 +229,19 @@ export async function POST(request: Request) {
                 }
 
                 if (username && password) {
+                    // Kiểm tra trùng lặp
+                    if (existingUsernames.has(username)) {
+                        skippedAccounts.push(username);
+                        continue;
+                    }
+
                     await connection.query(
                         'INSERT INTO accounts (product_id, username, password, twofa, extra_data, status) VALUES (?, ?, ?, ?, ?, "available")',
                         [productId, username, password, twofa || null, extra_data || null]
                     );
                     addedAccounts.push(username);
+                    // Thêm vào set để tránh trùng trong cùng 1 batch
+                    existingUsernames.add(username);
                 }
             }
 
@@ -241,7 +258,12 @@ export async function POST(request: Request) {
             );
 
             await connection.commit();
-            return NextResponse.json({ success: true, count: addedAccounts.length, totalStock });
+            return NextResponse.json({
+                success: true,
+                count: addedAccounts.length,
+                skipped: skippedAccounts.length,
+                totalStock
+            });
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -253,3 +275,4 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+

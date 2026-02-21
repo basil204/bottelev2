@@ -1,7 +1,30 @@
 import { query } from '../database/index.js';
 
 export const addAccounts = async (productId, accounts = []) => {
-  if (!accounts.length) return;
+  if (!accounts.length) return { insertCount: 0, skipCount: 0, skippedAccounts: [] };
+
+  // Lấy tất cả username đã tồn tại cho product này (bao gồm cả sold và available)
+  const existingRows = await query(
+    'SELECT username FROM accounts WHERE product_id = ?',
+    [productId]
+  );
+  const existingUsernames = new Set(existingRows.map(r => r.username));
+
+  // Lọc ra các account chưa tồn tại
+  const newAccounts = [];
+  const skippedAccounts = [];
+  for (const acc of accounts) {
+    if (existingUsernames.has(acc.username)) {
+      skippedAccounts.push(acc.username);
+    } else {
+      newAccounts.push(acc);
+    }
+  }
+
+  if (!newAccounts.length) {
+    return { insertCount: 0, skipCount: skippedAccounts.length, skippedAccounts };
+  }
+
   // Kiểm tra xem có cột twofa, extra_data không
   const [columns] = await query("SHOW COLUMNS FROM accounts");
   const hasTwofa = columns.some(c => c.Field === 'twofa');
@@ -15,7 +38,7 @@ export const addAccounts = async (productId, accounts = []) => {
   if (hasExtraData) sql += ', extra_data';
   sql += ', status) VALUES ';
 
-  accounts.forEach(({ username, password, twofa, extra_data }) => {
+  newAccounts.forEach(({ username, password, twofa, extra_data }) => {
     let placeholder = '(?, ?, ?';
     params.push(productId, username, password);
 
@@ -37,6 +60,8 @@ export const addAccounts = async (productId, accounts = []) => {
 
   await query(sql, params);
   await syncStock(productId);
+
+  return { insertCount: newAccounts.length, skipCount: skippedAccounts.length, skippedAccounts };
 };
 
 export const takeOneAvailable = async (productId) => {

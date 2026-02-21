@@ -204,8 +204,8 @@ export default function ProductsPage() {
         if (res.ok) {
             const result = await res.json();
 
-            // Fire and forget - don't wait for broadcast
-            if (notifyUsers && currentProductName) {
+            // Fire and forget - chỉ thông báo khi có account mới được thêm
+            if (notifyUsers && currentProductName && result.count > 0) {
                 fetch('/api/broadcast', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -218,7 +218,19 @@ export default function ProductsPage() {
                 }).catch(e => console.error('Broadcast error:', e));
             }
 
-            alert(t('products.success_stock').replace('{count}', result.count));
+            // Hiển thị thông báo chi tiết
+            let msg = '';
+            if (result.count > 0) {
+                msg += t('products.success_stock').replace('{count}', result.count);
+            }
+            if (result.skipped > 0) {
+                msg += `\nBỏ qua ${result.skipped} tài khoản đã tồn tại.`;
+            }
+            if (result.count === 0 && result.skipped > 0) {
+                msg = `Tất cả ${result.skipped} tài khoản đều đã tồn tại. Không có tài khoản mới được thêm.`;
+            }
+
+            alert(msg);
             setIsStockModalOpen(false);
             setStockData('');
             setCurrentProductId(null);

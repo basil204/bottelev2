@@ -1,6 +1,82 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
+import { sendPhoto } from '@/lib/telegram';
+
+// Kiểm tra lỗi Telegram có phải user đã block/deactivated không
+function isUserBlockedError(response: Response | null, error: any): boolean {
+    // Telegram error codes:
+    // 403 - Forbidden: bot was blocked by the user
+    // 400 - Bad Request: chat not found (user deleted account)
+    if (response && (response.status === 403 || response.status === 400)) {
+        return true;
+    }
+    if (error) {
+        const msg = String(error.message || error).toLowerCase();
+        if (msg.includes('blocked') || msg.includes('chat not found') ||
+            msg.includes('user is deactivated') || msg.includes('forbidden')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Xóa user không còn hoạt động khỏi database
+async function removeDeadUser(telegramId: string) {
+    try {
+        await pool.query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
+        console.log(`[BROADCAST] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
+    } catch (err) {
+        console.error(`[BROADCAST] Lỗi xóa user ${telegramId}:`, err);
+    }
+}
+
+// Gửi tin nhắn theo batch, mỗi batch gửi song song, giữa các batch delay để tránh rate limit
+// Tự động xóa user không gửi được (blocked/deactivated)
+async function sendBatch(
+    users: RowDataPacket[],
+    sendFn: (telegramId: string) => Promise<{ ok: boolean; blocked: boolean }>,
+    batchSize: number = 25,
+    delayMs: number = 1000
+): Promise<{ sent: number; failed: number; removed: number }> {
+    let sent = 0;
+    let failed = 0;
+    let removed = 0;
+
+    for (let i = 0; i < users.length; i += batchSize) {
+        const batch = users.slice(i, i + batchSize);
+
+        const results = await Promise.allSettled(
+            batch.map(async (user) => {
+                const result = await sendFn(user.telegram_id);
+                return { telegramId: user.telegram_id, ...result };
+            })
+        );
+
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                if (result.value.ok) {
+                    sent++;
+                } else if (result.value.blocked) {
+                    // User đã block bot hoặc deactivated → xóa khỏi DB
+                    await removeDeadUser(result.value.telegramId);
+                    removed++;
+                } else {
+                    failed++;
+                }
+            } else {
+                failed++;
+            }
+        }
+
+        // Delay giữa các batch để tránh rate limit (Telegram cho phép ~30 msg/s)
+        if (i + batchSize < users.length) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+
+    return { sent, failed, removed };
+}
 
 export async function POST(request: Request) {
     try {
@@ -46,7 +122,6 @@ export async function POST(request: Request) {
                 `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
                 `👉 Gõ /start để vào bot mua ngay nhé!`;
         } else if (type === 'custom' || body.message) {
-            // Support custom message for notifications page
             const customMessage = body.message;
             if (!customMessage || !customMessage.trim()) {
                 return NextResponse.json({ error: 'Message is required for custom broadcast' }, { status: 400 });
@@ -56,16 +131,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
 
-        const imageUrl = body.imageUrl; // Optional image URL
-        // If image URL is relative (starts with /), prepend domain if needed
-        // Telegram API requires absolute URL for photo or file_id
-        // Since we are running localhost or basic deploy, we might need a public URL.
-        // If this is running locally, Telegram server CANNOT access /uploads/xxx
-        // However, we can't easily tunnel.
-        // Alternative: Input full URL manually OR accept that it only works on public deploy.
-        // For now, let's assume we pass what we get. If it is relative, we try to create an absolute URL if we know the host.
-        // But request.url gives us the API URL.
-
+        const imageUrl = body.imageUrl;
         let finalImageUrl = imageUrl;
         if (imageUrl && imageUrl.startsWith('/')) {
             const protocol = request.headers.get('x-forwarded-proto') || 'http';
@@ -75,45 +141,53 @@ export async function POST(request: Request) {
             }
         }
 
-        // Send to all users
-        let sentCount = 0;
-        let failCount = 0;
-
-        for (const user of users) {
+        // Gửi theo batch song song (25 tin/batch, delay 1s giữa các batch)
+        // User nào block bot hoặc deactivated sẽ tự động bị xóa khỏi DB
+        const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
             try {
                 if (finalImageUrl) {
-                    // Import sendPhoto dynamically
-                    const { sendPhoto } = await import('@/lib/telegram');
-                    await sendPhoto(user.telegram_id, finalImageUrl, broadcastMessage, botToken);
-                    // We assume success if no error thrown (our lib catches error logs but doesn't throw, 
-                    // but ideally we should update lib to return status. For now, assume success if no crash)
-                    sentCount++;
+                    await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken);
+                    return { ok: true, blocked: false };
                 } else {
                     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            chat_id: user.telegram_id,
+                            chat_id: telegramId,
                             text: broadcastMessage,
                             parse_mode: 'HTML'
                         })
                     });
 
                     if (response.ok) {
-                        sentCount++;
-                    } else {
-                        failCount++;
+                        return { ok: true, blocked: false };
                     }
+
+                    // Kiểm tra nếu user đã block/deactivated
+                    if (isUserBlockedError(response, null)) {
+                        return { ok: false, blocked: true };
+                    }
+
+                    return { ok: false, blocked: false };
                 }
             } catch (err) {
-                failCount++;
+                if (isUserBlockedError(null, err)) {
+                    return { ok: false, blocked: true };
+                }
+                console.error(`[BROADCAST] Error sending to ${telegramId}:`, err);
+                return { ok: false, blocked: false };
             }
-        }
+        };
+
+        const { sent, failed, removed } = await sendBatch(users, sendFn);
+
+        console.log(`[BROADCAST] ✅ Hoàn thành: ${sent}/${users.length} thành công, ${failed} thất bại, ${removed} user đã bị xóa`);
 
         return NextResponse.json({
             success: true,
-            sent: sentCount,
-            failed: failCount,
+            sent,
+            failed,
+            removed,
             total: users.length
         });
 

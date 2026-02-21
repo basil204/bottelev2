@@ -51,10 +51,13 @@ export default function NotificationsPage() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                alert(t('notifications.success_message')
+                let msg = t('notifications.success_message')
                     .replace('{sent}', data.sent)
-                    .replace('{total}', data.total)
-                );
+                    .replace('{total}', data.total);
+                if (data.removed > 0) {
+                    msg += `\n🗑️ Đã xóa ${data.removed} user không hoạt động (blocked/deactivated)`;
+                }
+                alert(msg);
                 setMessage('');
                 setImageFile(null); // Reset file
                 // Reset file input value if needed (controlled input complex, letting it be simple)

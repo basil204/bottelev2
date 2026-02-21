@@ -45,6 +45,74 @@ export const notifyAccounts = async (bot, chatId, product, count) => {
   );
 };
 
+// Kiểm tra lỗi Telegram có phải user đã block/deactivated không
+const isUserBlockedError = (err) => {
+  if (!err) return false;
+  const msg = String(err.message || err).toLowerCase();
+  const code = err.response?.statusCode || err.response?.status || 0;
+  return code === 403 || code === 400 ||
+    msg.includes('blocked') || msg.includes('chat not found') ||
+    msg.includes('user is deactivated') || msg.includes('forbidden');
+};
+
+// Xóa user không còn hoạt động khỏi database
+const removeDeadUser = async (telegramId) => {
+  try {
+    await query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
+    console.log(`[NOTIFY] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
+  } catch (err) {
+    console.error(`[NOTIFY] Lỗi xóa user ${telegramId}:`, err.message);
+  }
+};
+
+// Helper: gửi tin nhắn theo batch song song, tránh rate limit Telegram
+// Tự động xóa user nào không gửi được (blocked/deactivated)
+const sendBatchMessages = async (bot, users, message, options = {}, batchSize = 25, delayMs = 1000) => {
+  let successCount = 0;
+  let failCount = 0;
+  let removedCount = 0;
+
+  for (let i = 0; i < users.length; i += batchSize) {
+    const batch = users.slice(i, i + batchSize);
+
+    const results = await Promise.allSettled(
+      batch.map(user =>
+        bot.sendMessage(user.telegram_id, message, options)
+          .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
+          .catch(err => {
+            const blocked = isUserBlockedError(err);
+            if (!blocked) {
+              console.error(`[NOTIFY] Lỗi gửi cho ${user.telegram_id}:`, err.message);
+            }
+            return { ok: false, blocked, telegramId: user.telegram_id };
+          })
+      )
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        if (result.value.ok) {
+          successCount++;
+        } else if (result.value.blocked) {
+          await removeDeadUser(result.value.telegramId);
+          removedCount++;
+        } else {
+          failCount++;
+        }
+      } else {
+        failCount++;
+      }
+    }
+
+    // Delay giữa các batch
+    if (i + batchSize < users.length) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  return { successCount, failCount, removedCount };
+};
+
 // Thông báo cho tất cả users về sản phẩm có thêm tài khoản mới
 export const notifyUsersAboutProductStock = async (bot, productId, accountCount) => {
   try {
@@ -78,25 +146,9 @@ export const notifyUsersAboutProductStock = async (bot, productId, accountCount)
       `➕ Số lượng mới: +${accountCount} tài khoản\n\n` +
       `🔔 Sản phẩm đã có hàng, bạn có thể mua ngay!`;
 
-    let successCount = 0;
-    let failCount = 0;
+    const { successCount, failCount, removedCount } = await sendBatchMessages(bot, userRows, message, { parse_mode: 'Markdown' });
 
-    // Gửi thông báo cho từng user
-    for (const userRow of userRows) {
-      try {
-        await bot.sendMessage(userRow.telegram_id, message, { parse_mode: 'Markdown' });
-        successCount++;
-
-        // Delay nhỏ để tránh rate limit
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error(`[NOTIFY] Lỗi khi gửi thông báo cho user ${userRow.telegram_id}:`, error.message);
-        failCount++;
-        // Nếu user đã block bot hoặc lỗi, bỏ qua và tiếp tục
-      }
-    }
-
-    console.log(`[NOTIFY] ✅ Hoàn thành: ${successCount} thành công, ${failCount} thất bại`);
+    console.log(`[NOTIFY] ✅ Hoàn thành: ${successCount} thành công, ${failCount} thất bại, ${removedCount} user đã xóa`);
 
   } catch (error) {
     console.error('[NOTIFY] ❌ Lỗi khi thông báo cho users:', error);

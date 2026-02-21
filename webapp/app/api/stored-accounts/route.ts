@@ -137,13 +137,18 @@ export async function POST(request: Request) {
     }
 }
 
-// PUT - Update account status
+// PUT - Update account status (single or batch)
 export async function PUT(request: Request) {
     try {
-        const { id, payment_status, sale_status, bot_status, note, code } = await request.json();
-        const { ipAddress, userAgent } = getRequestInfo(request);
+        const body = await request.json();
+        const { id, ids, payment_status, sale_status, bot_status, note, code } = body;
 
-        if (!id) {
+        // Support both single id and batch ids
+        const targetIds: number[] = ids && Array.isArray(ids) && ids.length > 0
+            ? ids
+            : (id ? [id] : []);
+
+        if (targetIds.length === 0) {
             return NextResponse.json(
                 { success: false, error: 'ID không hợp lệ' },
                 { status: 400 }
@@ -206,9 +211,10 @@ export async function PUT(request: Request) {
             );
         }
 
-        params.push(id);
+        const placeholders = targetIds.map(() => '?').join(',');
+        params.push(...targetIds);
         await pool.query(
-            `UPDATE stored_accounts SET ${updates.join(', ')} WHERE id = ?`,
+            `UPDATE stored_accounts SET ${updates.join(', ')} WHERE id IN (${placeholders})`,
             params
         );
 
@@ -216,14 +222,14 @@ export async function PUT(request: Request) {
         await logAdminAction({
             action: 'UPDATE',
             targetType: 'STORED_ACCOUNT',
-            targetId: id,
-            details: changedFields,
+            targetId: targetIds.length === 1 ? targetIds[0] : undefined,
+            details: { ...changedFields, count: targetIds.length, ids: targetIds },
             request
         });
 
         return NextResponse.json({
             success: true,
-            message: 'Đã cập nhật tài khoản'
+            message: `Đã cập nhật ${targetIds.length} tài khoản`
         });
     } catch (error) {
         console.error('Error updating stored account:', error);

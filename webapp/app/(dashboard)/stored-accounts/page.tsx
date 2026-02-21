@@ -126,6 +126,9 @@ export default function StoredAccountsPage() {
     const [addingType, setAddingType] = useState(false);
     const [copiedAll, setCopiedAll] = useState(false);
 
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
     // Tab state
     const [activeTab, setActiveTab] = useState<'all' | 'sold'>('all');
     const [soldPage, setSoldPage] = useState(1);
@@ -320,6 +323,79 @@ export default function StoredAccountsPage() {
         } catch (error) {
             console.error('Error deleting account:', error);
         }
+    };
+
+    // Bulk update status for selected accounts
+    const handleBulkUpdateStatus = async (field: 'sale_status' | 'bot_status', value: string) => {
+        if (selectedIds.size === 0) return;
+        const ids = Array.from(selectedIds);
+        try {
+            const res = await fetch('/api/stored-accounts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, [field]: value })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSelectedIds(new Set());
+                fetchAccounts();
+            } else {
+                alert(data.error);
+            }
+        } catch (error) {
+            console.error('Error bulk updating:', error);
+        }
+    };
+
+    // Bulk delete selected accounts
+    const handleBulkDelete = async () => {
+        if (selectedIds.size === 0) return;
+        const reason = window.prompt(`Nhập lý do xóa ${selectedIds.size} tài khoản đã chọn (bắt buộc):`);
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('Lý do xóa là bắt buộc!');
+            return;
+        }
+        const ids = Array.from(selectedIds);
+        try {
+            for (const id of ids) {
+                await fetch('/api/stored-accounts', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, reason })
+                });
+            }
+            setSelectedIds(new Set());
+            fetchAccounts();
+        } catch (error) {
+            console.error('Error bulk deleting:', error);
+        }
+    };
+
+    const toggleSelectAll = () => {
+        const pageIds = paginatedData.paginated.map(a => a.id);
+        if (pageIds.every(id => selectedIds.has(id))) {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                pageIds.forEach(id => next.delete(id));
+                return next;
+            });
+        } else {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                pageIds.forEach(id => next.add(id));
+                return next;
+            });
+        }
+    };
+
+    const toggleSelect = (id: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
     };
 
 
@@ -595,9 +671,28 @@ export default function StoredAccountsPage() {
                     {/* Accounts Table */}
                     <Card>
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">
-                                Danh sách ({accounts.length} tài khoản)
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg">
+                                    Danh sách ({accounts.length} tài khoản)
+                                </CardTitle>
+                                {selectedIds.size > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm text-muted-foreground font-medium">
+                                            Đã chọn {selectedIds.size}
+                                        </span>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-700 dark:hover:bg-purple-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'sold')}>Đánh dấu Đã bán</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:hover:bg-blue-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'in_stock')}>Đánh dấu Còn hàng</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-teal-300 text-teal-600 hover:bg-teal-50 dark:border-teal-700 dark:hover:bg-teal-900/20" onClick={() => handleBulkUpdateStatus('bot_status', 'uploaded')}>Đã lên Bot</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => handleBulkUpdateStatus('bot_status', 'not_uploaded')}>Chưa lên Bot</Button>
+                                        <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleBulkDelete}>
+                                            <Trash2 className="w-3 h-3 mr-1" /> Xóa ({selectedIds.size})
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds(new Set())}>
+                                            <X className="w-3 h-3 mr-1" /> Bỏ chọn
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             {loading ? (
@@ -616,6 +711,15 @@ export default function StoredAccountsPage() {
                                         <Table className="[&_th]:px-1.5 [&_th]:py-2 [&_td]:px-1.5 [&_td]:py-1.5 text-xs">
                                             <TableHeader>
                                                 <TableRow>
+                                                    <TableHead className="w-8">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded border-gray-400 cursor-pointer"
+                                                            checked={paginatedData.paginated.length > 0 && paginatedData.paginated.every(a => selectedIds.has(a.id))}
+                                                            onChange={toggleSelectAll}
+                                                            title="Chọn tất cả trang này"
+                                                        />
+                                                    </TableHead>
                                                     <TableHead>Loại</TableHead>
                                                     <TableHead>Code</TableHead>
                                                     <TableHead>TK</TableHead>
@@ -635,7 +739,15 @@ export default function StoredAccountsPage() {
                                                 {paginatedData.paginated.map((account) => {
                                                     const parsed = parseAccountData(account.data);
                                                     return (
-                                                        <TableRow key={account.id}>
+                                                        <TableRow key={account.id} className={selectedIds.has(account.id) ? 'bg-primary/5' : ''}>
+                                                            <TableCell>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-4 h-4 rounded border-gray-400 cursor-pointer"
+                                                                    checked={selectedIds.has(account.id)}
+                                                                    onChange={() => toggleSelect(account.id)}
+                                                                />
+                                                            </TableCell>
                                                             <TableCell>
                                                                 <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
                                                                     {account.type_name}

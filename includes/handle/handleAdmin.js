@@ -254,9 +254,13 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
   const account = parseUploadText(msg.text)[0];
   if (!account) return bot.sendMessage(msg.chat.id, 'Sai định dạng. Xem hướng dẫn ở trên.');
 
-  await addAccounts(productId, [account]);
+  const result = await addAccounts(productId, [account]);
 
-  let msgText = `Đã thêm 1 account.`;
+  if (result.skipCount > 0) {
+    return bot.sendMessage(msg.chat.id, `⚠️ Tài khoản "${account.username}" đã tồn tại trong sản phẩm này. Bỏ qua.`);
+  }
+
+  let msgText = `✅ Đã thêm 1 account.`;
   if (account.twofa) msgText += ' (có 2FA)';
   if (account.extra_data) msgText += ' (có Mail KP/Extra)';
 
@@ -300,18 +304,33 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
     return bot.sendMessage(msg.chat.id, '❌ File rỗng hoặc sai định dạng. Định dạng: username|password hoặc username|password|2fa (mỗi dòng một account).');
   }
 
-  await addAccounts(productId, accounts);
-  await bot.sendMessage(msg.chat.id, `✅ Đã thêm ${accounts.length} account.`);
+  const result = await addAccounts(productId, accounts);
 
-  // Thông báo cho users về tài khoản mới
-  await notifyUsersAboutProductStock(bot, productId, accounts.length);
+  let msgText = '';
+  if (result.insertCount > 0) {
+    msgText += `✅ Đã thêm ${result.insertCount} account.`;
+  }
+  if (result.skipCount > 0) {
+    msgText += `\n⚠️ Bỏ qua ${result.skipCount} account đã tồn tại.`;
+  }
+  if (result.insertCount === 0 && result.skipCount > 0) {
+    msgText = `⚠️ Tất cả ${result.skipCount} account đều đã tồn tại. Không có account mới được thêm.`;
+  }
 
-  // Thông báo vào nhóm
-  const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
-  const { globalConfig } = await import('../listen.js');
-  const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
-  if (notificationChatId) {
-    await notifyGroupAboutNewStock(bot, notificationChatId, productId, accounts.length);
+  await bot.sendMessage(msg.chat.id, msgText);
+
+  // Chỉ thông báo nếu có account mới được thêm
+  if (result.insertCount > 0) {
+    // Thông báo cho users về tài khoản mới
+    await notifyUsersAboutProductStock(bot, productId, result.insertCount);
+
+    // Thông báo vào nhóm
+    const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
+    const { globalConfig } = await import('../listen.js');
+    const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
+    if (notificationChatId) {
+      await notifyGroupAboutNewStock(bot, notificationChatId, productId, result.insertCount);
+    }
   }
 };
 

@@ -18,8 +18,9 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
     reply_markup: {
       keyboard: [
         [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-        [{ text: '📧 Gmail EDU' }, { text: t('history', lang) }],
-        [{ text: t('admin_group', lang) }, { text: t('change_language', lang) }]
+        [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+        [{ text: t('history', lang) }, { text: t('change_language', lang) }],
+        [{ text: t('admin_group', lang) }]
       ],
       resize_keyboard: true
     }
@@ -35,8 +36,8 @@ export const sendOrderHistory = async (bot, chatId, userId, page, pageSize) => {
   const offset = (page - 1) * pageSize;
   const { rows, total } = await listOrdersByUser(userId, offset, pageSize);
   if (!rows.length) {
-    const msg = lang === 'en' ? 'No orders yet.' : 'Chưa có đơn hàng.';
-    return bot.sendMessage(chatId, msg);
+    const { t } = await import('../helpers/langHelper.js');
+    return bot.sendMessage(chatId, t('no_orders', lang));
   }
   const lines = rows.map((o) => `#${o.id} - ${o.name} - ${formatCurrency(o.price)} - ${o.created_at}`);
   const hasPrev = page > 1;
@@ -87,7 +88,9 @@ export const sendUserInfo = async (bot, chatId, user) => {
       })
       : 'N/A';
 
-    const username = user.username ? `@${user.username}` : 'Chưa có';
+    const lang = user.language || 'vi';
+    const noUsername = { en: 'Not set', zh: '未设置' };
+    const username = user.username ? `@${user.username}` : (noUsername[lang] || 'Chưa có');
     const credit = user.credit || 0;
 
     // Lấy thống kê check-in
@@ -108,7 +111,56 @@ export const sendUserInfo = async (bot, chatId, user) => {
     );
     const { total_referrals, total_credits_earned } = referralStats[0] || { total_referrals: 0, total_credits_earned: 0 };
 
-    const infoText = `📊 **THÔNG TIN TÀI KHOẢN**
+    const infoTexts = {
+      en: `📊 **ACCOUNT INFORMATION**
+
+👤 **Personal Info:**
+• ID: \`${user.telegram_id}\`
+• Username: ${username}
+• Created: ${createdDate}
+
+💰 **Balance:**
+• Current balance: ${formatCurrency(user.balance)}
+• Credit: ${credit}
+
+🎁 **Credit Stats:**
+• Total check-ins: ${total_checkins}
+• Total referrals: ${total_referrals}
+• Credits from referrals: ${total_credits_earned || 0}
+
+📦 **Order Stats:**
+• Total orders: ${total_orders}
+• Total spent: ${formatCurrency(total_spent)}
+
+💵 **Deposit Stats:**
+• Total deposits: ${total_deposits}
+• Total deposited: ${formatCurrency(total_deposited)}`,
+      zh: `📊 **账户信息**
+
+👤 **个人信息：**
+• ID: \`${user.telegram_id}\`
+• 用户名: ${username}
+• 创建日期: ${createdDate}
+
+💰 **余额：**
+• 当前余额: ${formatCurrency(user.balance)}
+• 积分: ${credit}
+
+🎁 **积分统计：**
+• 签到次数: ${total_checkins}
+• 推荐人数: ${total_referrals}
+• 推荐积分: ${total_credits_earned || 0}
+
+📦 **订单统计：**
+• 总订单: ${total_orders}
+• 总消费: ${formatCurrency(total_spent)}
+
+💵 **充值统计：**
+• 充值次数: ${total_deposits}
+• 充值总额: ${formatCurrency(total_deposited)}`
+    };
+
+    const infoText = infoTexts[lang] || `📊 **THÔNG TIN TÀI KHOẢN**
 
 👤 **Thông tin cá nhân:**
 • ID: \`${user.telegram_id}\`
@@ -135,6 +187,7 @@ export const sendUserInfo = async (bot, chatId, user) => {
     await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('[SEND_USER_INFO] Error:', error);
-    await bot.sendMessage(chatId, 'Có lỗi xảy ra khi lấy thông tin. Vui lòng thử lại sau.');
+    const errorMsgs = { en: 'Error loading info. Please try again.', zh: '加载信息出错，请重试。' };
+    await bot.sendMessage(chatId, errorMsgs[user?.language] || 'Có lỗi xảy ra khi lấy thông tin. Vui lòng thử lại sau.');
   }
 };

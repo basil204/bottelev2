@@ -4,6 +4,7 @@ export const messages = {
         select_language: '🌐 **Chọn ngôn ngữ / Select Language:**',
         lang_vi: '🇻🇳 Tiếng Việt',
         lang_en: '🇺🇸 English',
+        lang_zh: '🇨🇳 中文',
         lang_switched: '🇻🇳 Ngôn ngữ đã được chuyển sang Tiếng Việt.',
 
         // Welcome & Menu
@@ -74,6 +75,7 @@ export const messages = {
         select_language: '🌐 **Chọn ngôn ngữ / Select Language:**',
         lang_vi: '🇻🇳 Tiếng Việt',
         lang_en: '🇺🇸 English',
+        lang_zh: '🇨🇳 中文',
         lang_switched: '🇺🇸 Language switched to English.',
 
         // Welcome & Menu
@@ -138,6 +140,77 @@ export const messages = {
         loading: 'Loading...',
         error: 'An error occurred. Please try again.',
         no_permission: 'Access denied.'
+    },
+    zh: {
+        // Language selection
+        select_language: '🌐 **选择语言 / Select Language:**',
+        lang_vi: '🇻🇳 Tiếng Việt',
+        lang_en: '🇺🇸 English',
+        lang_zh: '🇨🇳 中文',
+        lang_switched: '🇨🇳 语言已切换为中文。',
+
+        // Welcome & Menu
+        welcome: '🎉 **欢迎来到机器人！**\n\n👋 您好！我们很高兴为您服务。',
+        menu_title: '👇 **功能菜单**',
+        deposit: '➕ 充值',
+        buy_product: '🛒 购买产品',
+        history: '🧾 购买记录',
+        change_language: '🌐 语言',
+        admin_group: '👥 群组',
+        join_group_msg: '👥 **加入支持群组：**\n\n点击下方链接加入群组：',
+        balance: '💰 余额: {amount}',
+
+        // User info
+        user_info: '👤 **账户信息：**\n• ID: {id}\n• 余额: {balance} (~${usdt})',
+        guide: '💡 **使用指南：**\n• 使用下方菜单进行操作\n• 充值后可购买产品',
+
+        // Products
+        product_list: '📦 **产品列表：**',
+        product_item: '🔹 {name} - {price} (库存 {stock})',
+        product_detail: '📦 **{name}**\n\n💰 价格: {price}\n📝 描述: {description}\n📊 库存: {stock}',
+        buy_now: '🛒 立即购买',
+        back_to_products: '⬅️ 返回',
+        out_of_stock: '❌ 产品已售罄！',
+        insufficient_balance: '❌ 余额不足！\n\n💰 当前余额: {balance}\n💵 产品价格: {price}\n\n请先充值。',
+        enter_quantity: '🔢 请输入购买数量 (1-{max})：',
+        invalid_quantity: '❌ 数量无效！请输入 1 到 {max} 之间的数字。',
+        purchase_success: '✅ **购买成功！**\n\n📦 产品: {name}\n💰 价格: {price}\n📊 数量: {quantity}\n\n📝 **账户信息：**\n{accounts}',
+        purchase_error: '❌ 购买时出现错误，请重试。',
+
+        // Deposit
+        deposit_menu_title: '💲 **选择充值方式：**',
+        deposit_bank: '🏦 银行转账',
+        deposit_usdt: '💲 USDT',
+        bank_info: '🏦 **转账信息：**\n\n• 银行: {bank}\n• 账号: {account}\n• 姓名: {name}\n• 备注: {content}\n\n⚠️ 请务必填写正确的备注内容！',
+        min_deposit: '⚠️ 最低充值金额: {amount}',
+        usdt_wallet: '🏦 USDT 钱包',
+        usdt_bybit: '📈 Bybit',
+        usdt_network: '🌐 网络: **{network}**',
+        usdt_wallet_addr: '💼 钱包地址：\n`{address}`\n(点击复制)',
+        usdt_note: '⚠️ **注意：**\n• 请通过 **{network}** 网络转账。\n• 转账完成后，请截图发送给管理员以完成充值。',
+        bybit_link: '🔗 转账链接: [点击这里]({link})',
+        bybit_note_label: '📝 **备注:** `{note}`\n(转账时请在备注中输入此ID)',
+        bybit_upload_guide: '⚠️ **注意：**\n• 转账完成后，请在此处 **上传收据截图** 等待审核。\n• 点击 ❌ **取消** 按钮可取消操作。',
+        cancel: '❌ 取消',
+        canceled: '❌ 已取消。',
+        pending_warning: '⚠️ 您有一笔待处理的充值请求。请等待管理员审核后再创建新请求。',
+        upload_success: '✅ 截图已发送给管理员，请等待审核。',
+        admin_config_missing: '⚠️ 系统尚未配置管理员接收图片。',
+        photo_received: '📸 **新的付款凭证**\n\n👤 用户: {user} (ID: {id})\n🔢 充值ID: #{depositId}\n🕒 时间: {time}',
+        approve_btn: '✅ 通过',
+        reject_btn: '❌ 拒绝',
+        approved_msg: '✅ 充值成功！\n\n💰 金额: {amount}\n💵 当前余额: {balance}\n📝 交易ID: #{depositId}',
+        rejected_msg: '❌ 您的充值请求 #{depositId} 已被拒绝。',
+        currency_rate: '💱 汇率: 1$ = {rate} 越南盾',
+
+        // History
+        no_orders: '暂无订单。',
+        order_item: '#{id} - {name} - {price} - {date}',
+
+        // Common
+        loading: '加载中...',
+        error: '出现错误，请重试。',
+        no_permission: '无访问权限。'
     }
 };
 

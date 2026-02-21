@@ -20,20 +20,23 @@ export function LanguageSwitcher() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleSelect = (lang: 'vi' | 'en') => {
+    const handleSelect = (lang: 'vi' | 'en' | 'zh') => {
         setLanguage(lang);
         setIsOpen(false);
     };
+
+    const langLabel: Record<string, string> = { vi: '🇻🇳 VN', en: '🇺🇸 EN', zh: '🇨🇳 中文' };
+    const langTitle: Record<string, string> = { vi: 'Đổi ngôn ngữ', en: 'Change language', zh: '切换语言' };
 
     return (
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="p-2 rounded-lg hover:bg-accent/50 transition-colors flex items-center gap-2 text-sm font-medium border border-border"
-                title={language === 'vi' ? 'Đổi ngôn ngữ' : 'Change language'}
+                title={langTitle[language] || 'Change language'}
             >
                 <Globe className="h-4 w-4" />
-                <span>{language === 'vi' ? '🇻🇳 VN' : '🇺🇸 EN'}</span>
+                <span>{langLabel[language] || '🇻🇳 VN'}</span>
                 <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -54,6 +57,14 @@ export function LanguageSwitcher() {
                         <span>🇺🇸</span>
                         <span>English</span>
                         {language === 'en' && <span className="ml-auto text-primary">✓</span>}
+                    </button>
+                    <button
+                        onClick={() => handleSelect('zh')}
+                        className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 hover:bg-accent/50 transition-colors ${language === 'zh' ? 'bg-accent/30 font-medium' : ''}`}
+                    >
+                        <span>🇨🇳</span>
+                        <span>中文</span>
+                        {language === 'zh' && <span className="ml-auto text-primary">✓</span>}
                     </button>
                 </div>
             )}

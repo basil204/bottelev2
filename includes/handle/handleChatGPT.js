@@ -18,6 +18,9 @@ import { setCache, getCache, delCache } from '../../lib/cache/index.js';
 
 const CHATGPT_CACHE_KEY = (telegramId) => `chatgpt_waiting_${telegramId}`;
 
+// Helper for 3-lang text
+const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
+
 /**
  * Hiển thị thông tin ChatGPT và nút mua
  */
@@ -36,23 +39,13 @@ export async function showChatGPTInfo(bot, chatId, user) {
     let message = '';
 
     // Header info
-    if (lang === 'en') {
-        message = `🤖 *ChatGPT Pro (Team Slot)*\n\n`;
-        message += `💰 Price: *${formatCurrency(price)}* / ${days} days\n`;
-        message += `📊 Available: ${hasSlot ? '✅ Yes' : '❌ No slots available'}\n\n`;
-    } else {
-        message = `🤖 *ChatGPT Pro (Team Slot)*\n\n`;
-        message += `💰 Giá: *${formatCurrency(price)}* / ${days} ngày\n`;
-        message += `📊 Còn slot: ${hasSlot ? '✅ Có' : '❌ Hết slot'}\n\n`;
-    }
+    message = `🤖 *ChatGPT Pro (Team Slot)*\n\n`;
+    message += `💰 ${L(lang, 'Giá', 'Price', '价格')}: *${formatCurrency(price)}* / ${days} ${L(lang, 'ngày', 'days', '天')}\n`;
+    message += `📊 ${L(lang, 'Còn slot', 'Available', '可用')}: ${hasSlot ? L(lang, '✅ Có', '✅ Yes', '✅ 有') : L(lang, '❌ Hết slot', '❌ No slots available', '❌ 无可用名额')}\n\n`;
 
     // Display active rentals
     if (activeRentals.length > 0) {
-        if (lang === 'en') {
-            message += `📋 *YOUR SUBSCRIPTIONS:*\n`;
-        } else {
-            message += `📋 *GÓI CƯỚC CỦA BẠN:*\n`;
-        }
+        message += `📋 *${L(lang, 'GÓI CƯỚC CỦA BẠN', 'YOUR SUBSCRIPTIONS', '您的订阅')}:*\n`;
 
         activeRentals.forEach((rental, index) => {
             const endDate = new Date(rental.end_date);
@@ -61,21 +54,25 @@ export async function showChatGPTInfo(bot, chatId, user) {
             const statusIcon = daysLeft > 0 ? '🟢' : '🔴';
 
             message += `\n${index + 1}. 📧 \`${rental.email}\`\n`;
-            message += `   📅 Expire: ${endDate.toLocaleDateString('vi-VN')}\n`;
-            message += `   ⏳ Remaining: *${daysLeft} days* ${statusIcon}\n`;
+            message += `   📅 ${L(lang, 'Hết hạn', 'Expire', '到期')}: ${endDate.toLocaleDateString('vi-VN')}\n`;
+            message += `   ⏳ ${L(lang, 'Còn lại', 'Remaining', '剩余')}: *${daysLeft} ${L(lang, 'ngày', 'days', '天')}* ${statusIcon}\n`;
         });
         message += '\n-------------------\n\n';
     }
 
     // Call to action
-    if (lang === 'en') {
-        message += hasSlot
-            ? `📧 Enter your email to rent a NEW ChatGPT Team slot:`
-            : `⚠️ Currently no slots available for new purchase.`;
+    if (hasSlot) {
+        message += L(lang,
+            '📧 Nhập email để thuê thêm slot ChatGPT Team MỚI:',
+            '📧 Enter your email to rent a NEW ChatGPT Team slot:',
+            '📧 输入您的邮箱以租用新的 ChatGPT Team 名额：'
+        );
     } else {
-        message += hasSlot
-            ? `📧 Nhập email để thuê thêm slot ChatGPT Team MỚI:`
-            : `⚠️ Hiện tại hết slot đăng ký mới.`;
+        message += L(lang,
+            '⚠️ Hiện tại hết slot đăng ký mới.',
+            '⚠️ Currently no slots available for new purchase.',
+            '⚠️ 当前没有可用的新名额。'
+        );
     }
 
     const { createCallbackData } = await import('../../utils/index.js'); // Import helper
@@ -83,14 +80,14 @@ export async function showChatGPTInfo(bot, chatId, user) {
     // Build inline keyboard with warranty button if user has active rentals
     const inlineKeyboard = [
         [
-            { text: lang === 'en' ? '📅 Check Expiry' : '📅 Kiểm tra hạn', callback_data: createCallbackData({ action: 'chatgpt_check_expiry' }) }
+            { text: L(lang, '📅 Kiểm tra hạn', '📅 Check Expiry', '📅 检查到期'), callback_data: createCallbackData({ action: 'chatgpt_check_expiry' }) }
         ]
     ];
 
     // Add warranty button if user has active rentals
     if (activeRentals.length > 0) {
         inlineKeyboard.push([
-            { text: lang === 'en' ? '🛡️ Warranty Check' : '🛡️ Bảo hành', callback_data: createCallbackData({ action: 'chatgpt_warranty' }) }
+            { text: L(lang, '🛡️ Bảo hành', '🛡️ Warranty Check', '🛡️ 保修检查'), callback_data: createCallbackData({ action: 'chatgpt_warranty' }) }
         ]);
     }
 
@@ -106,7 +103,7 @@ export async function showChatGPTInfo(bot, chatId, user) {
             reply_markup: {
                 inline_keyboard: inlineKeyboard,
                 keyboard: [
-                    [{ text: '❌ Huỷ' }]
+                    [{ text: L(lang, '❌ Huỷ', '❌ Cancel', '❌ 取消') }]
                 ],
                 resize_keyboard: true
             }
@@ -137,10 +134,13 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-        const lang = state.lang || 'vi';
-        const errorMsg = lang === 'en'
-            ? '❌ Invalid email format. Please enter a valid email:'
-            : '❌ Email không hợp lệ. Vui lòng nhập lại:';
+        const user = await getUserByTelegram(msg.from.id);
+        const lang = user?.language || 'vi';
+        const errorMsg = L(lang,
+            '❌ Email không hợp lệ. Vui lòng nhập lại:',
+            '❌ Invalid email format. Please enter a valid email:',
+            '❌ 邮箱格式无效，请重新输入：'
+        );
         await bot.sendMessage(msg.chat.id, errorMsg);
         return true;
     }
@@ -155,9 +155,12 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
 
         if (renewResult.active) {
             const daysLeft = Math.ceil((new Date(renewResult.rental.end_date) - new Date()) / (1000 * 60 * 60 * 24));
-            const message = lang === 'en'
-                ? `✅ This email already has an active rental!\n\n📧 Email: ${email}\n📅 Days remaining: ${daysLeft} days\n🏷️ FAM: ${renewResult.fam?.name || 'Unknown'}`
-                : `✅ Email này đang có slot hoạt động!\n\n📧 Email: ${email}\n📅 Còn lại: ${daysLeft} ngày\n🏷️ FAM: ${renewResult.fam?.name || 'Không rõ'}`;
+            const unknown = L(lang, 'Không rõ', 'Unknown', '未知');
+            const message = L(lang,
+                `✅ Email này đang có slot hoạt động!\n\n📧 Email: ${email}\n📅 Còn lại: ${daysLeft} ngày\n🏷️ FAM: ${renewResult.fam?.name || unknown}`,
+                `✅ This email already has an active rental!\n\n📧 Email: ${email}\n📅 Days remaining: ${daysLeft} days\n🏷️ FAM: ${renewResult.fam?.name || unknown}`,
+                `✅ 此邮箱已有活跃订阅！\n\n📧 邮箱: ${email}\n📅 剩余: ${daysLeft} 天\n🏷️ FAM: ${renewResult.fam?.name || unknown}`
+            );
 
             delCache(cacheKey);
             await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
@@ -169,9 +172,11 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
         }
 
         if (renewResult.renewed) {
-            const message = lang === 'en'
-                ? `🔄 Email moved to new FAM!\n\n📧 Email: ${email}\n🏷️ New FAM: ${renewResult.newFam?.name}\n\nPlease check your email for the new invitation.`
-                : `🔄 Email đã được chuyển sang FAM mới!\n\n📧 Email: ${email}\n🏷️ FAM mới: ${renewResult.newFam?.name}\n\nVui lòng kiểm tra email để nhận lời mời mới.`;
+            const message = L(lang,
+                `🔄 Email đã được chuyển sang FAM mới!\n\n📧 Email: ${email}\n🏷️ FAM mới: ${renewResult.newFam?.name}\n\nVui lòng kiểm tra email để nhận lời mời mới.`,
+                `🔄 Email moved to new FAM!\n\n📧 Email: ${email}\n🏷️ New FAM: ${renewResult.newFam?.name}\n\nPlease check your email for the new invitation.`,
+                `🔄 邮箱已转移至新 FAM！\n\n📧 邮箱: ${email}\n🏷️ 新 FAM: ${renewResult.newFam?.name}\n\n请检查邮箱以接收新的邀请。`
+            );
 
             delCache(cacheKey);
             await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
@@ -187,9 +192,11 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
     const days = await getSlotDays();
 
     if (Number(user.balance) < price) {
-        const message = lang === 'en'
-            ? `❌ Insufficient balance!\n\n💰 Required: ${formatCurrency(price)}\n💵 Your balance: ${formatCurrency(user.balance)}\n\nPlease deposit first.`
-            : `❌ Số dư không đủ!\n\n💰 Cần: ${formatCurrency(price)}\n💵 Số dư: ${formatCurrency(user.balance)}\n\nVui lòng nạp tiền trước.`;
+        const message = L(lang,
+            `❌ Số dư không đủ!\n\n💰 Cần: ${formatCurrency(price)}\n💵 Số dư: ${formatCurrency(user.balance)}\n\nVui lòng nạp tiền trước.`,
+            `❌ Insufficient balance!\n\n💰 Required: ${formatCurrency(price)}\n💵 Your balance: ${formatCurrency(user.balance)}\n\nPlease deposit first.`,
+            `❌ 余额不足！\n\n💰 需要: ${formatCurrency(price)}\n💵 余额: ${formatCurrency(user.balance)}\n\n请先充值。`
+        );
 
         delCache(cacheKey);
         await bot.sendMessage(msg.chat.id, message, { parse_mode: 'Markdown' });
@@ -202,9 +209,11 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
     // Get available FAM
     const fam = await getAvailableFam();
     if (!fam) {
-        const message = lang === 'en'
-            ? '❌ No slots available at the moment. Please try again later.'
-            : '❌ Hiện tại hết slot. Vui lòng thử lại sau.';
+        const message = L(lang,
+            '❌ Hiện tại hết slot. Vui lòng thử lại sau.',
+            '❌ No slots available at the moment. Please try again later.',
+            '❌ 当前无可用名额，请稍后再试。'
+        );
 
         delCache(cacheKey);
         await bot.sendMessage(msg.chat.id, message);
@@ -240,9 +249,11 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
         if (inviteResult.success) {
             await updateRentalInviteStatus(rentalId, 'sent');
 
-            const successMsg = lang === 'en'
-                ? `✅ *Purchase Successful!*\n\n📧 Email: \`${email}\`\n🏷️ FAM: ${fam.name}\n💰 Price: ${formatCurrency(price)}\n📅 Duration: ${days} days\n\n📨 An invitation has been sent to your email.\nPlease check and accept the invitation to join the Team.`
-                : `✅ *Mua thành công!*\n\n📧 Email: \`${email}\`\n🏷️ FAM: ${fam.name}\n💰 Giá: ${formatCurrency(price)}\n📅 Thời hạn: ${days} ngày\n\n📨 Lời mời đã được gửi đến email của bạn.\nVui lòng kiểm tra và chấp nhận lời mời để tham gia Team.`;
+            const successMsg = L(lang,
+                `✅ *Mua thành công!*\n\n📧 Email: \`${email}\`\n🏷️ FAM: ${fam.name}\n💰 Giá: ${formatCurrency(price)}\n📅 Thời hạn: ${days} ngày\n\n📨 Lời mời đã được gửi đến email của bạn.\nVui lòng kiểm tra và chấp nhận lời mời để tham gia Team.`,
+                `✅ *Purchase Successful!*\n\n📧 Email: \`${email}\`\n🏷️ FAM: ${fam.name}\n💰 Price: ${formatCurrency(price)}\n📅 Duration: ${days} days\n\n📨 An invitation has been sent to your email.\nPlease check and accept the invitation to join the Team.`,
+                `✅ *购买成功！*\n\n📧 邮箱: \`${email}\`\n🏷️ FAM: ${fam.name}\n💰 价格: ${formatCurrency(price)}\n📅 有效期: ${days} 天\n\n📨 邀请已发送至您的邮箱。\n请查收并接受邀请以加入团队。`
+            );
 
             await bot.sendMessage(msg.chat.id, successMsg, { parse_mode: 'Markdown' });
 
@@ -260,18 +271,22 @@ export async function handleChatGPTEmailInput(bot, msg, config) {
         } else {
             await updateRentalInviteStatus(rentalId, 'failed');
 
-            const errorMsg = lang === 'en'
-                ? `⚠️ *Purchase recorded but invitation failed!*\n\n📧 Email: ${email}\n\nPlease contact support to receive your invitation manually.`
-                : `⚠️ *Đã mua nhưng lỗi gửi lời mời!*\n\n📧 Email: ${email}\n\nVui lòng liên hệ hỗ trợ để nhận lời mời thủ công.`;
+            const errorMsg = L(lang,
+                `⚠️ *Đã mua nhưng lỗi gửi lời mời!*\n\n📧 Email: ${email}\n\nVui lòng liên hệ hỗ trợ để nhận lời mời thủ công.`,
+                `⚠️ *Purchase recorded but invitation failed!*\n\n📧 Email: ${email}\n\nPlease contact support to receive your invitation manually.`,
+                `⚠️ *已购买但发送邀请失败！*\n\n📧 邮箱: ${email}\n\n请联系客服手动接收邀请。`
+            );
 
             await bot.sendMessage(msg.chat.id, errorMsg, { parse_mode: 'Markdown' });
         }
 
     } catch (error) {
         console.error('[ChatGPT] Purchase error:', error);
-        const errorMsg = lang === 'en'
-            ? '❌ An error occurred. Please try again or contact support.'
-            : '❌ Có lỗi xảy ra. Vui lòng thử lại hoặc liên hệ hỗ trợ.';
+        const errorMsg = L(lang,
+            '❌ Có lỗi xảy ra. Vui lòng thử lại hoặc liên hệ hỗ trợ.',
+            '❌ An error occurred. Please try again or contact support.',
+            '❌ 出现错误，请重试或联系客服。'
+        );
         await bot.sendMessage(msg.chat.id, errorMsg);
     }
 
@@ -293,19 +308,16 @@ export async function showRentalStatus(bot, chatId, user) {
     const activeRentals = rentals.filter(r => r.status === 'active');
 
     if (activeRentals.length === 0) {
-        const msg = lang === 'en'
-            ? '❌ You do not have any active ChatGPT subscription.'
-            : '❌ Bạn chưa đăng ký gói ChatGPT nào đang hoạt động.';
+        const msg = L(lang,
+            '❌ Bạn chưa đăng ký gói ChatGPT nào đang hoạt động.',
+            '❌ You do not have any active ChatGPT subscription.',
+            '❌ 您还没有任何活跃的 ChatGPT 订阅。'
+        );
         await bot.sendMessage(chatId, msg);
         return;
     }
 
-    let message = '';
-    if (lang === 'en') {
-        message += `📋 *YOUR SUBSCRIPTIONS:*\n`;
-    } else {
-        message += `📋 *GÓI CƯỚC CỦA BẠN:*\n`;
-    }
+    let message = `📋 *${L(lang, 'GÓI CƯỚC CỦA BẠN', 'YOUR SUBSCRIPTIONS', '您的订阅')}:*\n`;
 
     activeRentals.forEach((rental, index) => {
         const endDate = new Date(rental.end_date);
@@ -314,8 +326,8 @@ export async function showRentalStatus(bot, chatId, user) {
         const statusIcon = daysLeft > 0 ? '🟢' : '🔴';
 
         message += `\n${index + 1}. 📧 \`${rental.email}\`\n`;
-        message += `   📅 Expire: ${endDate.toLocaleDateString('vi-VN')}\n`;
-        message += `   ⏳ Remaining: *${daysLeft} days* ${statusIcon}\n`;
+        message += `   📅 ${L(lang, 'Hết hạn', 'Expire', '到期')}: ${endDate.toLocaleDateString('vi-VN')}\n`;
+        message += `   ⏳ ${L(lang, 'Còn lại', 'Remaining', '剩余')}: *${daysLeft} ${L(lang, 'ngày', 'days', '天')}* ${statusIcon}\n`;
     });
 
     await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
@@ -328,9 +340,11 @@ export async function handleWarrantyCheck(bot, chatId, user, config) {
     const lang = user.language || 'vi';
 
     // Show loading message
-    const loadingMsg = lang === 'en'
-        ? '⏳ Checking warranty status for all your emails...'
-        : '⏳ Đang kiểm tra bảo hành cho tất cả email của bạn...';
+    const loadingMsg = L(lang,
+        '⏳ Đang kiểm tra bảo hành cho tất cả email của bạn...',
+        '⏳ Checking warranty status for all your emails...',
+        '⏳ 正在检查您所有邮箱的保修状态...'
+    );
     await bot.sendMessage(chatId, loadingMsg);
 
     try {
@@ -339,22 +353,26 @@ export async function handleWarrantyCheck(bot, chatId, user, config) {
         let message = '';
 
         if (results.noRentals) {
-            message = lang === 'en'
-                ? '❌ You do not have any active ChatGPT subscription to check.'
-                : '❌ Bạn chưa có gói ChatGPT nào đang hoạt động để kiểm tra.';
+            message = L(lang,
+                '❌ Bạn chưa có gói ChatGPT nào đang hoạt động để kiểm tra.',
+                '❌ You do not have any active ChatGPT subscription to check.',
+                '❌ 您没有任何活跃的 ChatGPT 订阅可供检查。'
+            );
             await bot.sendMessage(chatId, message);
             return;
         }
 
         if (results.allOk && results.needsSupport.length === 0) {
-            message = lang === 'en'
-                ? '✅ *WARRANTY CHECK COMPLETE*\n\nAll your subscriptions are working correctly!'
-                : '✅ *KIỂM TRA BẢO HÀNH HOÀN TẤT*\n\nTất cả gói cước của bạn đều hoạt động bình thường!';
+            message = L(lang,
+                '✅ *KIỂM TRA BẢO HÀNH HOÀN TẤT*\n\nTất cả gói cước của bạn đều hoạt động bình thường!',
+                '✅ *WARRANTY CHECK COMPLETE*\n\nAll your subscriptions are working correctly!',
+                '✅ *保修检查完成*\n\n您的所有订阅都运行正常！'
+            );
 
             // List all OK emails
             const okEmails = results.processed.filter(p => p.status === 'ok');
             if (okEmails.length > 0) {
-                message += '\n\n📧 *Emails OK:*';
+                message += `\n\n📧 *${L(lang, 'Emails OK', 'Emails OK', '邮箱正常')}:*`;
                 okEmails.forEach((item, i) => {
                     message += `\n${i + 1}. \`${item.email}\` (${item.fam})`;
                 });
@@ -365,27 +383,27 @@ export async function handleWarrantyCheck(bot, chatId, user, config) {
         }
 
         // Some changes were made
-        message = lang === 'en'
-            ? '🛡️ *WARRANTY CHECK RESULT*\n\n'
-            : '🛡️ *KẾT QUẢ KIỂM TRA BẢO HÀNH*\n\n';
+        message = `🛡️ *${L(lang, 'KẾT QUẢ KIỂM TRA BẢO HÀNH', 'WARRANTY CHECK RESULT', '保修检查结果')}*\n\n`;
 
         // Show moved emails
         const movedEmails = results.processed.filter(p => p.status === 'moved');
         if (movedEmails.length > 0) {
-            message += lang === 'en' ? '✅ *SUCCESSFULLY MOVED:*\n' : '✅ *ĐÃ CHUYỂN THÀNH CÔNG:*\n';
+            message += `✅ *${L(lang, 'ĐÃ CHUYỂN THÀNH CÔNG', 'SUCCESSFULLY MOVED', '成功转移')}:*\n`;
             movedEmails.forEach((item, i) => {
                 message += `${i + 1}. \`${item.email}\`\n`;
                 message += `   ${item.oldFam} → ${item.newFam}\n`;
             });
-            message += lang === 'en'
-                ? '\n📨 New invitations have been sent. Please check your email.\n\n'
-                : '\n📨 Lời mời mới đã được gửi. Vui lòng kiểm tra email.\n\n';
+            message += L(lang,
+                '\n📨 Lời mời mới đã được gửi. Vui lòng kiểm tra email.\n\n',
+                '\n📨 New invitations have been sent. Please check your email.\n\n',
+                '\n📨 新邀请已发送，请检查邮箱。\n\n'
+            );
         }
 
         // Show OK emails
         const okEmails = results.processed.filter(p => p.status === 'ok');
         if (okEmails.length > 0) {
-            message += lang === 'en' ? '✅ *WORKING OK:*\n' : '✅ *HOẠT ĐỘNG TỐT:*\n';
+            message += `✅ *${L(lang, 'HOẠT ĐỘNG TỐT', 'WORKING OK', '运行正常')}:*\n`;
             okEmails.forEach((item, i) => {
                 message += `${i + 1}. \`${item.email}\` (${item.fam})\n`;
             });
@@ -394,18 +412,16 @@ export async function handleWarrantyCheck(bot, chatId, user, config) {
 
         // Show emails needing support
         if (results.needsSupport.length > 0) {
-            message += lang === 'en'
-                ? '⚠️ *NEEDS ADMIN SUPPORT:*\n'
-                : '⚠️ *CẦN LIÊN HỆ ADMIN:*\n';
+            message += `⚠️ *${L(lang, 'CẦN LIÊN HỆ ADMIN', 'NEEDS ADMIN SUPPORT', '需要联系管理员')}:*\n`;
             results.needsSupport.forEach((item, i) => {
                 message += `${i + 1}. \`${item.email}\`\n`;
-                message += lang === 'en'
-                    ? `   Reason: No available FAM to switch\n`
-                    : `   Lý do: Hết FAM để chuyển\n`;
+                message += `   ${L(lang, 'Lý do: Hết FAM để chuyển', 'Reason: No available FAM to switch', '原因: 没有可用的 FAM 可切换')}\n`;
             });
-            message += lang === 'en'
-                ? '\n📞 Please contact admin for manual support.'
-                : '\n📞 Vui lòng liên hệ admin để được hỗ trợ thủ công.';
+            message += L(lang,
+                '\n📞 Vui lòng liên hệ admin để được hỗ trợ thủ công.',
+                '\n📞 Please contact admin for manual support.',
+                '\n📞 请联系管理员获取人工支持。'
+            );
 
             // Notify admins about warranty issues
             if (config.ADMIN_IDS && config.ADMIN_IDS.length > 0) {
@@ -425,9 +441,11 @@ export async function handleWarrantyCheck(bot, chatId, user, config) {
 
     } catch (error) {
         console.error('[ChatGPT Warranty] Error:', error);
-        const errorMsg = lang === 'en'
-            ? '❌ An error occurred while checking warranty. Please try again or contact support.'
-            : '❌ Có lỗi xảy ra khi kiểm tra bảo hành. Vui lòng thử lại hoặc liên hệ hỗ trợ.';
+        const errorMsg = L(lang,
+            '❌ Có lỗi xảy ra khi kiểm tra bảo hành. Vui lòng thử lại hoặc liên hệ hỗ trợ.',
+            '❌ An error occurred while checking warranty. Please try again or contact support.',
+            '❌ 检查保修时出现错误，请重试或联系客服。'
+        );
         await bot.sendMessage(chatId, errorMsg);
     }
 }

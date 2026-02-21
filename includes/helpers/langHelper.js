@@ -31,11 +31,15 @@ export const t = (key, lang = 'vi', params = {}) => {
 };
 
 export const formatMoney = async (amount, lang = 'vi') => {
-    if (lang === 'vi') {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-    } else {
+    if (lang === 'en') {
         const rate = await getExchangeRate();
         const usd = amount / rate;
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
+    } else if (lang === 'zh') {
+        const rate = await getExchangeRate();
+        const usd = amount / rate;
+        return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' }).format(usd);
+    } else {
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     }
 };

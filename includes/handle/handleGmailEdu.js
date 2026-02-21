@@ -21,6 +21,9 @@ import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 // Cache key cho Gmail EDU quantity input
 const gmailEduCacheKey = (telegramId) => `gmail_edu_waiting_${telegramId}`;
 
+// Helper for 3-lang text
+const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
+
 // Lấy setting string
 const getSettingString = async (key, defaultValue = '') => {
     try {
@@ -83,9 +86,11 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
 
         // Validate password
         if (text.length < 8) {
-            const errorMsg = lang === 'en'
-                ? '❌ Password must be at least 8 characters.'
-                : '❌ Mật khẩu phải có ít nhất 8 ký tự.';
+            const errorMsg = L(lang,
+                '❌ Mật khẩu phải có ít nhất 8 ký tự.',
+                '❌ Password must be at least 8 characters.',
+                '❌ 密码至少需要8个字符。'
+            );
             await bot.sendMessage(chatId, errorMsg);
             return true;
         }
@@ -104,18 +109,22 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
     // Parse số lượng
     const quantity = parseInt(text, 10);
     if (isNaN(quantity) || quantity < 1) {
-        const errorMsg = lang === 'en'
-            ? '❌ Invalid quantity. Please enter a positive integer (e.g., 1, 2, 5).'
-            : '❌ Số lượng không hợp lệ. Vui lòng nhập số nguyên dương (ví dụ: 1, 2, 5).';
+        const errorMsg = L(lang,
+            '❌ Số lượng không hợp lệ. Vui lòng nhập số nguyên dương (ví dụ: 1, 2, 5).',
+            '❌ Invalid quantity. Please enter a positive integer (e.g., 1, 2, 5).',
+            '❌ 数量无效，请输入正整数（例如：1、2、5）。'
+        );
         await bot.sendMessage(chatId, errorMsg);
         return true;
     }
 
     // Giới hạn số lượng tối đa
     if (quantity > 10) {
-        const errorMsg = lang === 'en'
-            ? '❌ Maximum 10 Gmail accounts per purchase.'
-            : '❌ Tối đa 10 tài khoản Gmail mỗi lần mua.';
+        const errorMsg = L(lang,
+            '❌ Tối đa 10 tài khoản Gmail mỗi lần mua.',
+            '❌ Maximum 10 Gmail accounts per purchase.',
+            '❌ 每次最多购买10个Gmail账户。'
+        );
         await bot.sendMessage(chatId, errorMsg);
         return true;
     }
@@ -123,9 +132,11 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
     // Hiển thị lựa chọn password
     const { createCallbackData } = await import('../../utils/index.js');
 
-    const message = lang === 'en'
-        ? `📧 Buying **${quantity} Gmail EDU**\n\n🔐 **Password option:**\nDo you want to set a custom password or use auto-generated?`
-        : `📧 Mua **${quantity} Gmail EDU**\n\n🔐 **Lựa chọn mật khẩu:**\nBạn muốn tự đặt mật khẩu hay để hệ thống tự tạo?`;
+    const message = L(lang,
+        `📧 Mua **${quantity} Gmail EDU**\n\n🔐 **Lựa chọn mật khẩu:**\nBạn muốn tự đặt mật khẩu hay để hệ thống tự tạo?`,
+        `📧 Buying **${quantity} Gmail EDU**\n\n🔐 **Password option:**\nDo you want to set a custom password or use auto-generated?`,
+        `📧 购买 **${quantity} Gmail EDU**\n\n🔐 **密码选项：**\n您想自定义密码还是自动生成？`
+    );
 
     await bot.sendMessage(chatId, message, {
         parse_mode: 'Markdown',
@@ -133,19 +144,19 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
             inline_keyboard: [
                 [
                     {
-                        text: lang === 'en' ? '🔄 Auto-generate password' : '🔄 Tự động tạo password',
+                        text: L(lang, '🔄 Tự động tạo password', '🔄 Auto-generate password', '🔄 自动生成密码'),
                         callback_data: createCallbackData({ action: 'gmail_pw_auto', qty: quantity })
                     }
                 ],
                 [
                     {
-                        text: lang === 'en' ? '✏️ Set custom password' : '✏️ Tự đặt mật khẩu',
+                        text: L(lang, '✏️ Tự đặt mật khẩu', '✏️ Set custom password', '✏️ 自定义密码'),
                         callback_data: createCallbackData({ action: 'gmail_pw_custom', qty: quantity })
                     }
                 ],
                 [
                     {
-                        text: lang === 'en' ? '❌ Cancel' : '❌ Huỷ',
+                        text: L(lang, '❌ Huỷ', '❌ Cancel', '❌ 取消'),
                         callback_data: createCallbackData({ action: 'gmail_pw_cancel' })
                     }
                 ]
@@ -158,12 +169,6 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
 
 /**
  * Mua Gmail EDU
- * @param {Object} bot - Telegram bot instance
- * @param {Object} msg - Telegram message
- * @param {Object} user - User object từ DB
- * @param {number} quantity - Số lượng Gmail cần mua
- * @param {string} lang - Ngôn ngữ (vi/en)
- * @param {string|null} customPassword - Mật khẩu tùy chỉnh (null = tự động tạo)
  */
 export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi', customPassword = null, config = null) => {
     const chatId = msg.chat.id;
@@ -173,9 +178,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         // Kiểm tra tính năng có bật không
         const enabled = await getSettingBoolean('gmail_edu_enabled', true);
         if (!enabled) {
-            const errorMsg = lang === 'en'
-                ? '❌ Gmail EDU purchase is currently disabled.'
-                : '❌ Tính năng mua Gmail EDU hiện đang tắt.';
+            const errorMsg = L(lang,
+                '❌ Tính năng mua Gmail EDU hiện đang tắt.',
+                '❌ Gmail EDU purchase is currently disabled.',
+                '❌ Gmail EDU 购买功能当前已关闭。'
+            );
             return bot.sendMessage(chatId, errorMsg);
         }
 
@@ -186,9 +193,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         // Lấy lại số dư mới nhất
         const currentUser = await getUserByTelegram(telegramId);
         if (!currentUser) {
-            const errorMsg = lang === 'en'
-                ? '❌ Please /start to create an account.'
-                : '❌ Vui lòng /start để tạo tài khoản.';
+            const errorMsg = L(lang,
+                '❌ Vui lòng /start để tạo tài khoản.',
+                '❌ Please /start to create an account.',
+                '❌ 请使用 /start 创建账户。'
+            );
             return bot.sendMessage(chatId, errorMsg);
         }
 
@@ -232,9 +241,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
 
             const { createCallbackData } = await import('../../utils/index.js');
 
-            const notifyMsg = lang === 'en'
-                ? `❌ **Insufficient balance!**\n\n💵 Required: ${formatCurrency(totalPrice)}\n💰 You have: ${formatCurrency(currentBalance)}\n💸 Missing: ${formatCurrency(missingAmount)}\n\n💡 Please choose a payment method:`
-                : `❌ **Số dư không đủ!**\n\n💵 Cần: ${formatCurrency(totalPrice)}\n💰 Bạn có: ${formatCurrency(currentBalance)}\n💸 Thiếu: ${formatCurrency(missingAmount)}\n\n💡 Vui lòng chọn phương thức nạp tiền:`;
+            const notifyMsg = L(lang,
+                `❌ **Số dư không đủ!**\n\n💵 Cần: ${formatCurrency(totalPrice)}\n💰 Bạn có: ${formatCurrency(currentBalance)}\n💸 Thiếu: ${formatCurrency(missingAmount)}\n\n💡 Vui lòng chọn phương thức nạp tiền:`,
+                `❌ **Insufficient balance!**\n\n💵 Required: ${formatCurrency(totalPrice)}\n💰 You have: ${formatCurrency(currentBalance)}\n💸 Missing: ${formatCurrency(missingAmount)}\n\n💡 Please choose a payment method:`,
+                `❌ **余额不足！**\n\n💵 需要: ${formatCurrency(totalPrice)}\n💰 您有: ${formatCurrency(currentBalance)}\n💸 差额: ${formatCurrency(missingAmount)}\n\n💡 请选择充值方式：`
+            );
 
             await bot.sendMessage(chatId, notifyMsg, {
                 parse_mode: 'Markdown',
@@ -242,7 +253,7 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                     inline_keyboard: [
                         [
                             {
-                                text: lang === 'en' ? `🏦 Bank QR (${formatCurrency(missingAmount)})` : `🏦 Chuyển khoản (${formatCurrency(missingAmount)})`,
+                                text: L(lang, `🏦 Chuyển khoản (${formatCurrency(missingAmount)})`, `🏦 Bank QR (${formatCurrency(missingAmount)})`, `🏦 银行转账 (${formatCurrency(missingAmount)})`),
                                 callback_data: createCallbackData({ action: 'gmail_deposit_bank', amount: missingAmount })
                             }
                         ],
@@ -254,7 +265,7 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                         ],
                         [
                             {
-                                text: lang === 'en' ? '❌ Cancel' : '❌ Huỷ',
+                                text: L(lang, '❌ Huỷ', '❌ Cancel', '❌ 取消'),
                                 callback_data: createCallbackData({ action: 'gmail_deposit_cancel' })
                             }
                         ]
@@ -270,9 +281,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         const deleteHours = await getDeleteHours();
 
         // Thông báo đang tạo
-        const creatingText = lang === 'en'
-            ? `⏳ Creating ${quantity} Gmail EDU...`
-            : `⏳ Đang tạo ${quantity} Gmail EDU...`;
+        const creatingText = L(lang,
+            `⏳ Đang tạo ${quantity} Gmail EDU...`,
+            `⏳ Creating ${quantity} Gmail EDU...`,
+            `⏳ 正在创建 ${quantity} 个 Gmail EDU...`
+        );
         const creatingMsg = await bot.sendMessage(chatId, creatingText);
 
         // Tạo Gmail EDU
@@ -300,9 +313,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         // Kiểm tra xem có tạo được account nào không
         if (createdAccounts.length === 0) {
             try { await bot.deleteMessage(chatId, creatingMsg.message_id); } catch (e) { }
-            const errorMsg = lang === 'en'
-                ? '❌ Unable to create Gmail EDU. Please try again later.'
-                : '❌ Không thể tạo Gmail EDU. Vui lòng thử lại sau.';
+            const errorMsg = L(lang,
+                '❌ Không thể tạo Gmail EDU. Vui lòng thử lại sau.',
+                '❌ Unable to create Gmail EDU. Please try again later.',
+                '❌ 无法创建 Gmail EDU，请稍后再试。'
+            );
             return bot.sendMessage(chatId, errorMsg);
         }
 
@@ -366,31 +381,22 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         try { await bot.deleteMessage(chatId, creatingMsg.message_id); } catch (e) { }
 
         // Gửi kết quả
-        let resultMessage;
-        if (lang === 'en') {
-            resultMessage = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n`;
-            resultMessage += `📧 Product: **Gmail EDU**\n`;
-            resultMessage += `📦 Quantity: ${createdAccounts.length}\n`;
-            resultMessage += `💰 Price: ${formatCurrency(actualPrice)}\n`;
-            resultMessage += `💵 New balance: ${formatCurrency(finalBalance)}\n\n`;
-            resultMessage += `⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`;
-        } else {
-            resultMessage = `✅ **THANH TOÁN THÀNH CÔNG!**\n\n`;
-            resultMessage += `🎁 Sản phẩm: **Gmail EDU**\n`;
-            resultMessage += `📦 Số lượng: ${createdAccounts.length}\n`;
-            resultMessage += `💰 Giá: ${formatCurrency(actualPrice)}\n`;
-            resultMessage += `💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n`;
-            resultMessage += `⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`;
-        }
+        let resultMessage = L(lang,
+            `✅ **THANH TOÁN THÀNH CÔNG!**\n\n🎁 Sản phẩm: **Gmail EDU**\n📦 Số lượng: ${createdAccounts.length}\n💰 Giá: ${formatCurrency(actualPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`,
+            `✅ **PAYMENT SUCCESSFUL!**\n\n📧 Product: **Gmail EDU**\n📦 Quantity: ${createdAccounts.length}\n💰 Price: ${formatCurrency(actualPrice)}\n💵 New balance: ${formatCurrency(finalBalance)}\n\n⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`,
+            `✅ **支付成功！**\n\n📧 产品: **Gmail EDU**\n📦 数量: ${createdAccounts.length}\n💰 价格: ${formatCurrency(actualPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n⚠️ **注意：** 账户将在首次登录后 ${deleteHours} 小时自动删除。`
+        );
 
         await bot.sendMessage(chatId, resultMessage, { parse_mode: 'Markdown' });
 
         // Gửi từng tài khoản riêng để dễ copy
         for (let i = 0; i < createdAccounts.length; i++) {
             const acc = createdAccounts[i];
-            const accountMsg = lang === 'en'
-                ? `📧 **Account ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``
-                : `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``;
+            const accountMsg = L(lang,
+                `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``,
+                `📧 **Account ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``,
+                `📧 **账户 ${i + 1}:**\n\n🔹 **账号:** \`${acc.email}\`\n🔹 **密码:** \`${acc.password}\``
+            );
 
             await bot.sendMessage(chatId, accountMsg, { parse_mode: 'Markdown' });
         }
@@ -401,9 +407,11 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
 
     } catch (error) {
         console.error('[BUY_GMAIL_EDU] Error:', error);
-        const errorMsg = lang === 'en'
-            ? '❌ An error occurred while purchasing Gmail EDU. Please try again later.'
-            : '❌ Có lỗi xảy ra khi mua Gmail EDU. Vui lòng thử lại sau.';
+        const errorMsg = L(lang,
+            '❌ Có lỗi xảy ra khi mua Gmail EDU. Vui lòng thử lại sau.',
+            '❌ An error occurred while purchasing Gmail EDU. Please try again later.',
+            '❌ 购买 Gmail EDU 时出现错误，请稍后再试。'
+        );
         await bot.sendMessage(chatId, errorMsg);
         return { success: false, error: error.message };
     }
@@ -418,9 +426,11 @@ export const showGmailEduInfo = async (bot, chatId, user) => {
 
         const enabled = await getSettingBoolean('gmail_edu_enabled', true);
         if (!enabled) {
-            const errorMsg = lang === 'en'
-                ? '❌ Gmail EDU purchase is currently disabled.'
-                : '❌ Tính năng mua Gmail EDU hiện đang tắt.';
+            const errorMsg = L(lang,
+                '❌ Tính năng mua Gmail EDU hiện đang tắt.',
+                '❌ Gmail EDU purchase is currently disabled.',
+                '❌ Gmail EDU 购买功能当前已关闭。'
+            );
             return bot.sendMessage(chatId, errorMsg);
         }
 
@@ -429,28 +439,11 @@ export const showGmailEduInfo = async (bot, chatId, user) => {
         const deleteHours = await getDeleteHours();
         const currentBalance = Number(user.balance) || 0;
 
-        let message;
-        if (lang === 'en') {
-            message = `📧 **BUY GMAIL EDU**\n\n` +
-                `💰 Price: ${formatCurrency(price)} / 1 Gmail\n` +
-                `🌐 Domain: @${domain}\n` +
-                `💵 Your balance: ${formatCurrency(currentBalance)}\n\n` +
-                `⚠️ **Note:**\n` +
-                `- Account will be auto-deleted ${deleteHours} hour(s) after first login\n` +
-                `- No refunds after purchase\n` +
-                `- Maximum 10 accounts per purchase\n\n` +
-                `Enter the quantity you want to buy (e.g., 1, 2, 5):`;
-        } else {
-            message = `📧 **MUA GMAIL EDU**\n\n` +
-                `💰 Giá: ${formatCurrency(price)} / 1 Gmail\n` +
-                `🌐 Domain: @${domain}\n` +
-                `💵 Số dư của bạn: ${formatCurrency(currentBalance)}\n\n` +
-                `⚠️ **Lưu ý:**\n` +
-                `- Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi login\n` +
-                `- Không hoàn tiền sau khi mua\n` +
-                `- Tối đa 10 tài khoản mỗi lần mua\n\n` +
-                `Nhập số lượng Gmail bạn muốn mua (ví dụ: 1, 2, 5):`;
-        }
+        const message = L(lang,
+            `📧 **MUA GMAIL EDU**\n\n💰 Giá: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n💵 Số dư của bạn: ${formatCurrency(currentBalance)}\n\n⚠️ **Lưu ý:**\n- Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi login\n- Không hoàn tiền sau khi mua\n- Tối đa 10 tài khoản mỗi lần mua\n\nNhập số lượng Gmail bạn muốn mua (ví dụ: 1, 2, 5):`,
+            `📧 **BUY GMAIL EDU**\n\n💰 Price: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n💵 Your balance: ${formatCurrency(currentBalance)}\n\n⚠️ **Note:**\n- Account will be auto-deleted ${deleteHours} hour(s) after first login\n- No refunds after purchase\n- Maximum 10 accounts per purchase\n\nEnter the quantity you want to buy (e.g., 1, 2, 5):`,
+            `📧 **购买 GMAIL EDU**\n\n💰 价格: ${formatCurrency(price)} / 1 个 Gmail\n🌐 域名: @${domain}\n💵 您的余额: ${formatCurrency(currentBalance)}\n\n⚠️ **注意：**\n- 账户将在首次登录后 ${deleteHours} 小时自动删除\n- 购买后不可退款\n- 每次最多购买10个账户\n\n请输入您要购买的数量（例如：1、2、5）：`
+        );
 
         await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 
@@ -469,9 +462,6 @@ export const showGmailEduInfo = async (bot, chatId, user) => {
 
 /**
  * Hoàn tất mua Gmail EDU sau khi nạp tiền thành công
- * @param {Object} bot - Telegram bot instance
- * @param {string|number} telegramId - Telegram user ID
- * @returns {boolean} true nếu có pending purchase và đã xử lý
  */
 export const completeGmailEduPurchaseAfterDeposit = async (bot, telegramId) => {
     try {

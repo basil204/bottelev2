@@ -51,7 +51,8 @@ export const registerListeners = (bot, config) => {
           inline_keyboard: [
             [
               { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'select_lang', lang: 'vi' }) },
-              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'select_lang', lang: 'en' }) }
+              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'select_lang', lang: 'en' }) },
+              { text: '🇨🇳 中文', callback_data: createCallbackData({ action: 'select_lang', lang: 'zh' }) }
             ]
           ]
         }
@@ -118,8 +119,9 @@ export const registerListeners = (bot, config) => {
     const { t } = await import('./helpers/langHelper.js');
     const { sendMenu } = await import('./handle/handleUser.js');
 
-    // Toggle language
-    const newLang = (!user.language || user.language === 'vi') ? 'en' : 'vi';
+    // Cycle language: vi -> en -> zh -> vi
+    const langCycle = { 'vi': 'en', 'en': 'zh', 'zh': 'vi' };
+    const newLang = langCycle[user.language] || 'en';
     await updateLanguage(user.id, newLang);
     user.language = newLang; // update for sendMenu
 
@@ -212,7 +214,7 @@ export const registerListeners = (bot, config) => {
     const user = await ensureUser(bot, msg);
 
     // Xử lý nút Huỷ (ưu tiên cao)
-    if (text === '❌ Huỷ' || text === '❌ Cancel') {
+    if (text === '❌ Huỷ' || text === '❌ Cancel' || text === '❌ 取消') {
       const { cancelUploadState } = await import('./handle/handleDeposit.js');
       // Also clear USDT amount waiting state and ChatGPT waiting state
       const { delCache } = await import('../lib/cache/index.js');
@@ -251,14 +253,14 @@ export const registerListeners = (bot, config) => {
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
-    if (text === '➕ Nạp tiền' || text === '➕ Deposit') return startDepositFlow(bot, msg, user, config);
-    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
+    if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
+    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
     if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
     if (text === '🤖 ChatGPT Pro') return showChatGPTInfo(bot, msg.chat.id, user);
-    if (text === '🧾 Lịch sử mua' || text === '🧾 History') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+    if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Xử lý nút đổi ngôn ngữ
-    if (text === '🌐 Ngôn ngữ' || text === '🌐 Language') {
+    if (text === '🌐 Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
       const { t } = await import('./helpers/langHelper.js');
       const { createCallbackData } = await import('../utils/index.js');
       await bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {
@@ -267,7 +269,8 @@ export const registerListeners = (bot, config) => {
           inline_keyboard: [
             [
               { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'change_lang', lang: 'vi' }) },
-              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) }
+              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) },
+              { text: '🇨🇳 中文', callback_data: createCallbackData({ action: 'change_lang', lang: 'zh' }) }
             ]
           ]
         }
@@ -276,7 +279,7 @@ export const registerListeners = (bot, config) => {
     }
 
     // Xử lý nút Nhóm
-    if (text === '👥 Nhóm' || text === '👥 Group') {
+    if (text === '👥 Nhóm' || text === '👥 Group' || text === '👥 群组') {
       const { t } = await import('./helpers/langHelper.js');
       const lang = user.language || 'vi';
 
@@ -292,9 +295,8 @@ export const registerListeners = (bot, config) => {
       }
 
       if (!groupLink) {
-        const noLinkMsg = lang === 'en'
-          ? '❌ Support group link not configured yet.'
-          : '❌ Link nhóm hỗ trợ chưa được cấu hình.';
+        const noLinkMsgs = { en: '❌ Support group link not configured yet.', zh: '❌ 支持群组链接尚未配置。' };
+        const noLinkMsg = noLinkMsgs[lang] || '❌ Link nhóm hỗ trợ chưa được cấu hình.';
         return bot.sendMessage(msg.chat.id, noLinkMsg);
       }
 
@@ -303,7 +305,7 @@ export const registerListeners = (bot, config) => {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: lang === 'en' ? '👥 Join Group' : '👥 Tham gia nhóm', url: groupLink }]
+            [{ text: { en: '👥 Join Group', zh: '👥 加入群组' }[lang] || '👥 Tham gia nhóm', url: groupLink }]
           ]
         }
       });

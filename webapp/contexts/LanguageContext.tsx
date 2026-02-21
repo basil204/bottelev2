@@ -3,8 +3,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { vi } from '../locales/vi';
 import { en } from '../locales/en';
+import { zh } from '../locales/zh';
 
-type Language = 'vi' | 'en';
+type Language = 'vi' | 'en' | 'zh';
 type Translations = typeof vi;
 
 // Helper to access nested keys safely
@@ -26,7 +27,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const saved = localStorage.getItem('language') as Language;
-        if (saved && (saved === 'vi' || saved === 'en')) {
+        if (saved && (saved === 'vi' || saved === 'en' || saved === 'zh')) {
             setLanguageState(saved);
         }
     }, []);
@@ -36,7 +37,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('language', lang);
     };
 
-    const dictionary = language === 'vi' ? vi : en;
+    const dictionaries: Record<Language, typeof vi> = { vi, en: en as typeof vi, zh: zh as typeof vi };
+    const dictionary = dictionaries[language] || vi;
 
     const t = (key: string) => {
         return getNestedValue(dictionary, key);

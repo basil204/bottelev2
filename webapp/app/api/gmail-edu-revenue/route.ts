@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         );
         const gmailPrice = Number(priceRows[0]?.value) || 10000;
 
-        // Get sold Gmail EDU with buyer info
+        // Get sold Gmail EDU with buyer info (exclude admin purchases)
         const query = `
             SELECT 
                 g.id,
@@ -65,7 +65,9 @@ export async function GET(request: Request) {
                 COALESCE(g.sold_price, ?) as price
             FROM gmail_accounts g
             LEFT JOIN users u ON g.sold_to_user_id = u.id
-            WHERE g.status = 'sold' ${dateCondition}
+            WHERE g.status = 'sold'
+              AND (u.telegram_id IS NULL OR u.telegram_id NOT IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL))
+              ${dateCondition}
             ORDER BY g.sold_at DESC
             LIMIT ? OFFSET ?
         `;
@@ -73,25 +75,31 @@ export async function GET(request: Request) {
         const queryParams = [gmailPrice, ...params, limit, offset];
         const [rows] = await pool.query<RowDataPacket[]>(query, queryParams);
 
-        // Get total count and revenue
+        // Get total count and revenue (exclude admin purchases)
         const countQuery = `
             SELECT 
                 COUNT(*) as total,
                 SUM(COALESCE(g.sold_price, ?)) as total_revenue
             FROM gmail_accounts g
-            WHERE g.status = 'sold' ${dateCondition}
+            LEFT JOIN users u ON g.sold_to_user_id = u.id
+            WHERE g.status = 'sold'
+              AND (u.telegram_id IS NULL OR u.telegram_id NOT IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL))
+              ${dateCondition}
         `;
         const [countRows] = await pool.query<RowDataPacket[]>(countQuery, [gmailPrice, ...params]);
         const total = countRows[0]?.total || 0;
         const totalRevenue = countRows[0]?.total_revenue || (total * gmailPrice);
 
-        // Get summary by date
+        // Get summary by date (exclude admin purchases)
         const summaryQuery = `
             SELECT 
                 DATE(g.sold_at) as date,
                 COUNT(*) as count
             FROM gmail_accounts g
-            WHERE g.status = 'sold' ${dateCondition}
+            LEFT JOIN users u ON g.sold_to_user_id = u.id
+            WHERE g.status = 'sold'
+              AND (u.telegram_id IS NULL OR u.telegram_id NOT IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL))
+              ${dateCondition}
             GROUP BY DATE(g.sold_at)
             ORDER BY date DESC
             LIMIT 30

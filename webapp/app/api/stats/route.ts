@@ -17,7 +17,16 @@ export async function GET(request: Request) {
     });
 
     const [users] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM users');
-    const [revenue] = await pool.query<RowDataPacket[]>('SELECT SUM(price) as total FROM orders WHERE status = "completed"');
+    // Admin orders count as 0đ revenue (CASE WHEN), still counted in order count
+    const [revenue] = await pool.query<RowDataPacket[]>(`
+      SELECT SUM(
+        CASE WHEN u.telegram_id IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL)
+          THEN 0 ELSE o.price END
+      ) as total
+      FROM orders o
+      INNER JOIN users u ON o.user_id = u.id
+      WHERE o.status = 'completed'
+    `);
     const [deposits] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved"');
     const [ordersCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM orders');
 
@@ -25,24 +34,34 @@ export async function GET(request: Request) {
     const [todayDeposits] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved" AND DATE(created_at) = CURDATE()');
     const [monthDeposits] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved" AND MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())');
 
-    // Chart data: Revenue last 7 days
+    // Chart data: Revenue last 7 days (admin orders = 0đ)
     const [revenueChart] = await pool.query<RowDataPacket[]>(`
-      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, SUM(price) as total
-      FROM orders
-      WHERE status = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      SELECT DATE_FORMAT(o.created_at, '%Y-%m-%d') as date,
+        SUM(
+          CASE WHEN u.telegram_id IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL)
+            THEN 0 ELSE o.price END
+        ) as total
+      FROM orders o
+      INNER JOIN users u ON o.user_id = u.id
+      WHERE o.status = 'completed'
+        AND o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
       GROUP BY date
       ORDER BY date ASC
     `);
 
-    // Revenue by product type
+    // Revenue by product type (admin orders = 0đ, still counted)
     const [productRevenue] = await pool.query<RowDataPacket[]>(`
       SELECT 
         p.id as product_id,
         p.name as product_name,
         COUNT(o.id) as order_count,
-        COALESCE(SUM(o.price), 0) as total_revenue
+        COALESCE(SUM(
+          CASE WHEN u.telegram_id IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL)
+            THEN 0 ELSE o.price END
+        ), 0) as total_revenue
       FROM products p
       LEFT JOIN orders o ON p.id = o.product_id AND o.status = 'completed'
+      LEFT JOIN users u ON o.user_id = u.id
       GROUP BY p.id, p.name
       ORDER BY total_revenue DESC
     `);

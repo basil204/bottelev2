@@ -10,18 +10,39 @@ const generateInvoiceCode = (orderId) => {
   return `HD-${year}${month}${day}-${orderNum}`;
 };
 
+// Kiểm tra user có phải admin không (qua telegram_id)
+const isAdminUser = async (userId) => {
+  try {
+    const rows = await query(
+      `SELECT aa.id FROM admin_accounts aa
+       INNER JOIN users u ON aa.telegram_id = u.telegram_id
+       WHERE u.id = ? LIMIT 1`,
+      [userId]
+    );
+    return rows.length > 0;
+  } catch (e) {
+    console.error('[ORDER_CONTROLLER] isAdminUser error:', e);
+    return false;
+  }
+};
+
 export const createOrder = async ({ userId, productId, price, email = null, note = null, status = 'completed' }) => {
+  // Nếu người mua là admin → price = 0 (không tính vào doanh thu)
+  const adminCheck = await isAdminUser(userId);
+  const finalPrice = adminCheck ? 0 : price;
+
   const pool = getPool();
   try {
     // Thử INSERT với đầy đủ các cột mới (email, note, status, invoice_code)
     const [result] = await pool.execute('INSERT INTO orders (user_id, product_id, price, email, note, status) VALUES (?, ?, ?, ?, ?, ?)', [
       userId,
       productId,
-      price,
+      finalPrice,
       email,
       note,
       status
     ]);
+
 
     // Tạo invoice_code từ order ID vừa tạo
     const invoiceCode = generateInvoiceCode(result.insertId);
@@ -42,7 +63,7 @@ export const createOrder = async ({ userId, productId, price, email = null, note
       const [result] = await pool.execute('INSERT INTO orders (user_id, product_id, price) VALUES (?, ?, ?)', [
         userId,
         productId,
-        price
+        finalPrice
       ]);
 
       // Tạo invoice_code từ order ID

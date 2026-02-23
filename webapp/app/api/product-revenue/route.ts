@@ -44,9 +44,13 @@ export async function GET(request: Request) {
                 p.id as product_id,
                 p.name as product_name,
                 COUNT(o.id) as order_count,
-                COALESCE(SUM(o.price), 0) as total_revenue
+                COALESCE(SUM(
+                    CASE WHEN u.telegram_id IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL)
+                        THEN 0 ELSE o.price END
+                ), 0) as total_revenue
             FROM products p
             LEFT JOIN orders o ON p.id = o.product_id AND o.status = 'completed' ${dateCondition}
+            LEFT JOIN users u ON o.user_id = u.id
             GROUP BY p.id, p.name
             ORDER BY total_revenue DESC
         `;

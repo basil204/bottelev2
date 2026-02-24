@@ -43,7 +43,7 @@ export async function GET(request: Request) {
             SELECT 
                 p.id as product_id,
                 p.name as product_name,
-                COUNT(o.id) as order_count,
+                COUNT(CASE WHEN u.telegram_id IS NULL OR u.telegram_id NOT IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL) THEN o.id END) as order_count,
                 COALESCE(SUM(
                     CASE WHEN u.telegram_id IN (SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL)
                         THEN 0 ELSE o.price END

@@ -46,6 +46,7 @@ interface Settings {
     admin_password: string;
     admin_username2: string;
     admin_password2: string;
+    gmail_checker_api_keys: string[];
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -75,6 +76,7 @@ export default function SettingsPage() {
         admin_password: '',
         admin_username2: '',
         admin_password2: '',
+        gmail_checker_api_keys: [],
     });
 
     const [newAdminId, setNewAdminId] = useState('');
@@ -404,6 +406,69 @@ export default function SettingsPage() {
                                             />
                                             <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_delete_hours_hint')}</div>
                                         </div>
+                                    </div>
+
+                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                                        <div>
+                                            <div className="font-medium text-white mb-2">🔑 Gmail Checker API Keys</div>
+                                            <div className="text-sm text-slate-400 mb-4">Các API key dùng để check live Gmail. Hệ thống sẽ chọn ngẫu nhiên.</div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="new_gmail_key"
+                                                className="flex-1"
+                                                placeholder="Nhập API Key (VD: 9fb537359bf5afee9...)"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const val = (e.currentTarget as HTMLInputElement).value.trim();
+                                                        if (val && !settings.gmail_checker_api_keys.includes(val)) {
+                                                            setSettings(prev => ({
+                                                                ...prev,
+                                                                gmail_checker_api_keys: [...prev.gmail_checker_api_keys, val]
+                                                            }));
+                                                            (e.currentTarget as HTMLInputElement).value = '';
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <Button
+                                                type="button"
+                                                onClick={() => {
+                                                    const input = document.getElementById('new_gmail_key') as HTMLInputElement;
+                                                    const val = input?.value.trim();
+                                                    if (val && !settings.gmail_checker_api_keys.includes(val)) {
+                                                        setSettings(prev => ({
+                                                            ...prev,
+                                                            gmail_checker_api_keys: [...prev.gmail_checker_api_keys, val]
+                                                        }));
+                                                        input.value = '';
+                                                    }
+                                                }}
+                                            >
+                                                Thêm
+                                            </Button>
+                                        </div>
+                                        {settings.gmail_checker_api_keys.length > 0 && (
+                                            <div className="space-y-2 mt-2">
+                                                {settings.gmail_checker_api_keys.map((key, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-900 border border-slate-700 rounded-md">
+                                                        <span className="font-mono text-xs truncate max-w-[80%]">{key}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSettings(prev => ({
+                                                                ...prev,
+                                                                gmail_checker_api_keys: prev.gmail_checker_api_keys.filter(k => k !== key)
+                                                            }))}
+                                                            className="text-red-500 hover:text-red-400 p-1"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="text-xs text-slate-500">Key lỗi sẽ tự động bị xóa trong quá trình check.</div>
                                     </div>
                                 </div>
                             </div>

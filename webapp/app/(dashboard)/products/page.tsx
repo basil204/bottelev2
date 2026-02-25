@@ -20,6 +20,7 @@ interface Product {
     description: string;
     stock: number;
     type: 'stock' | 'order';
+    priority: number;
 }
 
 interface Account {
@@ -440,6 +441,7 @@ export default function ProductsPage() {
                                         <TableHead>{t('products.price')}</TableHead>
                                         <TableHead>{t('products.type')}</TableHead>
                                         <TableHead>{t('products.stock')}</TableHead>
+                                        <TableHead>Ưu tiên</TableHead>
                                         <TableHead className="text-right">{t('products.actions')}</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -461,6 +463,11 @@ export default function ProductsPage() {
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="font-bold">{product.stock}</TableCell>
+                                                <TableCell>
+                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-xs font-mono">
+                                                        {product.priority || 0}
+                                                    </span>
+                                                </TableCell>
                                                 <TableCell className="text-right flex justify-end gap-2">
                                                     <Button size="icon" variant="ghost" onClick={() => openViewStockModal(product)} title={t('products.view_accounts')}>
                                                         <List className="w-4 h-4" />
@@ -648,6 +655,15 @@ export default function ProductsPage() {
                             type="number"
                             value={editingProduct?.price || ''}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, price: Number(e.target.value) }))}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Độ ưu tiên (Cao hơn hiện trước)</label>
+                        <Input
+                            type="number"
+                            value={editingProduct?.priority ?? 0}
+                            onChange={(e) => setEditingProduct(prev => ({ ...prev!, priority: Number(e.target.value) }))}
+                            placeholder="0"
                         />
                     </div>
                     <div className="space-y-2">

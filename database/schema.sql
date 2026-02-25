@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(18,2) NOT NULL,
   description TEXT,
   stock INT DEFAULT 0,
-  type ENUM('auto', 'manual') DEFAULT 'auto'
+  type ENUM('auto', 'manual') DEFAULT 'auto',
+  priority INT DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS accounts (

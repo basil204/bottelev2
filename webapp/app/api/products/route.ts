@@ -15,7 +15,7 @@ export async function GET(request: Request) {
             request
         });
 
-        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products ORDER BY id DESC');
+        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products ORDER BY priority DESC, id DESC');
         return NextResponse.json(rows);
     } catch (error) {
         console.error(error);
@@ -26,12 +26,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, price, description, type, code } = body;
+        const { name, price, description, type, code, priority } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO products (name, price, description, type, code) VALUES (?, ?, ?, ?, ?)',
-            [name, price, description, type || 'stock', code || null]
+            'INSERT INTO products (name, price, description, type, code, priority) VALUES (?, ?, ?, ?, ?, ?)',
+            [name, price, description, type || 'stock', code || null, priority || 0]
         );
 
         // Log action
@@ -57,12 +57,12 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, name, price, description, type, code } = body;
+        const { id, name, price, description, type, code, priority } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         await pool.query(
-            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ? WHERE id = ?',
-            [name, price, description, type, code || null, id]
+            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ?, priority = ? WHERE id = ?',
+            [name, price, description, type, code || null, priority || 0, id]
         );
 
         // Log action

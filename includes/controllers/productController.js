@@ -1,19 +1,30 @@
 import { query } from '../database/index.js';
 
-export const createProduct = async ({ name, price, description, type = 'stock', priority = 0 }) => {
-  await query('INSERT INTO products (name, price, description, stock, type, priority) VALUES (?, ?, ?, 0, ?, ?)', [name, price, description, type, priority]);
+export const createProduct = async ({ name, price, description, type = 'stock', priority = 0, check_live = 0 }) => {
+  await query('INSERT INTO products (name, price, description, stock, type, priority, check_live) VALUES (?, ?, ?, 0, ?, ?, ?)', [name, price, description, type, priority, check_live]);
 };
 
-export const updateProduct = async (id, { name, price, description, type, priority }) => {
-  if (type !== undefined && priority !== undefined) {
-    await query('UPDATE products SET name = ?, price = ?, description = ?, type = ?, priority = ? WHERE id = ?', [name, price, description, type, priority, id]);
-  } else if (type !== undefined) {
-    await query('UPDATE products SET name = ?, price = ?, description = ?, type = ? WHERE id = ?', [name, price, description, type, id]);
-  } else if (priority !== undefined) {
-    await query('UPDATE products SET name = ?, price = ?, description = ?, priority = ? WHERE id = ?', [name, price, description, priority, id]);
-  } else {
-    await query('UPDATE products SET name = ?, price = ?, description = ? WHERE id = ?', [name, price, description, id]);
+export const updateProduct = async (id, { name, price, description, type, priority, check_live }) => {
+  let q = 'UPDATE products SET name = ?, price = ?, description = ?';
+  let params = [name, price, description];
+
+  if (type !== undefined) {
+    q += ', type = ?';
+    params.push(type);
   }
+  if (priority !== undefined) {
+    q += ', priority = ?';
+    params.push(priority);
+  }
+  if (check_live !== undefined) {
+    q += ', check_live = ?';
+    params.push(check_live);
+  }
+
+  q += ' WHERE id = ?';
+  params.push(id);
+
+  await query(q, params);
 };
 
 export const deleteProduct = async (id) => {

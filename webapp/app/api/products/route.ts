@@ -26,12 +26,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, price, description, type, code, priority } = body;
+        const { name, price, description, type, code, priority, check_live } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO products (name, price, description, type, code, priority) VALUES (?, ?, ?, ?, ?, ?)',
-            [name, price, description, type || 'stock', code || null, priority || 0]
+            'INSERT INTO products (name, price, description, type, code, priority, check_live) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [name, price, description, type || 'stock', code || null, priority || 0, check_live || 0]
         );
 
         // Log action
@@ -57,12 +57,12 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, name, price, description, type, code, priority } = body;
+        const { id, name, price, description, type, code, priority, check_live } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         await pool.query(
-            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ?, priority = ? WHERE id = ?',
-            [name, price, description, type, code || null, priority || 0, id]
+            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ? WHERE id = ?',
+            [name, price, description, type, code || null, priority || 0, check_live || 0, id]
         );
 
         // Log action

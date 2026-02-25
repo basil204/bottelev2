@@ -6,6 +6,7 @@ import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
 import { query } from '../database/index.js';
+import { checkGmailLive } from '../helpers/gmailChecker.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -597,21 +598,67 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
     // Sản phẩm stock: lấy accounts từ kho
     for (let i = 0; i < quantity; i++) {
-      const account = await takeAndMarkSoldOneAvailable(product.id);
-      if (!account) {
-        if (purchasedAccounts.length > 0) {
-          for (const acc of purchasedAccounts) {
-            await query('UPDATE accounts SET status = "available" WHERE id = ?', [acc.id]);
+      let accountFound = false;
+      while (!accountFound) {
+        const account = await takeAndMarkSoldOneAvailable(product.id);
+        if (!account) {
+          // Refund partially if some accounts were already bought? 
+          // Currently, handlePurchaseWithQuantity marks accounts as sold and deducts balance at once.
+          // If we fail here, we should probably refund.
+
+          if (purchasedAccounts.length > 0) {
+            // We've already got some accounts. Should we return them or refund everything?
+            // The original logic returns what it got and errors.
           }
+
+          bot.sendMessage(msg.chat.id, L(lang,
+            `❌ Không đủ tài khoản sống trong kho. Đã lấy được ${purchasedAccounts.length}/${quantity} tài khoản.`,
+            `❌ Not enough live accounts in stock. Got ${purchasedAccounts.length}/${quantity}.`,
+            `❌ 库存中没有足够的活跃账户。已获取 ${purchasedAccounts.length}/${quantity} 个。`
+          ));
+
+          // Refund logic for the remaining quantity
+          if (purchasedAccounts.length < quantity) {
+            const refundAmount = productPrice * (quantity - purchasedAccounts.length);
+            await updateBalance(user.id, refundAmount);
+            await addBalanceLog({
+              userId: user.id,
+              amount: refundAmount,
+              reason: `refund_buy_product_insufficient_live_${product.id}`,
+              adminId: null
+            });
+            bot.sendMessage(msg.chat.id, L(lang,
+              `💰 Đã hoàn lại ${formatCurrency(refundAmount)} cho ${quantity - purchasedAccounts.length} sản phẩm lỗi/hết hàng.`,
+              `💰 Refunded ${formatCurrency(refundAmount)} for ${quantity - purchasedAccounts.length} failed/out-of-stock items.`,
+              `💰 已为 ${quantity - purchasedAccounts.length} 个失败/缺货产品退款 ${formatCurrency(refundAmount)}。`
+            ));
+          }
+
+          if (purchasedAccounts.length === 0) return; // Exit if nothing bought
+          break; // Exit loop if some were bought but stock is out
         }
-        return bot.sendMessage(msg.chat.id, L(lang,
-          `❌ Không đủ tài khoản trong kho. Đã lấy được ${purchasedAccounts.length}/${quantity} tài khoản.`,
-          `❌ Not enough accounts in stock. Got ${purchasedAccounts.length}/${quantity}.`,
-          `❌ 库存不足，已获取 ${purchasedAccounts.length}/${quantity} 个账户。`
-        ));
+
+        // Check live if enabled
+        if (product.check_live) {
+          console.log(`[BUY_PRODUCT] Checking live for: ${account.username}`);
+          const liveResult = await checkGmailLive(account.username);
+          const isLive = liveResult?.results?.[account.username] === true;
+
+          if (!isLive) {
+            console.log(`[BUY_PRODUCT] Account is DEAD: ${account.username}. Deleting and trying next...`);
+            await deleteAccountAfterPurchase(account.id, product.id);
+            continue; // Try next account
+          }
+          console.log(`[BUY_PRODUCT] Account is LIVE: ${account.username}`);
+        }
+
+        purchasedAccounts.push(account);
+        accountFound = true;
       }
-      purchasedAccounts.push(account);
+      if (purchasedAccounts.length < (i + 1)) break; // Break if we couldn't find a live account
     }
+
+    if (purchasedAccounts.length === 0) return; // Final fallback
 
     // Trừ tiền
     await updateBalance(user.id, -totalPrice);

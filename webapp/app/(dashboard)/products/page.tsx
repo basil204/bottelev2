@@ -21,6 +21,7 @@ interface Product {
     stock: number;
     type: 'stock' | 'order';
     priority: number;
+    check_live: number;
 }
 
 interface Account {
@@ -442,13 +443,14 @@ export default function ProductsPage() {
                                         <TableHead>{t('products.type')}</TableHead>
                                         <TableHead>{t('products.stock')}</TableHead>
                                         <TableHead>Ưu tiên</TableHead>
+                                        <TableHead>Check Live</TableHead>
                                         <TableHead className="text-right">{t('products.actions')}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                            <TableCell colSpan={8} className="h-24 text-center">{t('common.loading')}</TableCell>
                                         </TableRow>
                                     ) : (
                                         products.map((product) => (
@@ -464,8 +466,13 @@ export default function ProductsPage() {
                                                 </TableCell>
                                                 <TableCell className="font-bold">{product.stock}</TableCell>
                                                 <TableCell>
-                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-xs font-mono">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded bg-slate-900 text-white text-xs font-mono">
                                                         {product.priority || 0}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <span className={`px-2 py-1 rounded text-xs bg-slate-900 text-white ${product.check_live ? '' : 'opacity-60'}`}>
+                                                        {product.check_live ? 'Bật' : 'Tắt'}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="text-right flex justify-end gap-2">
@@ -665,6 +672,18 @@ export default function ProductsPage() {
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, priority: Number(e.target.value) }))}
                             placeholder="0"
                         />
+                    </div>
+                    <div className="flex items-center space-x-2 py-2">
+                        <input
+                            type="checkbox"
+                            id="check_live"
+                            checked={editingProduct?.check_live === 1}
+                            onChange={(e) => setEditingProduct(prev => ({ ...prev!, check_live: e.target.checked ? 1 : 0 }))}
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="check_live" className="text-sm font-medium cursor-pointer">
+                            Check Live trước khi bán
+                        </label>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t('products.type')}</label>

@@ -2,6 +2,28 @@
 import fetch from 'node-fetch'; // Bot environment might need node-fetch if on older Node
 import { query } from '../database/index.js';
 
+// Fetch the dynamic _t token from the homepage
+const fetchToken = async () => {
+    try {
+        const res = await fetch("https://www.gmailchecklive.com/", {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            }
+        });
+        const html = await res.text();
+        const match = html.match(/'_t'\s*,\s*'([a-f0-9]+)'/);
+        if (match) return match[1];
+        // Fallback: try another common pattern
+        const match2 = html.match(/name="_t"\s+value="([a-f0-9]+)"/);
+        if (match2) return match2[1];
+        console.warn('[Gmail Checker Helper] Could not extract _t token from page');
+        return null;
+    } catch (e) {
+        console.error('[Gmail Checker Helper] Error fetching token:', e);
+        return null;
+    }
+};
+
 export const checkGmailLive = async (emails) => {
     try {
         // Fetch API keys from settings
@@ -21,21 +43,19 @@ export const checkGmailLive = async (emails) => {
             return null;
         }
 
-        // Use the first key for now, or shuffle
         const apiKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
-
         const emailList = Array.isArray(emails) ? emails.join('\r\n') : emails;
 
-        // Simulating FormData for node environment
-        // We can use URLSearchParams if the server accepts it, 
-        // but let's try to match the multipart/form-data if possible.
-        // Actually, many APIs accept urlencoded too. Let's see.
-        // If not, we might need 'form-data' package.
+        // Dynamically fetch the _t token before each request
+        const token = await fetchToken();
+        if (!token) {
+            console.warn('[Gmail Checker Helper] No _t token, request may fail');
+        }
 
         const body = new URLSearchParams();
         body.append('emails', emailList);
         body.append('original_lines', emailList);
-        body.append('_t', '02497f2c');
+        body.append('_t', token || '');
         body.append('chunk_id', 'chunk_1');
         body.append('chunk_total', '1');
 
@@ -52,6 +72,7 @@ export const checkGmailLive = async (emails) => {
         });
 
         const rawData = await response.json();
+        console.log('[Gmail Checker] Response:', JSON.stringify(rawData));
         return rawData;
     } catch (error) {
         console.error('[Gmail Checker Helper] Error:', error);

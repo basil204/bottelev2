@@ -42,46 +42,60 @@ export async function POST(request: NextRequest) {
 
         for (const apiKey of shuffledKeys) {
             try {
-                const response = await fetch("https://checkmail.live/check/", {
+                // Prepare form data for gmailchecklive.com
+                const formData = new URLSearchParams();
+                const emailList = emails.join('\r\n');
+
+                // Using URLSearchParams might work if they accept urlencoded, 
+                // but user showed multipart. Let's use standard FormData if available or simulate it.
+                // In Next.js/Browser environment, FormData is available.
+                const fd = new FormData();
+                fd.append('emails', emailList);
+                fd.append('original_lines', emailList);
+                fd.append('_t', '02497f2c'); // Placeholder token from user's example
+                fd.append('chunk_id', 'chunk_1');
+                fd.append('chunk_total', '1');
+
+                const response = await fetch("https://www.gmailchecklive.com/index.php", {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json",
+                        "Accept": "*/*",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+                        "Referer": "https://www.gmailchecklive.com/",
+                        "Origin": "https://www.gmailchecklive.com"
                     },
-                    body: JSON.stringify({
-                        api_key: apiKey,
-                        fastCheck: true,
-                        emails: emails
-                    })
+                    body: fd
                 });
 
-                const data = await response.json();
+                const rawData = await response.json();
 
-                // Check if the API key is invalid
-                // Based on checkmail.live behavior, if status is false and message indicates invalid key
-                if (data.status === false && (
-                    data.message?.toLowerCase().includes('api key') ||
-                    data.message?.toLowerCase().includes('invalid') ||
-                    response.status === 401
-                )) {
-                    console.warn(`[Check Gmail API] Invalid API Key detected: ${apiKey}. Removing from database.`);
+                // Check if success
+                if (rawData.success) {
+                    // Transform gmailchecklive.com format to the app's expected format
+                    // gmailchecklive: { success: true, results: { "email": true/false } }
+                    // expected: { status: true, data: [ { email, status: 'live'/'die', index } ] }
 
-                    // Remove the invalid key from database
-                    const updatedKeys = apiKeys.filter(k => k !== apiKey);
-                    await pool.query(
-                        'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?',
-                        ['gmail_checker_api_keys', JSON.stringify(updatedKeys), JSON.stringify(updatedKeys)]
-                    );
+                    const transformedData = {
+                        status: true,
+                        success: true,
+                        data: Object.entries(rawData.results || {}).map(([email, isLive], idx) => ({
+                            email,
+                            status: isLive ? 'live' : 'die',
+                            index: idx + 1
+                        }))
+                    };
 
-                    // Update the local list for consistency if needed, though we continue the loop
-                    apiKeys = updatedKeys;
-                    continue; // Try next key
+                    successResponse = transformedData;
+                    break;
                 }
 
-                successResponse = data;
-                break; // Success or non-key error, exit loop
+                // If not success, judge if it's a key/service issue
+                console.warn(`[Check Gmail API] gmailchecklive.com returned failure:`, rawData);
+                lastError = rawData.message || 'gmailchecklive.com returned failure';
+
             } catch (error) {
-                console.error(`[Check Gmail API] Error with key ${apiKey}:`, error);
-                lastError = 'Lỗi kết nối tới checkmail.live';
+                console.error(`[Check Gmail API] Error:`, error);
+                lastError = 'Lỗi kết nối tới gmailchecklive.com';
             }
         }
 

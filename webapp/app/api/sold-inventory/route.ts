@@ -21,7 +21,7 @@ export async function GET(request: Request) {
                 u.username as buyer_username,
                 u.telegram_id as buyer_telegram_id,
                 p.id as product_id,
-                p.name as product_name
+                COALESCE(p.name, o.note, 'Sản phẩm') as product_name
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.id
             LEFT JOIN products p ON o.product_id = p.id

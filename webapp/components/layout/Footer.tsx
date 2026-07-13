@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { MapPin, Loader2 } from "lucide-react";
 
 interface LocationData {
@@ -19,28 +18,47 @@ interface LocationData {
 }
 
 export function Footer() {
-    const router = useRouter();
     const [location, setLocation] = useState<LocationData | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Log initial visit on mount without prompting for location
     useEffect(() => {
-        // Check if geolocation is supported
+        const logInitialVisit = async () => {
+            try {
+                await fetch('/api/log-visit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lat: null,
+                        lon: null,
+                        display_name: null,
+                        address: null,
+                    }),
+                });
+            } catch (logErr) {
+                console.error('Failed to log initial visit:', logErr);
+            }
+        };
+        logInitialVisit();
+    }, []);
+
+    const handleRequestLocation = () => {
         if (!navigator.geolocation) {
             setError("Trình duyệt không hỗ trợ định vị");
-            setLoading(false);
-            // Redirect to 404 if geolocation not supported
-            router.push('/404');
             return;
         }
 
-        // Request location permission
+        setLoading(true);
+        setError(null);
+
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
 
                 try {
-                    // Call Nominatim API to get address from coordinates
                     const response = await fetch(
                         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
                         {
@@ -57,23 +75,19 @@ export function Footer() {
                     const data: LocationData = await response.json();
                     setLocation(data);
 
-                    // Log visit to admin logs
-                    try {
-                        await fetch('/api/log-visit', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                lat: data.lat,
-                                lon: data.lon,
-                                display_name: data.display_name,
-                                address: data.address,
-                            }),
-                        });
-                    } catch (logErr) {
-                        console.error('Failed to log visit:', logErr);
-                    }
+                    // Update log with coordinates
+                    await fetch('/api/log-visit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            lat: data.lat,
+                            lon: data.lon,
+                            display_name: data.display_name,
+                            address: data.address,
+                        }),
+                    });
                 } catch (err) {
                     setError("Lỗi khi lấy thông tin địa chỉ");
                     console.error(err);
@@ -82,7 +96,6 @@ export function Footer() {
                 }
             },
             (err) => {
-                // Redirect to 404 when location permission is denied or error occurs
                 switch (err.code) {
                     case err.PERMISSION_DENIED:
                         setError("Bạn đã từ chối quyền truy cập vị trí");
@@ -97,40 +110,46 @@ export function Footer() {
                         setError("Lỗi không xác định");
                 }
                 setLoading(false);
-                // Redirect to 404
-                router.push('/404');
             },
             {
                 enableHighAccuracy: true,
                 timeout: 10000,
-                maximumAge: 300000, // Cache location for 5 minutes
+                maximumAge: 300000,
             }
         );
-    }, [router]);
+    };
 
     return (
-        <footer className="border-t border-gray-700 bg-gray-900/50 backdrop-blur-sm px-4 py-3">
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
-                <MapPin className="h-4 w-4 text-blue-400" />
-                {loading ? (
-                    <div className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Đang lấy vị trí...</span>
-                    </div>
-                ) : error ? (
-                    <span className="text-red-400">{error}</span>
-                ) : location ? (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <span className="font-medium text-gray-300">
-                            {location.display_name}
+        <footer className="border-t border-white/5 bg-zinc-950/20 backdrop-blur-sm px-6 py-3.5">
+            <div className="flex items-center justify-center">
+                <button
+                    onClick={handleRequestLocation}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.01] border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all duration-200 text-xs text-slate-400 hover:text-slate-200 group cursor-pointer"
+                    title="Nhấp để chia sẻ vị trí"
+                >
+                    {loading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" />
+                    ) : (
+                        <MapPin className="h-3.5 w-3.5 text-violet-400 group-hover:scale-110 transition-transform" />
+                    )}
+                    {error ? (
+                        <span className="text-red-400">{error}</span>
+                    ) : location ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5 text-left">
+                            <span className="font-medium text-slate-300">
+                                {location.display_name}
+                            </span>
+                            <span className="text-slate-500 font-mono">
+                                ({location.lat}, {location.lon})
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="transition-colors">
+                            Hệ thống quản trị Bot Tele
                         </span>
-                        <span className="text-gray-500 text-xs">
-                            ({location.lat}, {location.lon})
-                        </span>
-                    </div>
-                ) : (
-                    <span>Không có thông tin vị trí</span>
-                )}
+                    )}
+                </button>
             </div>
         </footer>
     );

@@ -36,26 +36,44 @@ export const getProduct = async (id) => {
   return rows[0];
 };
 
-export const listProducts = async (offset, limit) => {
+export const listProducts = async (offset, limit, categoryId = null) => {
   try {
+    let whereClause = '';
+    const params = [];
+    if (categoryId) {
+      whereClause = 'WHERE p.category_id = ?';
+      params.push(Number(categoryId));
+    }
+    const countParams = [...params];
+    params.push(limit, offset);
+
     // Thử query với product_id trước
     const rows = await query(
       `SELECT p.*, 
       (SELECT COUNT(*) FROM accounts a WHERE a.product_id = p.id AND a.status='available') as stock 
-      FROM products p ORDER BY priority DESC, id DESC LIMIT ? OFFSET ?`,
-      [limit, offset]
+      FROM products p ${whereClause} ORDER BY priority DESC, id DESC LIMIT ? OFFSET ?`,
+      params
     );
-    const [{ total }] = await query('SELECT COUNT(*) as total FROM products');
+    const [{ total }] = await query(`SELECT COUNT(*) as total FROM products p ${whereClause}`, countParams);
     return { rows, total };
   } catch (error) {
     // Nếu lỗi do không có cột product_id, dùng query đơn giản hơn (không tính stock từ accounts)
     if (error.code === 'ER_BAD_FIELD_ERROR' && error.message && error.message.includes('product_id')) {
       console.warn('[PRODUCT_CONTROLLER] Column product_id not found in accounts table, using product stock field instead');
+      let whereClause = '';
+      const params = [];
+      if (categoryId) {
+        whereClause = 'WHERE p.category_id = ?';
+        params.push(Number(categoryId));
+      }
+      const countParams = [...params];
+      params.push(limit, offset);
+
       const rows = await query(
-        `SELECT p.*, p.stock as stock FROM products p ORDER BY priority DESC, id DESC LIMIT ? OFFSET ?`,
-        [limit, offset]
+        `SELECT p.*, p.stock as stock FROM products p ${whereClause} ORDER BY priority DESC, id DESC LIMIT ? OFFSET ?`,
+        params
       );
-      const [{ total }] = await query('SELECT COUNT(*) as total FROM products');
+      const [{ total }] = await query(`SELECT COUNT(*) as total FROM products p ${whereClause}`, countParams);
       return { rows, total };
     }
     throw error;

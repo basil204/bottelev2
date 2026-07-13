@@ -30,13 +30,14 @@ export const createOrder = async ({ userId, productId, price, email = null, note
   // Nếu người mua là admin → price = 0 (không tính vào doanh thu)
   const adminCheck = await isAdminUser(userId);
   const finalPrice = adminCheck ? 0 : price;
+  const finalProductId = (productId === 0 || !productId) ? null : productId;
 
   const pool = getPool();
   try {
     // Thử INSERT với đầy đủ các cột mới (email, note, status, invoice_code)
     const [result] = await pool.execute('INSERT INTO orders (user_id, product_id, price, email, note, status) VALUES (?, ?, ?, ?, ?, ?)', [
       userId,
-      productId,
+      finalProductId,
       finalPrice,
       email,
       note,
@@ -62,7 +63,7 @@ export const createOrder = async ({ userId, productId, price, email = null, note
       console.warn('[ORDER_CONTROLLER] New columns (email, note, status) not found, using basic INSERT');
       const [result] = await pool.execute('INSERT INTO orders (user_id, product_id, price) VALUES (?, ?, ?)', [
         userId,
-        productId,
+        finalProductId,
         finalPrice
       ]);
 
@@ -78,8 +79,8 @@ export const createOrder = async ({ userId, productId, price, email = null, note
 
 export const listOrdersByUser = async (userId, offset, limit) => {
   const rows = await query(
-    `SELECT o.*, p.name FROM orders o 
-     JOIN products p ON p.id = o.product_id 
+    `SELECT o.*, COALESCE(p.name, o.note, 'Sản phẩm') as name FROM orders o 
+     LEFT JOIN products p ON p.id = o.product_id 
      WHERE o.user_id = ? ORDER BY o.id DESC LIMIT ? OFFSET ?`,
     [userId, limit, offset]
   );
@@ -91,9 +92,9 @@ export const listOrdersByUser = async (userId, offset, limit) => {
 // Manual orders là những orders có email/note và status = 'pending'
 export const listPendingManualOrders = async (offset, limit) => {
   const rows = await query(
-    `SELECT o.*, p.name as product_name, u.telegram_id, u.username 
+    `SELECT o.*, COALESCE(p.name, o.note, 'Sản phẩm') as product_name, u.telegram_id, u.username 
      FROM orders o 
-     JOIN products p ON p.id = o.product_id 
+     LEFT JOIN products p ON p.id = o.product_id 
      JOIN users u ON u.id = o.user_id
      WHERE o.status = 'pending' AND o.email IS NOT NULL
      ORDER BY o.created_at ASC LIMIT ? OFFSET ?`,
@@ -109,9 +110,9 @@ export const listPendingManualOrders = async (offset, limit) => {
 // Lấy order theo ID
 export const getOrderById = async (orderId) => {
   const rows = await query(
-    `SELECT o.*, p.name as product_name, u.telegram_id, u.username 
+    `SELECT o.*, COALESCE(p.name, o.note, 'Sản phẩm') as product_name, u.telegram_id, u.username 
      FROM orders o 
-     JOIN products p ON p.id = o.product_id 
+     LEFT JOIN products p ON p.id = o.product_id 
      JOIN users u ON u.id = o.user_id
      WHERE o.id = ?`,
     [orderId]

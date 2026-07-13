@@ -29,16 +29,32 @@ const checkViettelTransaction = async (bot, token, cached, user, promotion) => {
     const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${token}`);
     const data = response.data;
 
-    if (!data || data.status.code !== '00' || !data.data || !data.data.content) return false;
+    if (!data || data.status.code !== '00' || !data.data || (!data.data.content && !data.data.trans)) return false;
 
-    const transactions = data.data.content;
+    const rawTransactions = data.data.content || data.data.trans || [];
 
-    for (const tx of transactions) {
+    for (const rawTx of rawTransactions) {
+      // Parse amount handling dot separator
+      const rawAmt = rawTx.amount || rawTx.transAmount || '0';
+      const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+
+      const tx = {
+        bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
+        amount: parsedAmount,
+        description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
+        transDate: rawTx.transDate || rawTx.requestDate || '',
+        paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
+        balance: rawTx.balance || null,
+        accountId: rawTx.accountId || null,
+        clientId: rawTx.clientId || null,
+        msgContent: rawTx.msgContent || rawTx.transDesc || ''
+      };
+
       // Check for CREDIT (income) transactions
-      if (tx.paymentType !== 'CREDIT') continue;
+      if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
 
       const note = tx.msgContent || tx.description || '';
-      const amount = Number(tx.amount) || 0;
+      const amount = tx.amount;
       const txToken = extractToken(note);
 
       if (!txToken) continue;
@@ -298,16 +314,32 @@ export const startAutoDepositWatcher = (bot, config) => {
       const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${viettelConfig.token}`);
       const data = response.data;
 
-      if (!data || data.status.code !== '00' || !data.data || !data.data.content) return;
+      if (!data || data.status.code !== '00' || !data.data || (!data.data.content && !data.data.trans)) return;
 
-      const transactions = data.data.content;
+      const rawTransactions = data.data.content || data.data.trans || [];
 
-      for (const tx of transactions) {
+      for (const rawTx of rawTransactions) {
+        // Parse amount handling dot separator
+        const rawAmt = rawTx.amount || rawTx.transAmount || '0';
+        const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+
+        const tx = {
+          bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
+          amount: parsedAmount,
+          description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
+          transDate: rawTx.transDate || rawTx.requestDate || '',
+          paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
+          balance: rawTx.balance || null,
+          accountId: rawTx.accountId || null,
+          clientId: rawTx.clientId || null,
+          msgContent: rawTx.msgContent || rawTx.transDesc || ''
+        };
+
         // Only process CREDIT (incoming) transactions
-        if (tx.paymentType !== 'CREDIT') continue;
+        if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
 
         const note = tx.msgContent || tx.description || '';
-        const amount = Number(tx.amount) || 0;
+        const amount = tx.amount;
         const txToken = extractToken(note);
 
         if (!txToken) continue;

@@ -22,11 +22,16 @@ interface Product {
     type: 'stock' | 'order';
     priority: number;
     check_live: number;
+    category_id?: number | null;
+    category_name?: string | null;
 }
 
 interface Account {
     id: number;
     username: string;
+    password?: string | null;
+    extra_data?: string | null;
+    twofa?: string | null;
     status: string;
     created_at: string;
 }
@@ -50,7 +55,7 @@ export default function ProductsPage() {
     const { t } = useLanguage();
     const { formatPrice } = useCurrency();
     const [products, setProducts] = useState<Product[]>([]);
-    // ... (state)
+    const [categoriesList, setCategoriesList] = useState<{ id: number; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
@@ -92,8 +97,16 @@ export default function ProductsPage() {
             });
     };
 
+    const fetchCategories = () => {
+        fetch('/api/categories')
+            .then((res) => res.json())
+            .then((data) => setCategoriesList(Array.isArray(data) ? data : []))
+            .catch(() => setCategoriesList([]));
+    };
+
     useEffect(() => {
         fetchProducts();
+        fetchCategories();
     }, []);
 
     const handleDelete = async (id: number) => {
@@ -172,6 +185,7 @@ export default function ProductsPage() {
         });
 
         if (res.ok) {
+            const data = await res.json();
             // Fire and forget - don't wait for broadcast
             if (isNewProduct && notifyNewProduct) {
                 fetch('/api/broadcast', {
@@ -179,6 +193,7 @@ export default function ProductsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'new_product',
+                        productId: data.id,
                         productName: editingProduct.name,
                         productPrice: editingProduct.price
                     })
@@ -213,6 +228,7 @@ export default function ProductsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'stock_added',
+                        productId: currentProductId,
                         productName: currentProductName,
                         addedCount: result.count,
                         totalStock: result.totalStock || result.count
@@ -437,6 +453,7 @@ export default function ProductsPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>{t('users.id')}</TableHead>
+                                        <TableHead>Thư mục</TableHead>
                                         <TableHead>{t('products.name')}</TableHead>
                                         <TableHead>Code</TableHead>
                                         <TableHead>{t('products.price')}</TableHead>
@@ -450,12 +467,17 @@ export default function ProductsPage() {
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                            <TableCell colSpan={9} className="h-24 text-center">{t('common.loading')}</TableCell>
                                         </TableRow>
                                     ) : (
                                         products.map((product) => (
                                             <TableRow key={product.id}>
                                                 <TableCell>#{product.id}</TableCell>
+                                                <TableCell>
+                                                    <span className="px-2 py-1 rounded bg-slate-100 text-slate-800 dark:bg-slate-850 dark:text-slate-200 text-xs font-semibold">
+                                                        {product.category_name || 'Khác'}
+                                                    </span>
+                                                </TableCell>
                                                 <TableCell className="font-medium">{product.name}</TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">{product.code || '-'}</TableCell>
                                                 <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatPrice(product.price)}</TableCell>
@@ -647,6 +669,19 @@ export default function ProductsPage() {
                             value={editingProduct?.name || ''}
                             onChange={(e) => setEditingProduct(prev => ({ ...prev!, name: e.target.value }))}
                         />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Thư mục (Category)</label>
+                        <select
+                            value={editingProduct?.category_id || ''}
+                            onChange={(e) => setEditingProduct(prev => ({ ...prev!, category_id: Number(e.target.value) || null }))}
+                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option value="">-- Chọn thư mục --</option>
+                            {categoriesList.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Code (tùy chọn)</label>
@@ -841,7 +876,12 @@ export default function ProductsPage() {
                                     className="w-4 h-4 rounded border-gray-400 mr-3 cursor-pointer"
                                 />
                                 <span className="font-mono text-sm text-muted-foreground w-12">#{(inventoryPage - 1) * 20 + i + 1}</span>
-                                <code className="text-sm font-mono flex-1 truncate">{acc.username}</code>
+                                <code className="text-sm font-mono flex-1 truncate select-all" title={`${acc.username}${acc.password ? `|${acc.password}` : ''}${acc.extra_data ? `|${acc.extra_data}` : ''}${acc.twofa ? `|${acc.twofa}` : ''}`}>
+                                    {acc.username}
+                                    {acc.password ? `|${acc.password}` : ''}
+                                    {acc.extra_data ? `|${acc.extra_data}` : ''}
+                                    {acc.twofa ? `|${acc.twofa}` : ''}
+                                </code>
                                 <span className={clsx(
                                     "text-xs px-2 py-0.5 rounded-full capitalize mr-2",
                                     acc.status === 'available' ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"

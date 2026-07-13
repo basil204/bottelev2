@@ -25,7 +25,7 @@ export async function GET(
                 o.status,
                 o.created_at,
                 o.completed_at,
-                p.name as product_name
+                COALESCE(p.name, o.note, 'Sản phẩm') as product_name
             FROM orders o
             LEFT JOIN products p ON p.id = o.product_id
             WHERE o.user_id = ?

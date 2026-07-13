@@ -724,6 +724,7 @@ export default function StoredAccountsPage() {
                                                     <TableHead>Code</TableHead>
                                                     <TableHead>TK</TableHead>
                                                     <TableHead>MK</TableHead>
+                                                    <TableHead>Mail KP</TableHead>
                                                     <TableHead>2FA</TableHead>
                                                     <TableHead>Pay</TableHead>
                                                     <TableHead>Ngày pay</TableHead>
@@ -760,7 +761,7 @@ export default function StoredAccountsPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <code
-                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[110px] truncate block cursor-pointer hover:bg-muted/80"
+                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono"
                                                                     title={parsed.tk ? `Click để copy: ${parsed.tk}` : ''}
                                                                     onClick={() => parsed.tk && copyText(parsed.tk, `tk-${account.id}`)}
                                                                 >
@@ -769,7 +770,7 @@ export default function StoredAccountsPage() {
                                                             </TableCell>
                                                             <TableCell>
                                                                 <code
-                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[90px] truncate block cursor-pointer hover:bg-muted/80"
+                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono"
                                                                     title={parsed.mk ? `Click để copy: ${parsed.mk}` : ''}
                                                                     onClick={() => parsed.mk && copyText(parsed.mk, `mk-${account.id}`)}
                                                                 >
@@ -777,13 +778,22 @@ export default function StoredAccountsPage() {
                                                                 </code>
                                                             </TableCell>
                                                             <TableCell>
+                                                                <code
+                                                                    className="text-[11px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono"
+                                                                    title={parsed.extra ? `Click để copy: ${parsed.extra}` : ''}
+                                                                    onClick={() => parsed.extra && copyText(parsed.extra, `extra-${account.id}`)}
+                                                                >
+                                                                    {copiedField === `extra-${account.id}` ? '✓ Copied' : (parsed.extra || '-')}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
                                                                 <div className="flex items-center gap-0.5">
                                                                     <code
-                                                                        className="text-[11px] bg-muted px-1 py-0.5 rounded max-w-[60px] truncate block cursor-pointer hover:bg-muted/80"
+                                                                        className="text-[11px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono"
                                                                         title={parsed.twofa ? `Click để copy: ${parsed.twofa}` : ''}
                                                                         onClick={() => parsed.twofa && copyText(parsed.twofa, `2fa-${account.id}`)}
                                                                     >
-                                                                        {copiedField === `2fa-${account.id}` ? '✓' : (parsed.twofa ? parsed.twofa.substring(0, 8) + '...' : '-')}
+                                                                        {copiedField === `2fa-${account.id}` ? '✓ Copied' : (parsed.twofa || '-')}
                                                                     </code>
                                                                     {parsed.twofa && (
                                                                         <Button
@@ -1061,6 +1071,7 @@ export default function StoredAccountsPage() {
                                                     <TableHead className="w-[80px]">Code</TableHead>
                                                     <TableHead>TK</TableHead>
                                                     <TableHead>MK</TableHead>
+                                                    <TableHead>Mail KP</TableHead>
                                                     <TableHead>2FA</TableHead>
                                                     <TableHead className="w-[120px]">Người mua</TableHead>
                                                     <TableHead className="w-[100px]">Ngày bán</TableHead>
@@ -1084,18 +1095,23 @@ export default function StoredAccountsPage() {
                                                                 </span>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[120px] truncate cursor-pointer hover:bg-muted/80" title={parsed.tk} onClick={() => copyText(parsed.tk, `sold-tk-${account.id}`)}>
-                                                                    {parsed.tk || '-'}
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono" title={parsed.tk} onClick={() => copyText(parsed.tk, `sold-tk-${account.id}`)}>
+                                                                    {copiedField === `sold-tk-${account.id}` ? '✓ Copied' : (parsed.tk || '-')}
                                                                 </code>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.mk} onClick={() => copyText(parsed.mk, `sold-mk-${account.id}`)}>
-                                                                    {parsed.mk || '-'}
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono" title={parsed.mk} onClick={() => copyText(parsed.mk, `sold-mk-${account.id}`)}>
+                                                                    {copiedField === `sold-mk-${account.id}` ? '✓ Copied' : (parsed.mk || '-')}
                                                                 </code>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded max-w-[100px] truncate cursor-pointer hover:bg-muted/80" title={parsed.twofa} onClick={() => copyText(parsed.twofa, `sold-2fa-${account.id}`)}>
-                                                                    {parsed.twofa || '-'}
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono" title={parsed.extra} onClick={() => copyText(parsed.extra, `sold-extra-${account.id}`)}>
+                                                                    {copiedField === `sold-extra-${account.id}` ? '✓ Copied' : (parsed.extra || '-')}
+                                                                </code>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80 block font-mono" title={parsed.twofa} onClick={() => copyText(parsed.twofa, `sold-2fa-${account.id}`)}>
+                                                                    {copiedField === `sold-2fa-${account.id}` ? '✓ Copied' : (parsed.twofa || '-')}
                                                                 </code>
                                                             </TableCell>
                                                             <TableCell>

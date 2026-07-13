@@ -26,15 +26,45 @@ const waitingForProductQuantity = new Map();
 
 
 
-export const sendProductList = async (bot, chatId, page, pageSize, user, messageId = null) => {
+export const sendCategoryList = async (bot, chatId, user) => {
+  const lang = user?.language || 'vi';
+
+  // Fetch all categories from categories table
+  const categories = await query('SELECT * FROM categories ORDER BY priority DESC, id DESC');
+  if (!categories || !categories.length) {
+    return bot.sendMessage(chatId, L(lang, 'Chưa có thư mục nào.', 'No categories yet.', '暂无分类。'));
+  }
+
+  // Fetch products to check stock
+  const { rows } = await listProducts(0, 1000);
+
+  const inline_keyboard = categories.map(cat => {
+    // Check if this category has stock
+    const productsInCat = rows.filter(p => p.category_id === cat.id);
+    const hasStock = productsInCat.some(p => p.type === 'order' || (p.stock && p.stock > 0));
+    const icon = hasStock ? '🟢' : '🔴';
+
+    return [{
+      text: `${icon} ${cat.name}`,
+      callback_data: createCallbackData({ action: 'category_products', catId: cat.id })
+    }];
+  });
+
+  const selectMsg = L(lang, '📂 Chọn danh mục sản phẩm:', '📂 Select product category:', '📂 选择产品分类：');
+  await bot.sendMessage(chatId, selectMsg, {
+    reply_markup: { inline_keyboard }
+  });
+};
+
+export const sendProductList = async (bot, chatId, page, pageSize, user, categoryId = null, messageId = null) => {
   const { formatMoney } = await import('../helpers/langHelper.js');
   const lang = user?.language || 'vi';
 
   const actualPageSize = 10;
   const offset = (page - 1) * actualPageSize;
-  const { rows, total } = await listProducts(offset, actualPageSize);
+  const { rows, total } = await listProducts(offset, actualPageSize, categoryId);
   if (!rows.length) {
-    return bot.sendMessage(chatId, L(lang, 'Chưa có sản phẩm.', 'No products yet.', '暂无产品。'));
+    return bot.sendMessage(chatId, L(lang, 'Không có sản phẩm trong danh mục này.', 'No products in this category.', '此分类下暂无产品。'));
   }
 
   // Get settings
@@ -85,7 +115,13 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, message
 
   const hasPrev = page > 1;
   const hasNext = offset + rows.length < total;
-  inline_keyboard.push(...buildPaginationKeyboard({ action: 'products', page }, page, hasPrev, hasNext));
+  inline_keyboard.push(...buildPaginationKeyboard({ action: 'products', catId: categoryId, page }, page, hasPrev, hasNext));
+
+  // Add back to categories button
+  inline_keyboard.push([{
+    text: L(lang, '🔙 Quay lại danh mục', '🔙 Back to Categories', '🔙 返回分类'),
+    callback_data: createCallbackData({ action: 'back_to_categories' })
+  }]);
 
   const selectMsg = L(lang, 'Chọn sản phẩm:', 'Select product:', '选择产品：');
 

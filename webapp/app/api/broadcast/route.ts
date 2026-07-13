@@ -81,19 +81,21 @@ async function sendBatch(
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { type, productName, productPrice, addedCount, totalStock } = body;
+        const { type, productName, productPrice, addedCount, totalStock, productId } = body;
 
-        // Get shop name and bot token from settings
+        // Get shop name, bot token and bot username from settings
         const [settings] = await pool.query<RowDataPacket[]>(
-            "SELECT `key`, `value` FROM settings WHERE `key` IN ('shop_name', 'telegram_bot_token')"
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('shop_name', 'telegram_bot_token', 'bot_username')"
         );
 
         let shopName = 'SHOP';
         let botToken = '';
+        let botUsername = '';
 
         settings.forEach((row: any) => {
             if (row.key === 'shop_name') shopName = row.value || 'SHOP';
             if (row.key === 'telegram_bot_token') botToken = row.value;
+            if (row.key === 'bot_username') botUsername = row.value;
         });
 
         if (!botToken) {
@@ -114,13 +116,13 @@ export async function POST(request: Request) {
             broadcastMessage = `📢 ${shopName} thông báo có sản phẩm mới!\n\n` +
                 `🎁 Sản phẩm: ${productName}\n` +
                 `💰 Giá: ${Number(productPrice).toLocaleString('vi-VN')}đ\n\n` +
-                `👉 Gõ /start để vào bot mua ngay nhé!`;
+                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
         } else if (type === 'stock_added') {
             broadcastMessage = `📢 ${shopName} thông báo có hàng mới!\n\n` +
                 `🎁 Sản phẩm: ${productName}\n` +
                 `➕ Vừa thêm: ${addedCount} tài khoản\n` +
                 `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
-                `👉 Gõ /start để vào bot mua ngay nhé!`;
+                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
         } else if (type === 'custom' || body.message) {
             const customMessage = body.message;
             if (!customMessage || !customMessage.trim()) {
@@ -141,12 +143,24 @@ export async function POST(request: Request) {
             }
         }
 
+        // Build inline keyboard reply markup if bot username and product ID are present
+        let replyMarkup: any = undefined;
+        if (botUsername && productId) {
+            replyMarkup = {
+                inline_keyboard: [
+                    [
+                        { text: '🛒 Mua Ngay', url: `https://t.me/${botUsername}?start=buy_${productId}` }
+                    ]
+                ]
+            };
+        }
+
         // Gửi theo batch song song (25 tin/batch, delay 1s giữa các batch)
         // User nào block bot hoặc deactivated sẽ tự động bị xóa khỏi DB
         const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
             try {
                 if (finalImageUrl) {
-                    await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken);
+                    await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken, replyMarkup);
                     return { ok: true, blocked: false };
                 } else {
                     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -155,7 +169,8 @@ export async function POST(request: Request) {
                         body: JSON.stringify({
                             chat_id: telegramId,
                             text: broadcastMessage,
-                            parse_mode: 'HTML'
+                            parse_mode: 'HTML',
+                            reply_markup: replyMarkup
                         })
                     });
 

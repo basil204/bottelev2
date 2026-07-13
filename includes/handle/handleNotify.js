@@ -164,13 +164,13 @@ export const notifyAdminAboutNewManualOrder = async (bot, adminIds, order) => {
     }
 
     const message = `📝 **ĐƠN HÀNG MỚI CẦN XỬ LÝ**\n\n` +
-      `🆔 Mã đơn: #${order.id}\n` +
-      `🎁 Sản phẩm: ${order.product_name}\n` +
-      `👤 User: ${order.username || order.telegram_id}\n` +
-      `📧 Email: ${order.email || 'N/A'}\n` +
-      `📝 Note: ${order.note || 'Không có'}\n` +
-      `💰 Giá: ${formatCurrency(order.price)}\n` +
-      `🕐 ${order.created_at}\n\n` +
+      `🆔 Mã đơn: #${escapeMarkdown(order.id)}\n` +
+      `🎁 Sản phẩm: ${escapeMarkdown(order.product_name)}\n` +
+      `👤 User: ${escapeMarkdown(order.username || order.telegram_id)}\n` +
+      `📧 Email: ${escapeMarkdown(order.email || 'N/A')}\n` +
+      `📝 Note: ${escapeMarkdown(order.note || 'Không có')}\n` +
+      `💰 Giá: ${escapeMarkdown(formatCurrency(order.price))}\n` +
+      `🕐 ${escapeMarkdown(order.created_at)}\n\n` +
       `👉 Vào menu Admin → Đơn hàng cần xử lý để xem chi tiết`;
 
     let successCount = 0;
@@ -206,13 +206,13 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
     }
 
     let message = `🛒 **MUA HÀNG THÀNH CÔNG**\n\n` +
-      `🆔 Mã đơn: #${purchaseInfo.orderId || 'N/A'}\n` +
-      `🎁 Sản phẩm: ${purchaseInfo.productName}\n` +
-      `👤 User: ${purchaseInfo.username || purchaseInfo.telegramId}\n` +
-      `📧 ID: ${purchaseInfo.telegramId}\n` +
-      `📦 Số lượng: ${purchaseInfo.quantity}\n` +
-      `💰 Giá: ${formatCurrency(purchaseInfo.price)}\n` +
-      `💵 Số dư sau mua: ${formatCurrency(purchaseInfo.finalBalance)}`;
+      `🆔 Mã đơn: #${escapeMarkdown(purchaseInfo.orderId || 'N/A')}\n` +
+      `🎁 Sản phẩm: ${escapeMarkdown(purchaseInfo.productName)}\n` +
+      `👤 User: ${escapeMarkdown(purchaseInfo.username || purchaseInfo.telegramId)}\n` +
+      `📧 ID: ${escapeMarkdown(purchaseInfo.telegramId)}\n` +
+      `📦 Số lượng: ${escapeMarkdown(purchaseInfo.quantity)}\n` +
+      `💰 Giá: ${escapeMarkdown(formatCurrency(purchaseInfo.price))}\n` +
+      `💵 Số dư sau mua: ${escapeMarkdown(formatCurrency(purchaseInfo.finalBalance))}`;
 
     // Nếu có thông tin tài khoản, hiển thị thêm
     if (purchaseInfo.accounts) {
@@ -265,21 +265,21 @@ export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
     }
 
     let message = `💰 **NẠP TIỀN THÀNH CÔNG**\n\n` +
-      `🆔 Mã giao dịch: #${depositInfo.depositId}\n` +
-      `👤 User: ${depositInfo.username || depositInfo.telegramId}\n` +
-      `📧 ID: ${depositInfo.telegramId}\n` +
-      `💵 Số tiền gốc: ${formatCurrency(depositInfo.originalAmount)}`;
+      `🆔 Mã giao dịch: #${escapeMarkdown(depositInfo.depositId)}\n` +
+      `👤 User: ${escapeMarkdown(depositInfo.username || depositInfo.telegramId)}\n` +
+      `📧 ID: ${escapeMarkdown(depositInfo.telegramId)}\n` +
+      `💵 Số tiền gốc: ${escapeMarkdown(formatCurrency(depositInfo.originalAmount))}`;
 
     if (depositInfo.bonusAmount > 0) {
-      message += `\n🎁 Khuyến mại: +${formatCurrency(depositInfo.bonusAmount)} (${depositInfo.bonusPercentage}%)`;
+      message += `\n🎁 Khuyến mại: +${escapeMarkdown(formatCurrency(depositInfo.bonusAmount))} (${escapeMarkdown(depositInfo.bonusPercentage)}%)`;
     }
 
-    message += `\n💵 Tổng nhận: ${formatCurrency(depositInfo.finalAmount)}` +
-      `\n💵 Số dư mới: ${formatCurrency(depositInfo.finalBalance)}`;
+    message += `\n💵 Tổng nhận: ${escapeMarkdown(formatCurrency(depositInfo.finalAmount))}` +
+      `\n💵 Số dư mới: ${escapeMarkdown(formatCurrency(depositInfo.finalBalance))}`;
 
     // Thêm mã tham chiếu ngân hàng nếu có
     if (depositInfo.transactionRef) {
-      message += `\n📝 Ref: \`${depositInfo.transactionRef}\``;
+      message += `\n📝 Ref: \`${escapeMarkdown(depositInfo.transactionRef)}\``;
     }
 
     let successCount = 0;
@@ -350,11 +350,11 @@ export const notifyAdminAboutExchange = async (bot, adminIds, exchangeInfo) => {
     }
 
     const message = `💎 **ĐỔI CREDIT THÀNH CÔNG**\n\n` +
-      `🎁 Sản phẩm: ${exchangeInfo.productName}\n` +
-      `👤 User: ${exchangeInfo.username || exchangeInfo.telegramId}\n` +
-      `📧 ID: ${exchangeInfo.telegramId}\n` +
-      `💎 Số Credit trừ: ${exchangeInfo.cost}\n` +
-      `💰 Credit còn lại: ${exchangeInfo.remainingCredit}`;
+      `🎁 Sản phẩm: ${escapeMarkdown(exchangeInfo.productName)}\n` +
+      `👤 User: ${escapeMarkdown(exchangeInfo.username || exchangeInfo.telegramId)}\n` +
+      `📧 ID: ${escapeMarkdown(exchangeInfo.telegramId)}\n` +
+      `💎 Số Credit trừ: ${escapeMarkdown(exchangeInfo.cost)}\n` +
+      `💰 Credit còn lại: ${escapeMarkdown(exchangeInfo.remainingCredit)}`;
 
     let successCount = 0;
     let failCount = 0;

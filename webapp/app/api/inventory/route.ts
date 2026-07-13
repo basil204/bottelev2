@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
         // Get paginated accounts
         const [accounts] = await pool.query<RowDataPacket[]>(
-            'SELECT id, username, password, status FROM accounts WHERE product_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+            'SELECT id, username, password, extra_data, twofa, status FROM accounts WHERE product_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
             [productId, limit, offset]
         );
 

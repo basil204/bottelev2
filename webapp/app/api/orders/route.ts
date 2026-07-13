@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         const offset = (page - 1) * limit;
 
         const [rows] = await pool.query(`
-      SELECT orders.*, users.username, products.name as product_name
+      SELECT orders.*, users.username, COALESCE(products.name, orders.note, 'Sản phẩm') as product_name
       FROM orders
       LEFT JOIN users ON orders.user_id = users.id
       LEFT JOIN products ON orders.product_id = products.id

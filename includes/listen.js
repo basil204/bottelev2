@@ -1,6 +1,6 @@
 import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
-import { sendProductList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
+import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
 import { showChatGPTInfo, handleChatGPTEmailInput } from './handle/handleChatGPT.js';
 
@@ -31,16 +31,20 @@ import { listPendingDeposits, approveDeposit, rejectDeposit, checkDepositStatus,
 import { addBalanceLog } from './controllers/balanceLogController.js';
 import { createCallbackData, formatCurrency } from '../utils/index.js';
 import { query } from './database/index.js';
+import { getCache, setCache, delCache } from '../lib/cache/index.js';
 
 // Lưu config ở module level để có thể truy cập từ các callback
 export let globalConfig = {};
 
 export const registerListeners = (bot, config) => {
   globalConfig = config;
+
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
     const { t } = await import('./helpers/langHelper.js');
     const { createCallbackData } = await import('../utils/index.js');
+
+    const startParam = match[1] ? match[1].trim() : '';
 
     // Kiểm tra nếu user chưa chọn ngôn ngữ (lần đầu /start)
     if (!user.language) {
@@ -58,6 +62,14 @@ export const registerListeners = (bot, config) => {
         }
       });
       return;
+    }
+
+    if (startParam && startParam.startsWith('buy_')) {
+      const productId = parseInt(startParam.replace('buy_', ''), 10);
+      if (!isNaN(productId)) {
+        const { showProductDetail } = await import('./handle/handleBuy.js');
+        return showProductDetail(bot, msg.chat.id, productId, msg.from.id);
+      }
     }
 
     // User đã có ngôn ngữ - hiển thị menu bình thường
@@ -95,7 +107,7 @@ export const registerListeners = (bot, config) => {
     };
 
     await bot.sendMessage(msg.chat.id, messageText, opts);
-    await sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
+    await sendCategoryList(bot, msg.chat.id, user);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
@@ -258,7 +270,7 @@ export const registerListeners = (bot, config) => {
     if (handledManual) return; // Đã xử lý manual order input
 
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
-    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendProductList(bot, msg.chat.id, 1, config.PAGE_SIZE, user);
+    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
     if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
     if (text === '🤖 ChatGPT Pro') return showChatGPTInfo(bot, msg.chat.id, user);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
@@ -439,6 +451,12 @@ export const registerListeners = (bot, config) => {
     try {
       const data = JSON.parse(query.data);
       const chatId = query.message.chat.id;
+
+      // Also delete the message containing the clicked button
+      try {
+        await bot.deleteMessage(chatId, query.message.message_id);
+      } catch (e) {}
+
       const user = await ensureUser(bot, { ...query.message, from: query.from, text: query.data });
 
       console.log(`[CALLBACK] User ${query.from.id}: ${query.data}`);
@@ -503,8 +521,8 @@ export const registerListeners = (bot, config) => {
               }
             });
 
-            // Hiển thị danh sách sản phẩm
-            return sendProductList(bot, chatId, 1, config.PAGE_SIZE, user);
+            // Hiển thị danh sách danh mục
+            return sendCategoryList(bot, chatId, user);
           }
 
         case 'change_lang':
@@ -540,8 +558,11 @@ export const registerListeners = (bot, config) => {
           // Need to fetch user to get language for pagination callback too?
           // If ensureUser wasn't called here (it was called above), we can pass it.
           // user variable in 'callback_query' listener: const user = await ensureUser(...)
-          // Lấy messageId từ message để edit thay vì gửi mới
-          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, query.message.message_id);
+          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, data.catId);
+        case 'category_products':
+          return sendProductList(bot, chatId, 1, config.PAGE_SIZE, user, data.catId);
+        case 'back_to_categories':
+          return sendCategoryList(bot, chatId, user);
         case 'view_product':
           const { showProductDetail } = await import('./handle/handleBuy.js');
           return showProductDetail(bot, chatId, data.productId, query.from.id);

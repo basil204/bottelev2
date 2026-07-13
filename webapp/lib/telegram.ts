@@ -30,7 +30,7 @@ export async function sendMessage(chatId: number | string, text: string, token?:
     }
 }
 
-export async function sendPhoto(chatId: number | string, photo: string, caption?: string, token?: string): Promise<boolean> {
+export async function sendPhoto(chatId: number | string, photo: string, caption?: string, token?: string, replyMarkup?: any): Promise<boolean> {
     const useToken = token || TELEGRAM_BOT_TOKEN;
     if (!useToken) {
         console.error("TELEGRAM_BOT_TOKEN is not set");
@@ -48,6 +48,7 @@ export async function sendPhoto(chatId: number | string, photo: string, caption?
                 photo: photo,
                 caption: caption,
                 parse_mode: 'HTML',
+                reply_markup: replyMarkup
             }),
         });
 

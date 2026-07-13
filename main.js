@@ -47,6 +47,12 @@ const bootstrap = async () => {
     const botInfo = await bot.getMe();
     config.BOT_USERNAME = botInfo.username;
     console.log(`✅ Bot started: @${botInfo.username}`);
+    try {
+      const { query } = await import('./includes/database/index.js');
+      await query("INSERT INTO settings (`key`, `value`) VALUES ('bot_username', ?) ON DUPLICATE KEY UPDATE `value` = ?", [botInfo.username, botInfo.username]);
+    } catch (dbErr) {
+      console.error('⚠️ Could not save bot_username to DB:', dbErr.message);
+    }
   } catch (error) {
     console.error('⚠️  Could not get bot info:', error.message);
   }

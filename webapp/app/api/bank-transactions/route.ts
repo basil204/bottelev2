@@ -5,17 +5,17 @@ import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 
 
 interface Transaction {
-    msisdn: string;
-    clientCode: string;
-    clientId: string;
-    msgContent: string;
+    msisdn?: string;
+    clientCode?: string;
+    clientId?: string;
+    msgContent?: string;
     transDate: string;
-    accountId: string;
+    accountId?: string;
     amount: string;
-    balance: string;
+    balance?: string;
     bankTransId: string;
     description: string;
-    paymentType: 'CREDIT' | 'DEBIT';
+    paymentType?: 'CREDIT' | 'DEBIT';
 }
 
 // GET: Lấy lịch sử đã lưu trong database
@@ -144,19 +144,34 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: data?.status?.message || 'API Error' }, { status: 500 });
         }
 
-        const transactions: Transaction[] = data.data?.content || [];
+        const rawTransactions = data.data?.content || data.data?.trans || [];
 
-        if (transactions.length === 0) {
+        if (rawTransactions.length === 0) {
             return NextResponse.json({ message: 'No transactions to sync', synced: 0 });
         }
 
         let syncedCount = 0;
         let skippedCount = 0;
 
-        for (const tx of transactions) {
+        for (const rawTx of rawTransactions) {
             try {
+                // Parse amount handling dot separator
+                const rawAmt = rawTx.amount || rawTx.transAmount || '0';
+                const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+
+                const tx = {
+                    bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
+                    amount: parsedAmount.toString(),
+                    description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
+                    transDate: rawTx.transDate || rawTx.requestDate || '',
+                    paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
+                    balance: rawTx.balance ? rawTx.balance.toString() : null,
+                    accountId: rawTx.accountId || null,
+                    clientId: rawTx.clientId || null,
+                    msgContent: rawTx.msgContent || rawTx.transDesc || ''
+                };
+
                 // Parse date - handle multiple formats
-                // Format could be "DD/MM/YYYY HH:mm:ss" or "YYYY-MM-DD HH:mm:ss" or "DD-MM-YYYY HH:mm:ss"
                 let mysqlDate = tx.transDate;
 
                 // Check if date contains "/" separator (DD/MM/YYYY format)
@@ -197,11 +212,11 @@ export async function POST(request: Request) {
                         tx.bankTransId,
                         mysqlDate,
                         parseFloat(tx.amount),
-                        parseFloat(tx.balance),
-                        tx.paymentType,
-                        tx.msgContent || tx.description,
-                        tx.accountId,
-                        tx.clientId
+                        tx.balance !== undefined && tx.balance !== null ? parseFloat(tx.balance) : null,
+                        tx.paymentType || 'CREDIT',
+                        tx.msgContent || tx.description || null,
+                        tx.accountId || null,
+                        tx.clientId || null
                     ]
                 );
 
@@ -211,7 +226,7 @@ export async function POST(request: Request) {
                     skippedCount++;
                 }
             } catch (err) {
-                console.error('Error inserting transaction:', tx.bankTransId, err);
+                console.error('Error inserting transaction:', rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId, err);
                 skippedCount++;
             }
         }
@@ -220,7 +235,7 @@ export async function POST(request: Request) {
             message: 'Sync completed',
             synced: syncedCount,
             skipped: skippedCount,
-            total: transactions.length
+            total: rawTransactions.length
         });
     } catch (error) {
         console.error('Bank Transactions POST Error:', error);

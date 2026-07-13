@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { formatDate } from '@/lib/utils';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Users, CreditCard, ShoppingCart, DollarSign, TrendingUp, Activity, Database, Server, Package, CalendarDays, Filter } from 'lucide-react';
+import { Users, CreditCard, ShoppingCart, DollarSign, TrendingUp, Activity, Database, Server, Package, CalendarDays, Filter, Mail } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -255,18 +255,18 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {cards.map((card, i) => (
-          <Card key={i} className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card key={i} className="glass-panel glass-panel-hover border border-white/5 shadow-lg shadow-black/30 rounded-2xl">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
                 {card.title}
               </CardTitle>
-              <div className={`p-2 rounded-lg bg-gradient-to-br ${card.iconStartColor} ${card.iconEndColor} text-white shadow-md`}>
+              <div className={`p-2 rounded-xl bg-gradient-to-br ${card.iconStartColor} ${card.iconEndColor} text-white shadow-lg shadow-indigo-500/10`}>
                 <card.icon className="h-4 w-4" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="text-2xl font-extrabold tracking-tight text-white">{card.value}</div>
+              <p className="text-xs text-slate-500 mt-1 font-medium">
                 {card.desc}
               </p>
             </CardContent>
@@ -275,10 +275,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
-        <Card className="col-span-1 lg:col-span-4 shadow-sm">
+        <Card className="col-span-1 lg:col-span-4 glass-panel border border-white/5 shadow-xl rounded-2xl">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary" />
+            <CardTitle className="flex items-center gap-2 text-md font-semibold text-slate-200">
+              <TrendingUp className="w-4 h-4 text-violet-400" />
               {t('dashboard.total_revenue')}
             </CardTitle>
           </CardHeader>
@@ -286,37 +286,44 @@ export default function Dashboard() {
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={stats.revenueChart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#334155" : "#e2e8f0"} />
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#06b6d4" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
                   <XAxis
                     dataKey="date"
-                    stroke="#888888"
-                    fontSize={12}
+                    stroke="#64748b"
+                    fontSize={11}
                     tickLine={false}
                     axisLine={false}
                     padding={{ left: 10, right: 10 }}
                   />
                   <YAxis
-                    stroke="#888888"
-                    fontSize={12}
+                    stroke="#64748b"
+                    fontSize={11}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${value}đ`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                      borderColor: isDark ? '#334155' : '#e2e8f0',
-                      borderRadius: '8px',
-                      color: isDark ? '#f8fafc' : '#0f172a'
+                      backgroundColor: 'rgba(15, 15, 20, 0.9)',
+                      borderColor: 'rgba(255, 255, 255, 0.08)',
+                      borderRadius: '12px',
+                      backdropFilter: 'blur(8px)',
+                      color: '#f8fafc'
                     }}
                     formatter={(value) => [`${Number(value).toLocaleString('vi-VN')}đ`, t('dashboard.total_revenue')]}
                   />
                   <Line
                     type="monotone"
                     dataKey="total"
-                    stroke="#2563eb"
+                    stroke="url(#colorRevenue)"
                     strokeWidth={3}
-                    dot={{ r: 4, strokeWidth: 2, fill: '#2563eb', stroke: '#fff' }}
+                    dot={{ r: 4, strokeWidth: 2, fill: '#8b5cf6', stroke: '#fff' }}
                     activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                 </LineChart>
@@ -325,76 +332,81 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-1 lg:col-span-3 shadow-sm">
+        <Card className="col-span-1 lg:col-span-3 glass-panel border border-white/5 shadow-xl rounded-2xl">
           <CardHeader>
-            <CardTitle>System Status</CardTitle>
+            <CardTitle className="text-md font-semibold text-slate-200">System Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-500/10 rounded-full">
-                    <Activity className="h-4 w-4 text-green-500" />
+                  <div className="p-2.5 bg-green-500/10 rounded-xl border border-green-500/15">
+                    <Activity className="h-4 w-4 text-green-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">API Status</p>
-                    <p className="text-xs text-muted-foreground">Response time: 45ms</p>
+                    <p className="text-sm font-semibold text-slate-200">API Status</p>
+                    <p className="text-xs text-slate-400">Response time: 45ms</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-green-50 dark:bg-green-900/20 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 border border-green-500/20 px-2.5 py-1 text-xs font-semibold text-green-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-glow" />
                   Operational
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/10 rounded-full">
-                    <Database className="h-4 w-4 text-blue-500" />
+                  <div className="p-2.5 bg-cyan-500/10 rounded-xl border border-cyan-500/15">
+                    <Database className="h-4 w-4 text-cyan-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Database</p>
-                    <p className="text-xs text-muted-foreground">32 connections</p>
+                    <p className="text-sm font-semibold text-slate-200">Database</p>
+                    <p className="text-xs text-slate-400">32 connections</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-green-50 dark:bg-green-900/20 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 text-xs font-semibold text-cyan-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
                   Connected
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-500/10 rounded-full">
-                    <Server className="h-4 w-4 text-purple-500" />
+                  <div className="p-2.5 bg-violet-500/10 rounded-xl border border-violet-500/15">
+                    <Server className="h-4 w-4 text-violet-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Vercel Edge</p>
-                    <p className="text-xs text-muted-foreground">Region: Sin1</p>
+                    <p className="text-sm font-semibold text-slate-200">Vercel Edge</p>
+                    <p className="text-xs text-slate-400">Region: Sin1</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-green-50 dark:bg-green-900/20 px-2.5 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 px-2.5 py-1 text-xs font-semibold text-violet-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse-glow" />
                   Healthy
                 </span>
               </div>
             </div>
 
-            <div className="mt-8 p-4 rounded-lg bg-muted/50 border border-dashed">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-muted-foreground">🖥️ RAM Usage</span>
-                <span className="font-medium">
+            <div className="mt-8 p-4 rounded-xl bg-white/[0.01] border border-white/5 shadow-inner">
+              <div className="flex justify-between text-xs font-semibold mb-2">
+                <span className="text-slate-400">🖥️ RAM Usage</span>
+                <span className="text-slate-200">
                   {ramUsage ? `${ramUsage.usedGB}GB / ${ramUsage.totalGB}GB (${ramUsage.usagePercent}%)` : 'Loading...'}
                 </span>
               </div>
-              <div className="w-full bg-secondary rounded-full h-2">
+              <div className="w-full bg-white/[0.04] rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full transition-all ${ramUsage && ramUsage.usagePercent > 80 ? 'bg-red-500' :
-                    ramUsage && ramUsage.usagePercent > 60 ? 'bg-yellow-500' : 'bg-primary'
-                    }`}
+                  className={`h-2 rounded-full transition-all duration-500 shadow-md ${
+                    ramUsage && ramUsage.usagePercent > 80 ? 'bg-red-500 shadow-red-500/20' :
+                    ramUsage && ramUsage.usagePercent > 60 ? 'bg-yellow-500 shadow-yellow-500/20' : 
+                    'bg-violet-500 shadow-violet-500/20'
+                  }`}
                   style={{ width: `${ramUsage?.usagePercent || 0}%` }}
                 />
               </div>
               {ramUsage && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Free: {ramUsage.freeGB}GB
+                <div className="text-[10px] font-medium text-slate-500 mt-1">
+                  Free memory: {ramUsage.freeGB}GB
                 </div>
               )}
             </div>
@@ -403,22 +415,22 @@ export default function Dashboard() {
       </div>
 
       {/* Product Revenue Section */}
-      <Card className="shadow-sm">
+      <Card className="glass-panel border border-white/5 shadow-xl rounded-2xl">
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-4 h-4 text-primary" />
+            <CardTitle className="flex items-center gap-2 text-md font-semibold text-slate-200">
+              <Package className="w-4.5 h-4.5 text-violet-400" />
               {t('dashboard.product_revenue')}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               {/* Quick Filter Buttons */}
-              <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <div className="flex gap-1 bg-white/[0.02] border border-white/5 rounded-xl p-1">
                 {(['all', 'today', 'week', 'month'] as const).map((filter) => (
                   <Button
                     key={filter}
                     size="sm"
                     variant={revenueFilter === filter ? 'default' : 'ghost'}
-                    className="h-7 px-3 text-xs"
+                    className="h-8 px-3 text-xs rounded-lg cursor-pointer"
                     onClick={() => setRevenueFilter(filter)}
                   >
                     {t(`dashboard.filter_${filter}`)}
@@ -427,10 +439,10 @@ export default function Dashboard() {
                 <Button
                   size="sm"
                   variant={revenueFilter === 'custom' ? 'default' : 'ghost'}
-                  className="h-7 px-3 text-xs"
+                  className="h-8 px-3 text-xs rounded-lg cursor-pointer"
                   onClick={() => setRevenueFilter('custom')}
                 >
-                  <CalendarDays className="w-3 h-3 mr-1" />
+                  <CalendarDays className="w-3.5 h-3.5 mr-1" />
                   {t('dashboard.filter_custom')}
                 </Button>
               </div>
@@ -439,27 +451,27 @@ export default function Dashboard() {
 
           {/* Custom Date Range */}
           {revenueFilter === 'custom' && (
-            <div className="flex flex-wrap items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+            <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-white/[0.01] border border-white/5 rounded-xl">
               <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">{t('dashboard.from_date')}:</label>
+                <label className="text-xs font-semibold text-slate-400">{t('dashboard.from_date')}:</label>
                 <input
                   type="date"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                  className="px-3 py-1.5 text-xs font-medium border border-white/5 rounded-xl bg-zinc-950/80 text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">{t('dashboard.to_date')}:</label>
+                <label className="text-xs font-semibold text-slate-400">{t('dashboard.to_date')}:</label>
                 <input
                   type="date"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                  className="px-3 py-1.5 text-xs font-medium border border-white/5 rounded-xl bg-zinc-950/80 text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
               </div>
-              <Button size="sm" onClick={fetchProductRevenue} disabled={loadingRevenue}>
-                <Filter className="w-3 h-3 mr-1" />
+              <Button size="sm" className="rounded-xl cursor-pointer" onClick={fetchProductRevenue} disabled={loadingRevenue}>
+                <Filter className="w-3.5 h-3.5 mr-1" />
                 {loadingRevenue ? t('dashboard.filtering') : t('dashboard.filter_btn')}
               </Button>
             </div>
@@ -468,47 +480,47 @@ export default function Dashboard() {
         <CardContent>
           {loadingRevenue ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-500"></div>
             </div>
           ) : filteredProductRevenue.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full premium-table">
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">{t('dashboard.product')}</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">{t('dashboard.orders_count')}</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">{t('dashboard.revenue')}</th>
+                  <tr className="border-b border-white/5 text-slate-400">
+                    <th className="text-left py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">{t('dashboard.product')}</th>
+                    <th className="text-center py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">{t('dashboard.orders_count')}</th>
+                    <th className="text-right py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">{t('dashboard.revenue')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProductRevenue.map((product, index) => (
-                    <tr key={product.product_id} className={`border-b last:border-0 ${index % 2 === 0 ? 'bg-muted/30' : ''}`}>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                            <Package className="h-3 w-3" />
+                  {filteredProductRevenue.map((product) => (
+                    <tr key={product.product_id} className="group/row transition-all duration-200">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 group-hover/row:scale-105 transition-transform">
+                            <Package className="h-3.5 w-3.5" />
                           </div>
-                          <span className="font-medium">{product.product_name}</span>
+                          <span className="font-semibold text-slate-200 text-sm group-hover/row:text-white transition-colors">{product.product_name}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-400">
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="inline-flex items-center rounded-full bg-violet-500/10 border border-violet-500/20 px-2.5 py-0.5 text-xs font-semibold text-violet-400">
                           {product.order_count}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
+                      <td className="py-3.5 px-4 text-right font-bold text-green-400">
                         {formatPrice(product.total_revenue)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-muted/50 font-semibold">
-                    <td className="py-3 px-4">{t('dashboard.total')}</td>
-                    <td className="py-3 px-4 text-center">
+                  <tr className="bg-white/[0.02] font-bold text-slate-200">
+                    <td className="py-4 px-4 rounded-l-xl text-sm">{t('dashboard.total')}</td>
+                    <td className="py-4 px-4 text-center text-sm">
                       {filteredProductRevenue.reduce((sum, p) => sum + Number(p.order_count), 0)}
                     </td>
-                    <td className="py-3 px-4 text-right text-green-600 dark:text-green-400">
+                    <td className="py-4 px-4 text-right text-green-400 rounded-r-xl text-sm">
                       {formatPrice(filteredProductRevenue.reduce((sum, p) => sum + Number(p.total_revenue), 0))}
                     </td>
                   </tr>
@@ -516,7 +528,7 @@ export default function Dashboard() {
               </table>
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-slate-500 text-sm font-medium">
               {t('dashboard.no_data')}
             </div>
           )}
@@ -524,21 +536,21 @@ export default function Dashboard() {
       </Card>
 
       {/* Gmail EDU Revenue Section */}
-      <Card className="shadow-sm">
+      <Card className="glass-panel border border-white/5 shadow-xl rounded-2xl">
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-4 h-4 text-primary" />
+            <CardTitle className="flex items-center gap-2 text-md font-semibold text-slate-200">
+              <Mail className="w-4.5 h-4.5 text-violet-400" />
               Gmail EDU Revenue
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <div className="flex gap-1 bg-white/[0.02] border border-white/5 rounded-xl p-1">
                 {(['all', 'today', 'week', 'month'] as const).map((filter) => (
                   <Button
                     key={filter}
                     size="sm"
                     variant={gmailFilter === filter ? 'default' : 'ghost'}
-                    className="h-7 px-3 text-xs"
+                    className="h-8 px-3 text-xs rounded-lg cursor-pointer"
                     onClick={() => setGmailFilter(filter)}
                   >
                     {t(`dashboard.filter_${filter}`)}
@@ -547,10 +559,10 @@ export default function Dashboard() {
                 <Button
                   size="sm"
                   variant={gmailFilter === 'custom' ? 'default' : 'ghost'}
-                  className="h-7 px-3 text-xs"
-                  onClick={() => setGmailFilter('custom')}
+                  className="h-8 px-3 text-xs rounded-lg cursor-pointer"
+                  onClick={() => setGmailFilter(gmailFilter === 'custom' ? 'all' : 'custom')} // Toggle custom filter
                 >
-                  <CalendarDays className="w-3 h-3 mr-1" />
+                  <CalendarDays className="w-3.5 h-3.5 mr-1" />
                   {t('dashboard.filter_custom')}
                 </Button>
               </div>
@@ -558,27 +570,27 @@ export default function Dashboard() {
           </div>
 
           {gmailFilter === 'custom' && (
-            <div className="flex flex-wrap items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+            <div className="flex flex-wrap items-center gap-4 mt-4 p-4 bg-white/[0.01] border border-white/5 rounded-xl">
               <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">{t('dashboard.from_date')}:</label>
+                <label className="text-xs font-semibold text-slate-400">{t('dashboard.from_date')}:</label>
                 <input
                   type="date"
                   value={gmailFromDate}
                   onChange={(e) => setGmailFromDate(e.target.value)}
-                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                  className="px-3 py-1.5 text-xs font-medium border border-white/5 rounded-xl bg-zinc-950/80 text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">{t('dashboard.to_date')}:</label>
+                <label className="text-xs font-semibold text-slate-400">{t('dashboard.to_date')}:</label>
                 <input
                   type="date"
                   value={gmailToDate}
                   onChange={(e) => setGmailToDate(e.target.value)}
-                  className="px-3 py-1.5 text-sm border rounded-md bg-background"
+                  className="px-3 py-1.5 text-xs font-medium border border-white/5 rounded-xl bg-zinc-950/80 text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
               </div>
-              <Button size="sm" onClick={fetchGmailRevenue} disabled={loadingGmail}>
-                <Filter className="w-3 h-3 mr-1" />
+              <Button size="sm" className="rounded-xl cursor-pointer" onClick={fetchGmailRevenue} disabled={loadingGmail}>
+                <Filter className="w-3.5 h-3.5 mr-1" />
                 {loadingGmail ? t('dashboard.filtering') : t('dashboard.filter_btn')}
               </Button>
             </div>
@@ -587,17 +599,17 @@ export default function Dashboard() {
           {/* Summary Cards */}
           {gmailSummary && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="text-sm text-muted-foreground">Tổng đã bán</div>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{gmailSummary.totalSold}</div>
+              <div className="p-4 bg-white/[0.015] border border-blue-500/10 rounded-xl flex flex-col gap-1 shadow-inner">
+                <div className="text-xs font-semibold text-slate-400">Tổng đã bán</div>
+                <div className="text-2xl font-bold text-cyan-400">{gmailSummary.totalSold}</div>
               </div>
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div className="text-sm text-muted-foreground">Tổng doanh thu</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatPrice(gmailSummary.totalRevenue)}</div>
+              <div className="p-4 bg-white/[0.015] border border-green-500/10 rounded-xl flex flex-col gap-1 shadow-inner">
+                <div className="text-xs font-semibold text-slate-400">Tổng doanh thu</div>
+                <div className="text-2xl font-bold text-green-400">{formatPrice(gmailSummary.totalRevenue)}</div>
               </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <div className="text-sm text-muted-foreground">Giá/tài khoản</div>
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{formatPrice(gmailSummary.pricePerAccount)}</div>
+              <div className="p-4 bg-white/[0.015] border border-purple-500/10 rounded-xl flex flex-col gap-1 shadow-inner">
+                <div className="text-xs font-semibold text-slate-400">Giá/tài khoản</div>
+                <div className="text-2xl font-bold text-violet-400">{formatPrice(gmailSummary.pricePerAccount)}</div>
               </div>
             </div>
           )}
@@ -605,35 +617,35 @@ export default function Dashboard() {
         <CardContent>
           {loadingGmail ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-500"></div>
             </div>
           ) : gmailSales.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full premium-table">
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Người mua</th>
-                    <th className="text-center py-3 px-4 font-medium text-muted-foreground">Ngày bán</th>
-                    <th className="text-right py-3 px-4 font-medium text-muted-foreground">Giá</th>
+                  <tr className="border-b border-white/5 text-slate-400">
+                    <th className="text-left py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">Email</th>
+                    <th className="text-left py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">Người mua</th>
+                    <th className="text-center py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">Ngày bán</th>
+                    <th className="text-right py-3.5 px-4 font-semibold text-xs tracking-wider uppercase">Giá</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {gmailSales.slice(0, 20).map((sale, index) => (
-                    <tr key={sale.id} className={`border-b last:border-0 ${index % 2 === 0 ? 'bg-muted/30' : ''}`}>
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-sm">{sale.email}</span>
+                  {gmailSales.slice(0, 20).map((sale) => (
+                    <tr key={sale.id} className="group/row transition-all duration-200">
+                      <td className="py-3.5 px-4">
+                        <span className="font-semibold text-slate-200 text-sm group-hover/row:text-white transition-colors">{sale.email}</span>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm">{sale.buyer_username || 'N/A'}</span>
-                          <span className="text-xs text-muted-foreground">{sale.buyer_telegram_id || ''}</span>
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold text-slate-200 text-sm group-hover/row:text-white transition-colors">{sale.buyer_username || 'N/A'}</span>
+                          <span className="text-xs text-slate-500 font-mono">{sale.buyer_telegram_id || ''}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-center text-sm">
+                      <td className="py-3.5 px-4 text-center text-sm font-medium text-slate-300">
                         {sale.sold_at ? new Date(sale.sold_at).toLocaleDateString('vi-VN') : 'N/A'}
                       </td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-600 dark:text-green-400">
+                      <td className="py-3.5 px-4 text-right font-bold text-green-400">
                         {formatPrice(sale.price)}
                       </td>
                     </tr>
@@ -641,13 +653,13 @@ export default function Dashboard() {
                 </tbody>
               </table>
               {gmailSales.length > 20 && (
-                <div className="text-center py-2 text-sm text-muted-foreground">
+                <div className="text-center py-3.5 text-xs font-semibold text-slate-500">
                   Hiển thị 20/{gmailSales.length} giao dịch gần nhất
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-slate-500 text-sm font-medium">
               {t('dashboard.no_data')}
             </div>
           )}

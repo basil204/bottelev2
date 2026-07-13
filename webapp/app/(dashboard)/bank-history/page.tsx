@@ -18,17 +18,17 @@ import { RefreshCw, ArrowUpCircle, ArrowDownCircle, Filter, Calendar, TrendingUp
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Transaction {
-    msisdn: string;
-    clientCode: string;
-    clientId: string;
-    msgContent: string;
+    msisdn?: string;
+    clientCode?: string;
+    clientId?: string;
+    msgContent?: string;
     transDate: string;
-    accountId: string;
+    accountId?: string;
     amount: string;
-    balance: string;
+    balance?: string;
     bankTransId: string;
     description: string;
-    paymentType: 'CREDIT' | 'DEBIT';
+    paymentType?: 'CREDIT' | 'DEBIT';
 }
 
 interface DailySummary {
@@ -91,7 +91,21 @@ export default function BankHistoryPage() {
                 setTransactions([]);
                 setFilteredTransactions([]);
             } else {
-                const txs = data.content || [];
+                const rawTxs = data.content || data.trans || [];
+                const txs = rawTxs.map((rawTx: any) => {
+                    const rawAmt = rawTx.amount || rawTx.transAmount || '0';
+                    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+                    return {
+                        ...rawTx,
+                        bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
+                        amount: parsedAmount.toString(),
+                        description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
+                        transDate: rawTx.transDate || rawTx.requestDate || '',
+                        paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
+                        balance: rawTx.balance || null,
+                        msgContent: rawTx.msgContent || rawTx.transDesc || ''
+                    };
+                });
                 setTransactions(txs);
                 setFilteredTransactions(txs);
 
@@ -123,7 +137,7 @@ export default function BankHistoryPage() {
             const date = tx.transDate.split(' ')[0]; // Get date part only
             const existing = summaryMap.get(date) || { date, totalCredit: 0, totalDebit: 0, count: 0 };
 
-            if (tx.paymentType === 'CREDIT') {
+            if ((tx.paymentType || 'CREDIT') === 'CREDIT') {
                 existing.totalCredit += Number(tx.amount);
             } else {
                 existing.totalDebit += Number(tx.amount);
@@ -145,7 +159,7 @@ export default function BankHistoryPage() {
             const month = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}` : tx.transDate.slice(0, 7);
             const existing = summaryMap.get(month) || { month, totalCredit: 0, totalDebit: 0, count: 0 };
 
-            if (tx.paymentType === 'CREDIT') {
+            if ((tx.paymentType || 'CREDIT') === 'CREDIT') {
                 existing.totalCredit += Number(tx.amount);
             } else {
                 existing.totalDebit += Number(tx.amount);
@@ -234,7 +248,7 @@ export default function BankHistoryPage() {
         let totalCredit = 0;
         let totalDebit = 0;
         filteredTransactions.forEach(tx => {
-            if (tx.paymentType === 'CREDIT') {
+            if ((tx.paymentType || 'CREDIT') === 'CREDIT') {
                 totalCredit += Number(tx.amount);
             } else {
                 totalDebit += Number(tx.amount);
@@ -559,7 +573,7 @@ export default function BankHistoryPage() {
                                         filteredTransactions.map((tx, index) => (
                                             <TableRow key={tx.clientId || index}>
                                                 <TableCell>
-                                                    {tx.paymentType === 'CREDIT' ? (
+                                                    {(tx.paymentType || 'CREDIT') === 'CREDIT' ? (
                                                         <span className="flex items-center gap-1 text-green-600">
                                                             <ArrowDownCircle className="w-4 h-4" />
                                                             {t('bank_history.credit')}
@@ -574,11 +588,11 @@ export default function BankHistoryPage() {
                                                 <TableCell className="whitespace-nowrap">
                                                     {tx.transDate}
                                                 </TableCell>
-                                                <TableCell className={`font-bold ${tx.paymentType === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {tx.paymentType === 'CREDIT' ? '+' : '-'}{formatPrice(Number(tx.amount))}
+                                                <TableCell className={`font-bold ${(tx.paymentType || 'CREDIT') === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {(tx.paymentType || 'CREDIT') === 'CREDIT' ? '+' : '-'}{formatPrice(Number(tx.amount))}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {formatPrice(Number(tx.balance))}
+                                                    {tx.balance !== null && tx.balance !== undefined ? formatPrice(Number(tx.balance)) : '-'}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-xs">
                                                     {tx.bankTransId}

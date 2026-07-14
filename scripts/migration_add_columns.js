@@ -267,6 +267,18 @@ async function migrate() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
+        // 7. Ensure bank_transactions table has bank column
+        console.log("Checking bank_transactions bank column...");
+        try {
+            const [btCols] = await connection.query("SHOW COLUMNS FROM bank_transactions");
+            if (!btCols.some(c => c.Field === 'bank')) {
+                console.log("Adding column 'bank' to bank_transactions...");
+                await connection.query("ALTER TABLE bank_transactions ADD COLUMN bank VARCHAR(20) DEFAULT 'VIETTEL' AFTER msg_content");
+            }
+        } catch (e) {
+            console.log("Failed to alter bank_transactions table:", e.message);
+        }
+
         console.log('Migration completed successfully.');
         await connection.end();
     } catch (error) {

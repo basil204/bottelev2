@@ -28,28 +28,74 @@ const buildQrUrl = (bankCode, accountNo, amount, content, accountName = null) =>
 };
 
 // Helper to get Bank Settings for QR
-const getBankConfig = async (defaultConfig) => {
+const getBankConfig = async (defaultConfig, bank) => {
   try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('vietqr_bank_code', 'vietqr_account_no', 'vietqr_account_name', 'viettel_account')");
+    const keys = [
+      'vietqr_account_name',
+      'viettel_account',
+      'vcb_account',
+      'vietqr_account_no',
+      'tpb_account',
+      'mb_account',
+      'acb_account',
+      'tcb_account',
+      'vp_account',
+      'timo_account',
+      'vietqr_bank_code'
+    ];
+    const rows = await query(`SELECT \`key\`, \`value\` FROM settings WHERE \`key\` IN (${keys.map(k => `'${k}'`).join(',')})`);
     const dbConfig = {};
     if (Array.isArray(rows)) {
       rows.forEach(r => {
-        if (r.key === 'vietqr_bank_code') dbConfig.bankCode = r.value;
-        if (r.key === 'vietqr_account_no') dbConfig.accountNo = r.value;
-        if (r.key === 'vietqr_account_name') dbConfig.accountName = r.value;
-        if (r.key === 'viettel_account') dbConfig.viettelAccount = r.value;
+        dbConfig[r.key] = r.value;
       });
     }
-    return {
-      bankCode: dbConfig.bankCode || defaultConfig.VIETQR_BANK_CODE || 'VIETTELMONEY',
-      accountNo: dbConfig.viettelAccount || dbConfig.accountNo || defaultConfig.VIETQR_ACCOUNT_NO,
-      accountName: dbConfig.accountName || defaultConfig.VIETQR_ACCOUNT_NAME
-    };
+
+    const accountName = dbConfig.vietqr_account_name || defaultConfig.VIETQR_ACCOUNT_NAME || '';
+
+    if (bank === 'viettel') {
+      return {
+        bankCode: 'VIETTELMONEY',
+        accountNo: dbConfig.viettel_account || '',
+        accountName
+      };
+    }
+
+    let bankCode = 'VCB';
+    let accountNo = '';
+
+    if (bank === 'vcb') {
+      bankCode = 'VCB';
+      accountNo = dbConfig.vcb_account || dbConfig.vietqr_account_no || '';
+    } else if (bank === 'tpb') {
+      bankCode = 'TPB';
+      accountNo = dbConfig.tpb_account || '';
+    } else if (bank === 'mb') {
+      bankCode = 'MB';
+      accountNo = dbConfig.mb_account || '';
+    } else if (bank === 'acb') {
+      bankCode = 'ACB';
+      accountNo = dbConfig.acb_account || '';
+    } else if (bank === 'tcb') {
+      bankCode = 'TCB';
+      accountNo = dbConfig.tcb_account || '';
+    } else if (bank === 'vp') {
+      bankCode = 'VPB';
+      accountNo = dbConfig.vp_account || '';
+    } else if (bank === 'timo') {
+      bankCode = 'TIMO';
+      accountNo = dbConfig.timo_account || '';
+    } else {
+      bankCode = dbConfig.vietqr_bank_code || 'VCB';
+      accountNo = dbConfig.vietqr_account_no || '';
+    }
+
+    return { bankCode, accountNo, accountName };
   } catch (e) {
     return {
-      bankCode: defaultConfig.VIETQR_BANK_CODE || 'VIETTELMONEY',
-      accountNo: defaultConfig.VIETQR_ACCOUNT_NO,
-      accountName: defaultConfig.VIETQR_ACCOUNT_NAME
+      bankCode: bank === 'vp' ? 'VPB' : bank.toUpperCase(),
+      accountNo: '',
+      accountName: defaultConfig.VIETQR_ACCOUNT_NAME || ''
     };
   }
 }
@@ -103,14 +149,39 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
     }
   }
 
-  // Set default selection to sepay (or whatever bank integration is used)
-  setCache(`bank_selection_${userId}`, 'sepay', 5 * 60 * 1000);
+  // Load active_bank from database setting
+  let activeBank = 'viettel';
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank'");
+    if (rows?.[0]?.value) {
+      activeBank = rows[0].value;
+    }
+  } catch (e) {
+    console.error('Error fetching active_bank setting:', e);
+  }
 
-  // Ask for amount
+  setCache(`bank_selection_${userId}`, activeBank, 15 * 60 * 1000);
+
+  // Directly ask for amount
   const promptMsg = L(lang,
-    'Nhập số tiền cần nạp (VNĐ).',
-    'Enter deposit amount (VND).',
-    '请输入充值金额（越南盾）。'
+    'Nhập số tiền cần nạp (VNĐ):',
+    'Enter deposit amount (VND):',
+    '请输入充值金额（越南盾）：'
+  );
+  await bot.sendMessage(chatId, promptMsg);
+};
+
+export const selectBankMethod = async (bot, chatId, userId, bank) => {
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+
+  setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
+
+  const promptMsg = L(lang,
+    'Nhập số tiền cần nạp (VNĐ):',
+    'Enter deposit amount (VND):',
+    '请输入充值金额（越南盾）：'
   );
   await bot.sendMessage(chatId, promptMsg);
 };
@@ -662,7 +733,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   // Get selected bank
   let selectedBank = getCache(`bank_selection_${msg.from.id}`);
   if (!selectedBank) {
-    selectedBank = 'sepay';
+    selectedBank = 'viettel';
   }
 
   const amount = Number(msg.text.replace(/\D/g, ''));
@@ -707,7 +778,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const content = token;
 
   // Create VietQR
-  const bankConfig = await getBankConfig(config);
+  const bankConfig = await getBankConfig(config, selectedBank);
   const bankCode = bankConfig.bankCode;
   const accountNo = bankConfig.accountNo;
   const accountName = bankConfig.accountName;
@@ -716,7 +787,17 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const expiresAt = Date.now() + 15 * 60 * 1000;
   const depositId = await createDeposit(user.id, amount, content);
 
-  const bankDisplayName = bankCode;
+  const bankNames = {
+    viettel: 'ViettelPay',
+    vcb: 'Vietcombank',
+    tpb: 'TPBank',
+    mb: 'MBBank',
+    acb: 'ACB',
+    tcb: 'Techcombank',
+    vp: 'VPBank',
+    timo: 'Timo'
+  };
+  const bankDisplayName = bankNames[selectedBank] || selectedBank.toUpperCase();
 
   let caption = L(lang,
     `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 15 phút.`,

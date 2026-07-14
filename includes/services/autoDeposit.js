@@ -20,40 +20,197 @@ const processedKey = (ref) => `tx_${ref}`;
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const contentKey = (token) => `content_${token}`;
 
-// Check Viettel Transaction
-const checkViettelTransaction = async (bot, token, cached, user, promotion) => {
+const getBankToken = async (bank) => {
+  try {
+    const key = `${bank}_token`;
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = ?", [key]);
+    if (rows?.[0]?.value) return rows[0].value;
+    return '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const getBankUrl = (bank, token) => {
+  switch (bank) {
+    case 'viettel':
+      return `https://api.sieuthicode.net/historyapiviettel/${token}`;
+    case 'vcb':
+      return `https://api.sieuthicode.net/historyapivcb/${token}`;
+    case 'tpb':
+      return `https://api.sieuthicode.net/historyapitpbank/${token}`;
+    case 'mb':
+      return `https://api.sieuthicode.net/historyapimb/${token}`;
+    case 'acb':
+      return `https://api.sieuthicode.net/historyapiacb/${token}`;
+    case 'tcb':
+      return `https://api.sieuthicode.net/historyapitcb/${token}`;
+    case 'vp':
+      return `https://api.sieuthicode.net/historyapivpbank/${token}`;
+    case 'timo':
+      return `https://api.sieuthicode.net/historyapitimo/${token}`;
+    default:
+      return '';
+  }
+};
+
+const normalizeTransaction = (rawTx, bank) => {
+  if (bank === 'viettel') {
+    const rawAmt = rawTx.amount || rawTx.transAmount || '0';
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+    return {
+      id: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
+      amount: parsedAmount,
+      description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
+      transDate: rawTx.transDate || rawTx.requestDate || '',
+      paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
+      bank: 'VIETTEL'
+    };
+  }
+  
+  if (bank === 'vcb') {
+    const rawAmt = rawTx.Amount || '0';
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.Reference || rawTx.SeqNo || '',
+      amount: parsedAmount,
+      description: rawTx.Description || rawTx.Remark || '',
+      transDate: rawTx.tranDate || rawTx.TransactionDate || '',
+      paymentType: (rawTx.CD === '+' || rawTx.DorCCode === 'C') ? 'CREDIT' : 'DEBIT',
+      bank: 'VCB'
+    };
+  }
+
+  if (bank === 'tpb') {
+    const rawAmt = rawTx.amount || '0';
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.id || '',
+      amount: parsedAmount,
+      description: rawTx.description || '',
+      transDate: rawTx.bookingDate || '',
+      paymentType: rawTx.creditDebitIndicator === 'CRDT' ? 'CREDIT' : 'DEBIT',
+      bank: 'TPB'
+    };
+  }
+
+  if (bank === 'mb') {
+    const rawAmt = rawTx.creditAmount || '0';
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.tranId || rawTx.refNo || '',
+      amount: parsedAmount,
+      description: rawTx.description || rawTx.addDescription || '',
+      transDate: rawTx.postingDate || rawTx.transactionDate || '',
+      paymentType: parsedAmount > 0 ? 'CREDIT' : 'DEBIT',
+      bank: 'MB'
+    };
+  }
+
+  if (bank === 'acb') {
+    const rawAmt = rawTx.amount || 0;
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/,/g, '')) || 0;
+    let transDate = '';
+    if (rawTx.postingDate) {
+      try {
+        transDate = new Date(rawTx.postingDate).toLocaleString('vi-VN');
+      } catch {}
+    }
+    return {
+      id: rawTx.transactionNumber ? rawTx.transactionNumber.toString() : '',
+      amount: parsedAmount,
+      description: rawTx.description || '',
+      transDate: transDate,
+      paymentType: rawTx.type === 'IN' ? 'CREDIT' : 'DEBIT',
+      bank: 'ACB'
+    };
+  }
+
+  if (bank === 'tcb') {
+    const rawAmt = rawTx.amount || 0;
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawTx.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.transactionID || '',
+      amount: parsedAmount,
+      description: rawTx.description || '',
+      transDate: rawTx.date || '',
+      paymentType: parsedAmount >= 0 ? 'CREDIT' : 'DEBIT',
+      bank: 'TCB'
+    };
+  }
+
+  if (bank === 'vp') {
+    const rawAmt = rawTx.amount || 0;
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawTx.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.transId || '',
+      amount: parsedAmount,
+      description: rawTx.description || '',
+      transDate: rawTx.date || '',
+      paymentType: parsedAmount >= 0 ? 'CREDIT' : 'DEBIT',
+      bank: 'VP'
+    };
+  }
+
+  if (bank === 'timo') {
+    const rawAmt = rawTx.amount || 0;
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawTx.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.transId || '',
+      amount: parsedAmount,
+      description: rawTx.description || '',
+      transDate: rawTx.date || '',
+      paymentType: parsedAmount >= 0 ? 'CREDIT' : 'DEBIT',
+      bank: 'TIMO'
+    };
+  }
+
+  return null;
+};
+
+// Check Bank Transaction Unified
+const checkBankTransaction = async (bot, bank, token, cached, user, promotion) => {
   try {
     if (!token) return false;
 
-    // Call Viettel API
-    const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${token}`);
+    const url = getBankUrl(bank, token);
+    if (!url) return false;
+
+    const response = await axios.get(url);
     const data = response.data;
 
-    if (!data || data.status.code !== '00' || !data.data || (!data.data.content && !data.data.trans)) return false;
-
-    const rawTransactions = data.data.content || data.data.trans || [];
+    let rawTransactions = [];
+    if (bank === 'viettel') {
+      if (!data || data.status?.code !== '00' || !data.data) return false;
+      rawTransactions = data.data.content || data.data.trans || [];
+    } else if (bank === 'vcb') {
+      if (!data || data.code !== '00' && data.status?.code !== '00' || !data.transactions) return false;
+      rawTransactions = data.transactions || [];
+    } else if (bank === 'tpb') {
+      if (!data || !data.transactionInfos) return false;
+      rawTransactions = data.transactionInfos || [];
+    } else if (bank === 'mb') {
+      if (!data || data.status !== 'success' || !data.TranList) return false;
+      rawTransactions = data.TranList || [];
+    } else if (bank === 'acb') {
+      if (!data || !data.data) return false;
+      rawTransactions = data.data || [];
+    } else if (bank === 'tcb') {
+      if (!data || data.status !== 'success' || !data.transactions) return false;
+      rawTransactions = data.transactions || [];
+    } else if (bank === 'vp' || bank === 'timo') {
+      if (!data || data.status !== 'success' || !data.data) return false;
+      rawTransactions = data.data || [];
+    }
 
     for (const rawTx of rawTransactions) {
-      // Parse amount handling dot separator
-      const rawAmt = rawTx.amount || rawTx.transAmount || '0';
-      const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
-
-      const tx = {
-        bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
-        amount: parsedAmount,
-        description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
-        transDate: rawTx.transDate || rawTx.requestDate || '',
-        paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
-        balance: rawTx.balance || null,
-        accountId: rawTx.accountId || null,
-        clientId: rawTx.clientId || null,
-        msgContent: rawTx.msgContent || rawTx.transDesc || ''
-      };
+      const tx = normalizeTransaction(rawTx, bank);
+      if (!tx) continue;
 
       // Check for CREDIT (income) transactions
       if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
 
-      const note = tx.msgContent || tx.description || '';
+      const note = tx.description || '';
       const amount = tx.amount;
       const txToken = extractToken(note);
 
@@ -63,22 +220,22 @@ const checkViettelTransaction = async (bot, token, cached, user, promotion) => {
         // Verify Amount
         const requestedAmount = Number(cached.amount);
         if (amount < requestedAmount) {
-          console.log(`[VIETTEL] Underpayment ${tx.bankTransId}: ${amount} < ${requestedAmount}`);
+          console.log(`[${bank.toUpperCase()}] Underpayment ${tx.id}: ${amount} < ${requestedAmount}`);
           return false;
         }
 
         await processDepositTransaction(bot, {
           amount_in: amount,
-          id: tx.bankTransId, // Unique ID
+          id: tx.id,
           transaction_content: note,
-          ref_prefix: 'VIETTEL'
+          ref_prefix: bank.toUpperCase()
         }, cached, user, promotion);
 
         return true;
       }
     }
   } catch (err) {
-    console.error('[CHECK_PAYMENT] Viettel Error:', err.message);
+    console.error(`[CHECK_PAYMENT] ${bank.toUpperCase()} Error:`, err.message);
   }
   return false;
 };
@@ -117,7 +274,10 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
     await createDepositWithStatus(user.id, originalAmount, 'approved', ref);
   }
 
-  await updateBalance(user.id, promotionResult.finalAmount);
+  const finalBalance = await updateBalance(user.id, promotionResult.finalAmount);
+  setCache(processedKey(ref), true, 86400000);
+
+  // Add Log
   await addBalanceLog({
     userId: user.id,
     amount: promotionResult.finalAmount,
@@ -125,62 +285,38 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
     adminId: null
   });
 
-  const updatedUser = await getUserById(user.id);
-  const finalBalance = Number(updatedUser.balance);
-
-  const qrCache = getCache(qrKey(user.telegram_id));
-  const token = cached.token;
-
-  if (qrCache) {
-    await deleteQrMessage(bot, qrCache);
-    delCache(qrKey(user.telegram_id));
-  }
-  if (token) {
-    const tokenCache = getCache(contentKey(token));
-    if (tokenCache) {
-      await deleteQrMessage(bot, tokenCache);
-      delCache(contentKey(token));
-    }
-  }
-  setCache(processedKey(ref), true, 86400000);
-
   try {
-    const { completePurchaseAfterDeposit } = await import('../handle/handleBuy.js');
-    await completePurchaseAfterDeposit(bot, user.id, user.telegram_id, user.telegram_id);
-  } catch (e) { }
-
-  // Hoàn tất mua Gmail EDU nếu có pending purchase
-  try {
-    const { completeGmailEduPurchaseAfterDeposit } = await import('../handle/handleGmailEdu.js');
-    await completeGmailEduPurchaseAfterDeposit(bot, user.telegram_id);
-  } catch (e) { }
-
-  try {
-    const { getUserByTelegram } = await import('../controllers/userController.js');
-    const dbUser = await getUserByTelegram(user.telegram_id);
-    const lang = dbUser?.language || 'vi';
     const L = (l, vi, en, zh) => ({ en, zh }[l] || vi);
+    const lang = user.language || 'vi';
 
-    let message = L(lang,
-      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`,
-      `✅ **Deposit successful!**\n\n💰 Amount: ${formatCurrency(promotionResult.originalAmount)}`,
-      `✅ **充值成功！**\n\n💰 金额: ${formatCurrency(promotionResult.originalAmount)}`
+    let successMsg = L(lang,
+      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền nạp: \`+${formatCurrency(originalAmount)}\``,
+      `✅ **Deposit successful!**\n\n💰 Amount credited: \`+${formatCurrency(originalAmount)}\``,
+      `✅ **充值成功！**\n\n💰 充值金额: \`+${formatCurrency(originalAmount)}\``
     );
+
     if (promotionResult.bonusAmount > 0) {
-      message += L(lang,
-        `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
-        `\n🎁 **Bonus: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
-        `\n🎁 **奖金: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`
+      successMsg += L(lang,
+        `\n🎁 Khuyến mãi (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``,
+        `\n🎁 Promotion (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``,
+        `\n🎁 促销红利 (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``
       );
     }
-    message += L(lang,
-      `\n💵 **Số tiền được cộng: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **Số dư cuối: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`,
-      `\n💵 **Amount credited: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **Final balance: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`,
-      `\n💵 **入账金额: ${formatCurrency(promotionResult.finalAmount)}**\n💳 **最终余额: ${formatCurrency(finalBalance)}**\n📝 Ref: ${ref}`
-    );
-    await bot.sendMessage(user.telegram_id, message, { parse_mode: 'Markdown' });
 
-    // Notify admins - fetch from database
+    successMsg += L(lang,
+      `\n💳 Số dư mới: \`${formatCurrency(finalBalance)}\``,
+      `\n💳 New balance: \`${formatCurrency(finalBalance)}\``,
+      `\n💳 新余额: \`${formatCurrency(finalBalance)}\``
+    );
+
+    if (cached.messageId) {
+      await bot.sendMessage(user.telegram_id, successMsg, { parse_mode: 'Markdown' });
+      await deleteQrMessage(bot, cached);
+    } else {
+      await bot.sendMessage(user.telegram_id, successMsg, { parse_mode: 'Markdown' });
+    }
+
+    // Notify admins
     const { getAdminIds } = await import('../handle/handleNotify.js');
     const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
     if (adminIds.length > 0) {
@@ -200,16 +336,9 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   return true;
 };
 
-// Get Viettel settings from DB
-const getViettelSettings = async () => {
-  try {
-    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'viettel_token'");
-    return { token: rows?.[0]?.value || '' };
-  } catch (error) {
-    console.error('Error fetching Viettel settings:', error);
-    return { token: '' };
-  }
-};
+// Simple stub stubs if required by external imports
+export const getViettelSettings = async () => ({ token: await getBankToken('viettel') });
+export const getVcbSettings = async () => ({ token: await getBankToken('vcb') });
 
 const getAdminSettings = async () => {
   try {
@@ -228,7 +357,6 @@ const getAdminSettings = async () => {
 
 // Exported function for manual check
 export const checkPaymentForUser = async (bot, userId, config) => {
-  // Get user language
   const { getUserByTelegram } = await import('../controllers/userController.js');
   const dbUser = await getUserByTelegram(userId);
   const lang = dbUser?.language || 'vi';
@@ -238,7 +366,7 @@ export const checkPaymentForUser = async (bot, userId, config) => {
   const qrCache = getCache(qrKey(userId));
   if (!qrCache) return { success: false, message: L(lang, 'Không tìm thấy giao dịch chờ.', 'No pending transaction found.', '未找到待处理的交易。') };
 
-  const { token } = qrCache;
+  const { token, bank } = qrCache;
   const cached = getCache(contentKey(token));
   if (!cached) return { success: false, message: L(lang, 'Giao dịch đã hết hạn hoặc không tồn tại.', 'Transaction expired or not found.', '交易已过期或不存在。') };
 
@@ -247,11 +375,10 @@ export const checkPaymentForUser = async (bot, userId, config) => {
 
   const promotion = await getActivePromotion();
 
-  // Check Viettel
   let success = false;
-  const viettelConfig = await getViettelSettings();
-  if (viettelConfig.token) {
-    success = await checkViettelTransaction(bot, viettelConfig.token, cached, user, promotion);
+  const bankToken = await getBankToken(bank);
+  if (bankToken) {
+    success = await checkBankTransaction(bot, bank, bankToken, cached, user, promotion);
   }
 
   if (success) {
@@ -301,81 +428,109 @@ export const startAutoDepositWatcher = (bot, config) => {
 
   const tick = async () => {
     try {
-      // Only check if there are pending QRs waiting for payment
       const pendingKeys = getAllKeys('qr_');
       if (!pendingKeys || pendingKeys.length === 0) return;
 
-      const viettelConfig = await getViettelSettings();
-      if (!viettelConfig.token) return;
+      // Group pending keys by bank
+      const pendingByBank = {};
+      pendingKeys.forEach(key => {
+        const qr = getCache(key);
+        if (qr && qr.bank) {
+          if (!pendingByBank[qr.bank]) pendingByBank[qr.bank] = [];
+          pendingByBank[qr.bank].push(qr);
+        }
+      });
+
+      const activeBanks = Object.keys(pendingByBank);
+      if (activeBanks.length === 0) return;
 
       const promotion = await getActivePromotion();
 
-      // Call Viettel API
-      const response = await axios.get(`https://api.sieuthicode.net/historyapiviettel/${viettelConfig.token}`);
-      const data = response.data;
+      for (const bank of activeBanks) {
+        const token = await getBankToken(bank);
+        if (!token) continue;
 
-      if (!data || data.status.code !== '00' || !data.data || (!data.data.content && !data.data.trans)) return;
+        const url = getBankUrl(bank, token);
+        if (!url) continue;
 
-      const rawTransactions = data.data.content || data.data.trans || [];
+        try {
+          const response = await axios.get(url);
+          const data = response.data;
 
-      for (const rawTx of rawTransactions) {
-        // Parse amount handling dot separator
-        const rawAmt = rawTx.amount || rawTx.transAmount || '0';
-        const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+          let rawTransactions = [];
+          if (bank === 'viettel') {
+            if (data && data.status?.code === '00' && data.data) {
+              rawTransactions = data.data.content || data.data.trans || [];
+            }
+          } else if (bank === 'vcb') {
+            if (data && (data.code === '00' || data.status?.code === '00') && data.transactions) {
+              rawTransactions = data.transactions || [];
+            }
+          } else if (bank === 'tpb') {
+            if (data && data.transactionInfos) {
+              rawTransactions = data.transactionInfos || [];
+            }
+          } else if (bank === 'mb') {
+            if (data && data.status === 'success' && data.TranList) {
+              rawTransactions = data.TranList || [];
+            }
+          } else if (bank === 'acb') {
+            if (data && data.data) {
+              rawTransactions = data.data || [];
+            }
+          } else if (bank === 'tcb') {
+            if (data && data.status === 'success' && data.transactions) {
+              rawTransactions = data.transactions || [];
+            }
+          } else if (bank === 'vp' || bank === 'timo') {
+            if (data && data.status === 'success' && data.data) {
+              rawTransactions = data.data || [];
+            }
+          }
 
-        const tx = {
-          bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
-          amount: parsedAmount,
-          description: rawTx.msgContent || rawTx.description || rawTx.transDesc || '',
-          transDate: rawTx.transDate || rawTx.requestDate || '',
-          paymentType: rawTx.paymentType || (rawTx.spendMoneyTransaction === true ? 'DEBIT' : 'CREDIT'),
-          balance: rawTx.balance || null,
-          accountId: rawTx.accountId || null,
-          clientId: rawTx.clientId || null,
-          msgContent: rawTx.msgContent || rawTx.transDesc || ''
-        };
+          for (const rawTx of rawTransactions) {
+            const tx = normalizeTransaction(rawTx, bank);
+            if (!tx) continue;
 
-        // Only process CREDIT (incoming) transactions
-        if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
+            if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
 
-        const note = tx.msgContent || tx.description || '';
-        const amount = tx.amount;
-        const txToken = extractToken(note);
+            const note = tx.description || '';
+            const amount = tx.amount;
+            const txToken = extractToken(note);
 
-        if (!txToken) continue;
+            if (!txToken) continue;
 
-        // Check if this token matches any pending deposit
-        const cached = getCache(contentKey(txToken));
-        if (!cached) continue;
+            const cached = getCache(contentKey(txToken));
+            if (!cached || cached.bank !== bank) continue;
 
-        const user = await getUserById(cached.userId);
-        if (!user) continue;
+            const user = await getUserById(cached.userId);
+            if (!user) continue;
 
-        // Verify amount (must be >= requested amount)
-        const requestedAmount = Number(cached.amount);
-        if (amount < requestedAmount) {
-          console.log(`[AUTO_VIETTEL] Underpayment for ${txToken}: ${amount} < ${requestedAmount}`);
-          continue;
+            const requestedAmount = Number(cached.amount);
+            if (amount < requestedAmount) {
+              console.log(`[AUTO_${bank.toUpperCase()}] Underpayment for ${txToken}: ${amount} < ${requestedAmount}`);
+              continue;
+            }
+
+            console.log(`[AUTO_${bank.toUpperCase()}] Found matching transaction: Token=${txToken}, Amount=${amount}`);
+            await processDepositTransaction(bot, {
+              amount_in: amount,
+              id: tx.id,
+              transaction_content: note,
+              ref_prefix: bank.toUpperCase()
+            }, cached, user, promotion);
+          }
+        } catch (err) {
+          console.error(`[AUTO_${bank.toUpperCase()}] Polling Error:`, err.message);
         }
-
-        // Process deposit
-        console.log(`[AUTO_VIETTEL] Found matching transaction: Token=${txToken}, Amount=${amount}`);
-        await processDepositTransaction(bot, {
-          amount_in: amount,
-          id: tx.bankTransId,
-          transaction_content: note,
-          ref_prefix: 'VIETTEL'
-        }, cached, user, promotion);
       }
     } catch (err) {
-      console.error('[AUTO_VIETTEL] Error:', err.message);
+      console.error('[AUTO_WATCHER] General Error:', err.message);
     }
   };
 
-  // Start polling
   setInterval(tick, CHECK_INTERVAL);
-  tick(); // Initial run
+  tick();
 
-  // Also start QR expiration checker
   startQrExpirationChecker(bot);
 };

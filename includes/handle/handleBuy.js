@@ -38,17 +38,26 @@ export const sendCategoryList = async (bot, chatId, user) => {
   // Fetch products to check stock
   const { rows } = await listProducts(0, 1000);
 
-  const inline_keyboard = categories.map(cat => {
+  const buttons = categories.map(cat => {
     // Check if this category has stock
     const productsInCat = rows.filter(p => p.category_id === cat.id);
     const hasStock = productsInCat.some(p => p.type === 'order' || (p.stock && p.stock > 0));
     const icon = hasStock ? '🟢' : '🔴';
 
-    return [{
-      text: `${icon} ${cat.name}`,
+    // Remove any existing duplicate status circle emojis
+    const cleanName = cat.name.replace(/^[🟢🔴]\s*/, '');
+
+    return {
+      text: `${icon} ${cleanName}`,
       callback_data: createCallbackData({ action: 'category_products', catId: cat.id })
-    }];
+    };
   });
+
+  // Chunk buttons into rows of 3 columns
+  const inline_keyboard = [];
+  for (let i = 0; i < buttons.length; i += 3) {
+    inline_keyboard.push(buttons.slice(i, i + 3));
+  }
 
   const selectMsg = L(lang, '📂 Chọn danh mục sản phẩm:', '📂 Select product category:', '📂 选择产品分类：');
   await bot.sendMessage(chatId, selectMsg, {

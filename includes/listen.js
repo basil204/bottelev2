@@ -573,6 +573,18 @@ export const registerListeners = (bot, config) => {
           const { promptForBankDeposit } = await import('./handle/handleDeposit.js');
           return promptForBankDeposit(bot, chatId, query.from.id, config);
 
+        case 'select_bank_method':
+          {
+            const { selectBankMethod } = await import('./handle/handleDeposit.js');
+            return selectBankMethod(bot, chatId, query.from.id, data.bank);
+          }
+
+        case 'back_to_deposit_options':
+          {
+            const { startDepositFlow } = await import('./handle/handleDeposit.js');
+            return startDepositFlow(bot, query.message, user, config);
+          }
+
         case 'deposit_select_usdt':
           const { showUsdtOptions } = await import('./handle/handleDeposit.js');
           return showUsdtOptions(bot, chatId, config);

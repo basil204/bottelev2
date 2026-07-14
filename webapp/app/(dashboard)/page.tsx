@@ -41,7 +41,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [promotion, setPromotion] = useState<Promotion | null>(null);
-  const [ramUsage, setRamUsage] = useState<{ usagePercent: number; usedGB: string; totalGB: string; freeGB: string } | null>(null);
+  const [ramUsage, setRamUsage] = useState<{ usagePercent: number; usedGB: string; totalGB: string; freeGB: string; botUsername?: string } | null>(null);
   const { theme } = useTheme();
   const { t } = useLanguage();
   const { formatPrice } = useCurrency();
@@ -226,13 +226,25 @@ export default function Dashboard() {
 
   const isDark = theme === 'dark';
 
+  const botUsername = ramUsage?.botUsername || 'autobasilbot';
+
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-500">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">{t('sidebar.dashboard')}</h2>
-        <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground bg-card border px-3 py-1 rounded-full shadow-sm">
-          <Activity className="w-4 h-4 text-green-500" />
-          <span>System Normal</span>
+        <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-green-400 bg-green-500/10 border border-green-500/20 px-3.5 py-1.5 rounded-full shadow-sm shadow-green-500/5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span>Bot started: <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="hover:underline font-bold text-green-300">@{botUsername}</a></span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-card border px-3.5 py-1.5 rounded-full shadow-sm">
+            <Activity className="w-3.5 h-3.5 text-green-500" />
+            <span>System Normal</span>
+          </div>
         </div>
       </div>
 

@@ -29,6 +29,7 @@ interface Transaction {
     bankTransId: string;
     description: string;
     paymentType?: 'CREDIT' | 'DEBIT';
+    bank?: string;
 }
 
 interface DailySummary {
@@ -91,10 +92,10 @@ export default function BankHistoryPage() {
                 setTransactions([]);
                 setFilteredTransactions([]);
             } else {
-                const rawTxs = data.content || data.trans || [];
+                const rawTxs = data.transactions || data.content || data.trans || [];
                 const txs = rawTxs.map((rawTx: any) => {
                     const rawAmt = rawTx.amount || rawTx.transAmount || '0';
-                    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
+                    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '').replace(/,/g, '')) || 0;
                     return {
                         ...rawTx,
                         bankTransId: rawTx.bankTransId || rawTx.id || rawTx.transactionId || rawTx.requestId || '',
@@ -555,6 +556,7 @@ export default function BankHistoryPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>{t('bank_history.type')}</TableHead>
+                                        <TableHead>Ngân hàng</TableHead>
                                         <TableHead>{t('bank_history.time')}</TableHead>
                                         <TableHead>{t('bank_history.amount')}</TableHead>
                                         <TableHead>{t('bank_history.balance')}</TableHead>
@@ -565,9 +567,9 @@ export default function BankHistoryPage() {
                                 <TableBody>
                                     {filteredTransactions.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                {t('bank_history.no_transactions')}
-                                            </TableCell>
+                                             <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                                                 {t('bank_history.no_transactions')}
+                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         filteredTransactions.map((tx, index) => (
@@ -584,6 +586,26 @@ export default function BankHistoryPage() {
                                                             {t('bank_history.debit')}
                                                         </span>
                                                     )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {(() => {
+                                                        const bankBadges: Record<string, { label: string; style: string }> = {
+                                                            VIETTEL: { label: 'ViettelPay', style: 'bg-red-500/10 text-red-400 border border-red-500/20' },
+                                                            VCB: { label: 'Vietcombank', style: 'bg-green-500/10 text-green-400 border border-green-500/20' },
+                                                            TPB: { label: 'TPBank', style: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' },
+                                                            MB: { label: 'MBBank', style: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' },
+                                                            ACB: { label: 'ACB', style: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
+                                                            TCB: { label: 'Techcombank', style: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' },
+                                                            VP: { label: 'VPBank', style: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' },
+                                                            TIMO: { label: 'Timo', style: 'bg-orange-500/10 text-orange-400 border border-orange-500/20' }
+                                                        };
+                                                        const badge = bankBadges[tx.bank || ''] || { label: tx.bank || 'Unknown', style: 'bg-slate-500/10 text-slate-400 border border-slate-500/20' };
+                                                        return (
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.style}`}>
+                                                                {badge.label}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell className="whitespace-nowrap">
                                                     {tx.transDate}

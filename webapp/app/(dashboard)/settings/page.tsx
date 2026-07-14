@@ -28,6 +28,24 @@ interface Settings {
     mb_auto_deposit: boolean;
     viettel_token: string;
     viettel_account: string;
+    vcb_token: string;
+    vcb_account: string;
+    tpb_token: string;
+    tpb_account: string;
+    mb_token: string;
+    mb_account: string;
+    acb_token: string;
+    acb_account: string;
+    tcb_token: string;
+    tcb_account: string;
+    vp_token: string;
+    vp_account: string;
+    timo_token: string;
+    timo_account: string;
+    vietqr_bank_code: string;
+    vietqr_account_no: string;
+    vietqr_account_name: string;
+    active_bank: string;
     min_deposit: number;
     exchange_rate: number;
     telegram_bot_token: string;
@@ -58,6 +76,24 @@ export default function SettingsPage() {
         mb_auto_deposit: true,
         viettel_token: '',
         viettel_account: '',
+        vcb_token: '',
+        vcb_account: '',
+        tpb_token: '',
+        tpb_account: '',
+        mb_token: '',
+        mb_account: '',
+        acb_token: '',
+        acb_account: '',
+        tcb_token: '',
+        tcb_account: '',
+        vp_token: '',
+        vp_account: '',
+        timo_token: '',
+        timo_account: '',
+        vietqr_bank_code: 'VCB',
+        vietqr_account_no: '',
+        vietqr_account_name: '',
+        active_bank: 'viettel',
         min_deposit: 50000,
         exchange_rate: 26000,
         telegram_bot_token: '',
@@ -80,6 +116,7 @@ export default function SettingsPage() {
     });
 
     const [newAdminId, setNewAdminId] = useState('');
+    const [configuringBank, setConfiguringBank] = useState<'viettel' | 'vcb' | 'tpb' | 'mb' | 'acb' | 'tcb' | 'vp' | 'timo'>('viettel');
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -289,8 +326,51 @@ export default function SettingsPage() {
                                     />
                                 </div>
 
-                                {/* Viettel Config - Show when auto deposit is enabled */}
+                                {/* Bank Active & Selector config - Show when auto deposit is enabled */}
                                 {settings.mb_auto_deposit && (
+                                    <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800 mb-4 space-y-4">
+                                        <div>
+                                            <Label className="text-white font-medium">Ngân hàng hoạt động chính (Chỉ được phép bật 1 ngân hàng)</Label>
+                                            <select
+                                                value={settings.active_bank}
+                                                onChange={(e) => handleChange('active_bank', e.target.value)}
+                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            >
+                                                <option value="viettel">ViettelPay (Sieuthicode)</option>
+                                                <option value="vcb">Vietcombank & VietQR (Sieuthicode)</option>
+                                                <option value="tpb">TPBank & VietQR (Sieuthicode)</option>
+                                                <option value="mb">MBBank & VietQR (Sieuthicode)</option>
+                                                <option value="acb">ACB & VietQR (Sieuthicode)</option>
+                                                <option value="tcb">Techcombank & VietQR (Sieuthicode)</option>
+                                                <option value="vp">VPBank & VietQR (Sieuthicode)</option>
+                                                <option value="timo">Timo & VietQR (Sieuthicode)</option>
+                                            </select>
+                                            <p className="text-xs text-slate-400 mt-1">Hệ thống Bot Telegram chỉ kích hoạt nhận tiền duy nhất ngân hàng được chọn tại đây.</p>
+                                        </div>
+
+                                        <div>
+                                            <Label className="text-white font-medium">Chọn ngân hàng để cấu hình thông tin</Label>
+                                            <select
+                                                value={configuringBank}
+                                                onChange={(e) => setConfiguringBank(e.target.value as any)}
+                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            >
+                                                <option value="viettel">ViettelPay</option>
+                                                <option value="vcb">Vietcombank & VietQR</option>
+                                                <option value="tpb">TPBank & VietQR</option>
+                                                <option value="mb">MBBank & VietQR</option>
+                                                <option value="acb">ACB & VietQR</option>
+                                                <option value="tcb">Techcombank & VietQR</option>
+                                                <option value="vp">VPBank & VietQR</option>
+                                                <option value="timo">Timo & VietQR</option>
+                                            </select>
+                                            <p className="text-xs text-slate-400 mt-1">Cài đặt thông tin tài khoản cho ngân hàng được chọn để lưu trữ trước khi bật.</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Viettel Config - Show when auto deposit is enabled and Viettel is selected for configuration */}
+                                {settings.mb_auto_deposit && configuringBank === 'viettel' && (
                                     <div className="p-4 bg-red-900/20 rounded-lg border border-red-800">
                                         <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
                                             📱 {t('settings.viettel_config')}
@@ -321,6 +401,65 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                     </div>
+                                )}
+
+                                {/* Non-Viettel Configs - Dynamically rendered for other banks */}
+                                {settings.mb_auto_deposit && configuringBank !== 'viettel' && (
+                                    (() => {
+                                        const bankDetails: Record<string, { name: string; color: string; tokenKey: keyof Settings; accountKey: keyof Settings }> = {
+                                            vcb: { name: 'Vietcombank', color: 'bg-blue-900/20 border-blue-800 text-blue-400', tokenKey: 'vcb_token', accountKey: 'vcb_account' },
+                                            tpb: { name: 'TPBank', color: 'bg-purple-900/20 border-purple-800 text-purple-400', tokenKey: 'tpb_token', accountKey: 'tpb_account' },
+                                            mb: { name: 'MBBank', color: 'bg-cyan-900/20 border-cyan-800 text-cyan-400', tokenKey: 'mb_token', accountKey: 'mb_account' },
+                                            acb: { name: 'ACB', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-400', tokenKey: 'acb_token', accountKey: 'acb_account' },
+                                            tcb: { name: 'Techcombank', color: 'bg-red-900/20 border-red-800 text-red-400', tokenKey: 'tcb_token', accountKey: 'tcb_account' },
+                                            vp: { name: 'VPBank', color: 'bg-green-900/20 border-green-800 text-green-400', tokenKey: 'vp_token', accountKey: 'vp_account' },
+                                            timo: { name: 'Timo', color: 'bg-orange-900/20 border-orange-800 text-orange-400', tokenKey: 'timo_token', accountKey: 'timo_account' }
+                                        };
+                                        const detail = bankDetails[configuringBank];
+                                        if (!detail) return null;
+                                        return (
+                                            <div className={`p-4 rounded-lg border ${detail.color.split(' ')[0]} ${detail.color.split(' ')[1]}`}>
+                                                <div className={`font-medium mb-2 flex items-center gap-2 ${detail.color.split(' ')[2]}`}>
+                                                    🏦 Cấu hình {detail.name} & VietQR (Sieuthicode)
+                                                </div>
+                                                <div className="text-sm text-slate-400 mb-4">
+                                                    Cấu hình token {detail.name} từ Sieuthicode và thông tin số tài khoản {detail.name} để nhận chuyển khoản.
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token {detail.name} (Sieuthicode)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings[detail.tokenKey] as string}
+                                                            onChange={(e) => handleChange(detail.tokenKey, e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder={`Token ${detail.name} từ Sieuthicode...`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản ngân hàng (STK)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings[detail.accountKey] as string}
+                                                            onChange={(e) => handleChange(detail.accountKey, e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder={`Số tài khoản ${detail.name} nhận tiền...`}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Tên chủ tài khoản (Không dấu - Dùng chung)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.vietqr_account_name}
+                                                            onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            placeholder="Ví dụ: NGUYEN VAN A..."
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()
                                 )}
 
                                 {/* Deposit Configuration */}

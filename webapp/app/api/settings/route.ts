@@ -24,6 +24,24 @@ export async function GET() {
             mb_auto_deposit: true,
             viettel_token: '',
             viettel_account: '',
+            vcb_token: '',
+            vcb_account: '',
+            tpb_token: '',
+            tpb_account: '',
+            mb_token: '',
+            mb_account: '',
+            acb_token: '',
+            acb_account: '',
+            tcb_token: '',
+            tcb_account: '',
+            vp_token: '',
+            vp_account: '',
+            timo_token: '',
+            timo_account: '',
+            vietqr_bank_code: 'VCB',
+            vietqr_account_no: '',
+            vietqr_account_name: '',
+            active_bank: 'viettel',
             min_deposit: 50000,
             exchange_rate: 26000, // USDT -> VND exchange rate
             telegram_bot_token: '',
@@ -95,6 +113,24 @@ export async function POST(request: Request) {
             mb_auto_deposit,
             viettel_token,
             viettel_account,
+            vcb_token,
+            vcb_account,
+            tpb_token,
+            tpb_account,
+            mb_token,
+            mb_account,
+            acb_token,
+            acb_account,
+            tcb_token,
+            tcb_account,
+            vp_token,
+            vp_account,
+            timo_token,
+            timo_account,
+            vietqr_bank_code,
+            vietqr_account_no,
+            vietqr_account_name,
+            active_bank,
             min_deposit,
             exchange_rate, // Exchange rate USDT -> VND
             telegram_bot_token,
@@ -135,6 +171,24 @@ export async function POST(request: Request) {
             if (mb_auto_deposit !== undefined) await upsertSetting('mb_auto_deposit', mb_auto_deposit);
             if (viettel_token !== undefined) await upsertSetting('viettel_token', viettel_token);
             if (viettel_account !== undefined) await upsertSetting('viettel_account', viettel_account);
+            if (vcb_token !== undefined) await upsertSetting('vcb_token', vcb_token);
+            if (vcb_account !== undefined) await upsertSetting('vcb_account', vcb_account);
+            if (tpb_token !== undefined) await upsertSetting('tpb_token', tpb_token);
+            if (tpb_account !== undefined) await upsertSetting('tpb_account', tpb_account);
+            if (mb_token !== undefined) await upsertSetting('mb_token', mb_token);
+            if (mb_account !== undefined) await upsertSetting('mb_account', mb_account);
+            if (acb_token !== undefined) await upsertSetting('acb_token', acb_token);
+            if (acb_account !== undefined) await upsertSetting('acb_account', acb_account);
+            if (tcb_token !== undefined) await upsertSetting('tcb_token', tcb_token);
+            if (tcb_account !== undefined) await upsertSetting('tcb_account', tcb_account);
+            if (vp_token !== undefined) await upsertSetting('vp_token', vp_token);
+            if (vp_account !== undefined) await upsertSetting('vp_account', vp_account);
+            if (timo_token !== undefined) await upsertSetting('timo_token', timo_token);
+            if (timo_account !== undefined) await upsertSetting('timo_account', timo_account);
+            if (vietqr_bank_code !== undefined) await upsertSetting('vietqr_bank_code', vietqr_bank_code);
+            if (vietqr_account_no !== undefined) await upsertSetting('vietqr_account_no', vietqr_account_no);
+            if (vietqr_account_name !== undefined) await upsertSetting('vietqr_account_name', vietqr_account_name);
+            if (active_bank !== undefined) await upsertSetting('active_bank', active_bank);
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
             if (exchange_rate !== undefined) await upsertSetting('exchange_rate', exchange_rate);
             if (telegram_bot_token !== undefined) {

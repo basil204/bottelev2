@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import os from 'os';
+import pool from '@/lib/db';
+import { RowDataPacket } from 'mysql2';
 
 export async function GET() {
     try {
@@ -13,6 +15,19 @@ export async function GET() {
         const usedGB = (usedMemory / (1024 * 1024 * 1024)).toFixed(2);
         const freeGB = (freeMemory / (1024 * 1024 * 1024)).toFixed(2);
 
+        // Get bot_username from DB
+        let botUsername = 'autobasilbot';
+        try {
+            const [rows] = await pool.query<RowDataPacket[]>(
+                "SELECT `value` FROM settings WHERE `key` = 'bot_username'"
+            );
+            if (rows && rows.length > 0 && rows[0].value) {
+                botUsername = rows[0].value;
+            }
+        } catch (dbErr) {
+            console.error('Error fetching bot_username from DB:', dbErr);
+        }
+
         return NextResponse.json({
             total: totalMemory,
             used: usedMemory,
@@ -21,6 +36,7 @@ export async function GET() {
             totalGB,
             usedGB,
             freeGB,
+            botUsername
         });
     } catch (error) {
         console.error('Error getting system info:', error);

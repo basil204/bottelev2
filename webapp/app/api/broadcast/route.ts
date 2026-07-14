@@ -102,6 +102,30 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Bot token not configured' }, { status: 400 });
         }
 
+        // Fetch product category and price dynamically from database
+        let categoryName = '';
+        let fetchedPrice = productPrice;
+
+        if (productId) {
+            try {
+                const [productRows] = await pool.query<RowDataPacket[]>(
+                    `SELECT p.price, c.name AS category_name 
+                     FROM products p 
+                     LEFT JOIN categories c ON p.category_id = c.id 
+                     WHERE p.id = ?`,
+                    [productId]
+                );
+                if (productRows && productRows.length > 0) {
+                    categoryName = productRows[0].category_name || '';
+                    if (productRows[0].price !== undefined && productRows[0].price !== null) {
+                        fetchedPrice = productRows[0].price;
+                    }
+                }
+            } catch (err: any) {
+                console.error('Error fetching product details for broadcast:', err.message);
+            }
+        }
+
         // Get all users
         const [users] = await pool.query<RowDataPacket[]>('SELECT telegram_id FROM users WHERE telegram_id IS NOT NULL');
 
@@ -113,16 +137,18 @@ export async function POST(request: Request) {
         let broadcastMessage = '';
 
         if (type === 'new_product') {
-            broadcastMessage = `📢 ${shopName} thông báo có sản phẩm mới!\n\n` +
-                `🎁 Sản phẩm: ${productName}\n` +
-                `💰 Giá: ${Number(productPrice).toLocaleString('vi-VN')}đ\n\n` +
-                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
+            broadcastMessage = `🔥 🔥 ${categoryName || productName} có sản phẩm mới\n\n` +
+                `🛍️ ${productName}\n` +
+                (categoryName ? `📁 Danh mục: ${categoryName}\n` : '') +
+                `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}₫\n\n` +
+                `👇 Bấm nút bên dưới để mua ngay:`;
         } else if (type === 'stock_added') {
-            broadcastMessage = `📢 ${shopName} thông báo có hàng mới!\n\n` +
-                `🎁 Sản phẩm: ${productName}\n` +
-                `➕ Vừa thêm: ${addedCount} tài khoản\n` +
-                `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
-                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
+            broadcastMessage = `🔥 🔥 ${categoryName || productName} có hàng mới\n\n` +
+                `🛍️ ${productName}\n` +
+                (categoryName ? `📁 Danh mục: ${categoryName}\n` : '') +
+                `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}₫\n` +
+                `📦 Tồn kho: ${totalStock} · vừa nhập ${addedCount}\n\n` +
+                `👇 Bấm nút bên dưới để mua ngay:`;
         } else if (type === 'custom' || body.message) {
             const customMessage = body.message;
             if (!customMessage || !customMessage.trim()) {

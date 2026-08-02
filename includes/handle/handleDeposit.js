@@ -56,7 +56,7 @@ const getBankConfig = async (defaultConfig, bank) => {
     if (bank === 'viettel') {
       return {
         bankCode: 'VIETTELMONEY',
-        accountNo: dbConfig.viettel_account || '',
+        accountNo: dbConfig.viettel_account || dbConfig.vietqr_account_no || '',
         accountName
       };
     }
@@ -69,22 +69,22 @@ const getBankConfig = async (defaultConfig, bank) => {
       accountNo = dbConfig.vcb_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'tpb') {
       bankCode = 'TPB';
-      accountNo = dbConfig.tpb_account || '';
+      accountNo = dbConfig.tpb_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'mb') {
       bankCode = 'MB';
-      accountNo = dbConfig.mb_account || '';
+      accountNo = dbConfig.mb_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'acb') {
       bankCode = 'ACB';
-      accountNo = dbConfig.acb_account || '';
+      accountNo = dbConfig.acb_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'tcb') {
       bankCode = 'TCB';
-      accountNo = dbConfig.tcb_account || '';
+      accountNo = dbConfig.tcb_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'vp') {
       bankCode = 'VPB';
-      accountNo = dbConfig.vp_account || '';
+      accountNo = dbConfig.vp_account || dbConfig.vietqr_account_no || '';
     } else if (bank === 'timo') {
       bankCode = 'TIMO';
-      accountNo = dbConfig.timo_account || '';
+      accountNo = dbConfig.timo_account || dbConfig.vietqr_account_no || '';
     } else {
       bankCode = dbConfig.vietqr_bank_code || 'VCB';
       accountNo = dbConfig.vietqr_account_no || '';
@@ -733,7 +733,18 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   // Get selected bank
   let selectedBank = getCache(`bank_selection_${msg.from.id}`);
   if (!selectedBank) {
-    selectedBank = 'viettel';
+    try {
+      const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank'");
+      if (rows?.[0]?.value) {
+        selectedBank = rows[0].value;
+      }
+    } catch (e) {
+      console.error('Error fetching active_bank setting:', e);
+    }
+    if (!selectedBank) {
+      selectedBank = 'viettel';
+    }
+    setCache(`bank_selection_${msg.from.id}`, selectedBank, 15 * 60 * 1000);
   }
 
   const amount = Number(msg.text.replace(/\D/g, ''));

@@ -592,9 +592,18 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
       const { handleDepositAmount } = await import('./handleDeposit.js');
 
-      const { setCache: setCacheDeposit } = await import('../../lib/cache/index.js');
-      const bankKey = (telegramId) => `bank_${telegramId}`;
-      setCacheDeposit(bankKey(msg.from.id), 'viettel', 10 * 60 * 1000);
+      // Retrieve active_bank setting from database
+      let activeBank = 'viettel';
+      try {
+        const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank'");
+        if (rows?.[0]?.value) {
+          activeBank = rows[0].value;
+        }
+      } catch (e) {
+        console.error('Error fetching active_bank setting for auto deposit:', e);
+      }
+
+      setCache(`bank_selection_${msg.from.id}`, activeBank, 15 * 60 * 1000);
 
       const fakeMsg = { ...msg, text: missingAmount.toString() };
 
@@ -608,7 +617,11 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
         { parse_mode: 'Markdown' }
       );
 
-      await handleDepositAmount(bot, fakeMsg, user, config);
+      try {
+        await handleDepositAmount(bot, fakeMsg, user, config);
+      } catch (depErr) {
+        console.error('[AUTO_QR_DEPOSIT_ERROR]', depErr);
+      }
       return;
     }
 

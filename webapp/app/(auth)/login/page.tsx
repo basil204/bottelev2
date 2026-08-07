@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { ArrowRight, CheckCircle, Eye, EyeSlash, LockKey, ShieldCheck, User } from '@phosphor-icons/react';
+import { ArrowRight, CheckCircle, Eye, EyeOff as EyeSlash, KeyRound as LockKey, ShieldCheck, User } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function LoginPage() {
@@ -35,7 +35,7 @@ export default function LoginPage() {
       <section className="relative hidden overflow-hidden border-r border-zinc-200/80 bg-[#173c2b] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full border border-white/10" />
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full border border-white/10" />
-        <div className="relative flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#173c2b]"><ShieldCheck size={21} weight="fill" /></div><div><p className="text-sm font-semibold">Bot Tele</p><p className="text-[10px] uppercase tracking-[0.18em] text-white/50">Operations workspace</p></div></div>
+        <div className="relative flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#173c2b]"><ShieldCheck size={21} /></div><div><p className="text-sm font-semibold">Bot Tele</p><p className="text-[10px] uppercase tracking-[0.18em] text-white/50">Operations workspace</p></div></div>
         <div className="relative max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200/70">Quản trị tập trung</p>
           <h1 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.045em] xl:text-5xl">Mọi hoạt động kinh doanh, trong một không gian rõ ràng.</h1>
@@ -46,7 +46,7 @@ export default function LoginPage() {
 
       <section className="flex items-center justify-center px-5 py-10 sm:px-10">
         <div className="w-full max-w-[420px]">
-          <div className="mb-10 flex items-center gap-3 lg:hidden"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#173c2b] text-white"><ShieldCheck size={21} weight="fill" /></div><p className="font-semibold text-zinc-900">Bot Tele</p></div>
+          <div className="mb-10 flex items-center gap-3 lg:hidden"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#173c2b] text-white"><ShieldCheck size={21} /></div><p className="font-semibold text-zinc-900">Bot Tele</p></div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Tài khoản quản trị</p>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-zinc-950">{t('auth.login_title')}</h2>
           <p className="mt-2 text-sm leading-6 text-zinc-500">{t('auth.login_subtitle')}</p>

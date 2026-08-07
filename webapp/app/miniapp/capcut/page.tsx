@@ -2,7 +2,7 @@
 
 import Script from 'next/script';
 import { useEffect, useState } from 'react';
-import { CheckCircle, Key, SignIn, UsersThree, WarningCircle } from '@phosphor-icons/react';
+import { CheckCircle, Key, LogIn as SignIn, Users as UsersThree, CircleAlert as WarningCircle } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -87,7 +87,7 @@ export default function CapCutMiniApp() {
       <Script src="https://telegram.org/js/telegram-web-app.js?61" strategy="afterInteractive" />
       <div className="mx-auto max-w-xl">
         <header className="mb-5 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#17623f] text-white"><UsersThree size={22} weight="fill" /></div>
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#17623f] text-white"><UsersThree size={22} /></div>
           <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Telegram Mini App</p><h1 className="text-xl font-bold tracking-tight">CapCut Workspace</h1></div>
         </header>
 
@@ -106,7 +106,7 @@ export default function CapCutMiniApp() {
 
           {workspaces.length > 0 && tab === 'login' && <div className="space-y-2 border-t border-zinc-100 pt-4"><p className="text-sm font-semibold">Workspace đã tìm thấy</p>{workspaces.map(ws => <button key={ws.workspace_id} type="button" onClick={() => { setWorkspaceId(ws.workspace_id); setInviteLink(ws.join_link); setTab('join'); }} className="flex w-full items-center justify-between rounded-xl border border-zinc-200 p-3 text-left hover:border-emerald-300 hover:bg-emerald-50"><span><b className="block text-sm">{ws.name}</b><small className="text-zinc-500">{ws.member_cnt}/{ws.member_limit} thành viên</small></span><span className="text-xs font-semibold text-emerald-700">Chọn</span></button>)}</div>}
           {error && <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><WarningCircle size={20} className="shrink-0" />{error}</div>}
-          {result && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle size={19} weight="fill" />Xử lý thành công</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-emerald-950">{JSON.stringify(result, null, 2)}</pre></div>}
+          {result && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle size={19} />Xử lý thành công</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-emerald-950">{JSON.stringify(result, null, 2)}</pre></div>}
           <button type="button" disabled={loading || !ready} onClick={submit} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#17623f] px-4 text-sm font-bold text-white transition hover:bg-[#1d714a] active:scale-[.98] disabled:opacity-50">{tab === 'login' ? <SignIn size={19} /> : <Key size={19} />}{loading ? 'Đang xử lý...' : tabs.find(item => item.id === tab)?.label}</button>
         </section>
         <p className="mt-4 text-center text-xs leading-5 text-zinc-500">Mật khẩu và proxy chỉ được chuyển tới API CapCut trong yêu cầu hiện tại, không lưu trên trình duyệt.</p>

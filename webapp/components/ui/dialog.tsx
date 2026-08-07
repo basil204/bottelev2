@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { X } from '@phosphor-icons/react';
+import { X } from 'lucide-react';
 
 interface DialogProps {
     open: boolean;

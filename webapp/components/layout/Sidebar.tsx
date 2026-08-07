@@ -5,25 +5,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import {
-  Archive,
-  Bank,
-  Bell,
-  ChartBar,
-  CheckCircle,
-  Envelope,
-  Folders,
-  GearSix,
-  Globe,
-  List,
-  Package,
-  ShieldCheck,
-  ShoppingCart,
-  SignOut,
-  SquaresFour,
-  UserGear,
-  UsersThree,
-  Wallet,
-} from '@phosphor-icons/react';
+  Archive, Landmark as Bank, Bell, ChartNoAxesColumn as ChartBar, CheckCircle,
+  Mail as Envelope, Folders, Settings as GearSix, Globe, Menu as List, Package,
+  ShieldCheck, ShoppingCart, LogOut as SignOut, LayoutDashboard as SquaresFour,
+  UserCog as UserGear, Users as UsersThree, Wallet,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -98,7 +84,7 @@ export function Sidebar() {
       <aside className={clsx('fixed inset-y-0 left-0 z-40 w-[17rem] border-r border-zinc-200/80 bg-white/95 backdrop-blur-xl transition-transform duration-300 ease-out md:translate-x-0', isOpen ? 'translate-x-0' : '-translate-x-full')}>
         <div className="flex h-full flex-col">
           <div className="flex h-[4.5rem] items-center gap-3 border-b border-zinc-200/80 px-5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-[#07100b] shadow-[inset_0_1px_0_rgba(255,255,255,.3)]"><ShieldCheck size={19} weight="fill" /></div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-[#07100b] shadow-[inset_0_1px_0_rgba(255,255,255,.3)]"><ShieldCheck size={19} /></div>
             <div><p className="text-[15px] font-bold tracking-tight text-zinc-900">Bot Tele</p><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">Operations console</p></div>
           </div>
 

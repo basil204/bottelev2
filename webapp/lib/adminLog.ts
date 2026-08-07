@@ -1,5 +1,3 @@
-import pool from './db';
-import { ResultSetHeader } from 'mysql2';
 import { verifyJWT } from '../lib-edge/jwt';
 
 export type AdminAction =
@@ -44,67 +42,9 @@ interface LogParams {
 /**
  * Log admin activity
  */
-export async function logAdminAction(params: LogParams): Promise<boolean> {
-    try {
-        let {
-            adminId = null,
-            adminName = null,
-            action,
-            targetType,
-            targetId = null,
-            details = null,
-            ipAddress = null,
-            userAgent = null,
-            request
-        } = params;
-
-        // If request is provided, try to extract missing info
-        if (request) {
-            if (!ipAddress || !userAgent) {
-                const info = getRequestInfo(request);
-                if (!ipAddress) ipAddress = info.ipAddress;
-                if (!userAgent) userAgent = info.userAgent;
-            }
-
-            // Check role from JWT to extract username
-            const cookieHeader = request.headers.get('cookie') || '';
-            const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/);
-            if (tokenMatch) {
-                const token = decodeURIComponent(tokenMatch[1]);
-                if (token && token !== 'true') {
-                    const payload = await verifyJWT(token);
-                    if (payload) {
-                        if (!adminName) adminName = payload.username;
-                        // Skip logging for user 'manhit'
-                        if (payload.username === 'manhit') {
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            // Legacy fallback if no JWT or role not found in JWT
-            if (!adminName) {
-                adminName = await getAdminFromCookie(request);
-            }
-        }
-
-        const detailsStr = details
-            ? (typeof details === 'object' ? JSON.stringify(details) : details)
-            : null;
-
-        await pool.query<ResultSetHeader>(
-            `INSERT INTO admin_logs 
-                (admin_id, admin_name, action, target_type, target_id, details, ip_address, user_agent) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [adminId, adminName || 'System', action, targetType, targetId?.toString() || null, detailsStr, ipAddress, userAgent]
-        );
-
-        return true;
-    } catch (error) {
-        console.error('[ADMIN_LOG] Error logging action:', error);
-        return false;
-    }
+export async function logAdminAction(_params: LogParams): Promise<boolean> {
+    // Admin activity logging is intentionally disabled.
+    return true;
 }
 
 /**

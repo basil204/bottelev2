@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Mail, Trash2, RefreshCw, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Mail, Trash2, RefreshCw, Clock, CheckCircle, XCircle, Minus, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +60,7 @@ export default function GmailEduPage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [statusFilter, setStatusFilter] = useState<string>('');
+    const [savingSold, setSavingSold] = useState(false);
 
     const fetchAccounts = async () => {
         try {
@@ -93,6 +94,28 @@ export default function GmailEduPage() {
             setSettings(data);
         } catch (error) {
             console.error('Error fetching settings:', error);
+        }
+    };
+
+    const updateSoldCount = async (nextValue: number) => {
+        const soldCount = Math.max(0, Math.trunc(nextValue));
+        setStats(current => ({ ...current, sold: soldCount }));
+        setSavingSold(true);
+        try {
+            const response = await fetch('/api/gmail-edu', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sold_count: soldCount }),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Không thể cập nhật số Gmail EDU đã bán');
+            }
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Không thể cập nhật số đã bán');
+            fetchAccounts();
+        } finally {
+            setSavingSold(false);
         }
     };
 
@@ -144,7 +167,7 @@ export default function GmailEduPage() {
             case 'available':
                 return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" /> {t('gmail_edu.status_available')}</span>;
             case 'sold':
-                return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"><Clock className="w-3 h-3 mr-1" /> {t('gmail_edu.status_sold')}</span>;
+                return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><Clock className="w-3 h-3 mr-1" /> {t('gmail_edu.status_sold')}</span>;
             case 'deleted':
                 return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" /> {t('gmail_edu.status_deleted')}</span>;
             default:
@@ -185,10 +208,14 @@ export default function GmailEduPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">{t('gmail_edu.sold')}</CardTitle>
-                        <Clock className="h-4 w-4 text-blue-500" />
+                        <Clock className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-600">{stats.sold}</div>
+                        <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+                            <button type="button" onClick={() => updateSoldCount(stats.sold - 1)} disabled={savingSold || stats.sold <= 0} className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white disabled:opacity-35" aria-label="Giảm số Gmail EDU đã bán"><Minus className="h-4 w-4" /></button>
+                            <input type="number" min="0" value={stats.sold} onChange={(event) => setStats(current => ({ ...current, sold: Math.max(0, Number(event.target.value)) }))} onBlur={(event) => updateSoldCount(Number(event.target.value))} className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-xl font-bold text-emerald-700 shadow-none focus:ring-0" aria-label="Số Gmail EDU đã bán" />
+                            <button type="button" onClick={() => updateSoldCount(stats.sold + 1)} disabled={savingSold} className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 hover:bg-white hover:text-emerald-700 disabled:opacity-35" aria-label="Tăng số Gmail EDU đã bán"><Plus className="h-4 w-4" /></button>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card>

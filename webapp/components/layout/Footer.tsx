@@ -120,12 +120,12 @@ export function Footer() {
     };
 
     return (
-        <footer className="border-t border-white/5 bg-zinc-950/20 backdrop-blur-sm px-6 py-3.5">
+        <footer className="border-t border-zinc-200/70 bg-white/60 backdrop-blur-sm px-6 py-3.5">
             <div className="flex items-center justify-center">
                 <button
                     onClick={handleRequestLocation}
                     disabled={loading}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.01] border border-white/5 hover:border-white/10 hover:bg-white/[0.03] transition-all duration-200 text-xs text-slate-400 hover:text-slate-200 group cursor-pointer"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-zinc-200/70 hover:border-zinc-200 hover:bg-zinc-100/80 transition-all duration-200 text-xs text-zinc-500 hover:text-zinc-800 group cursor-pointer"
                     title="Nhấp để chia sẻ vị trí"
                 >
                     {loading ? (
@@ -137,10 +137,10 @@ export function Footer() {
                         <span className="text-red-400">{error}</span>
                     ) : location ? (
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5 text-left">
-                            <span className="font-medium text-slate-300">
+                            <span className="font-medium text-zinc-700">
                                 {location.display_name}
                             </span>
-                            <span className="text-slate-500 font-mono">
+                            <span className="text-zinc-500 font-mono">
                                 ({location.lat}, {location.lon})
                             </span>
                         </div>

@@ -16,12 +16,50 @@ export async function GET(request: Request) {
         });
 
         const [rows] = await pool.query<RowDataPacket[]>(
-            `SELECT p.*, c.name as category_name 
+            `SELECT p.*, c.name as category_name,
+                    GREATEST(0, COALESCE(s.real_sold, 0) + COALESCE(p.sold_adjustment, 0)) AS sold_count,
+                    COALESCE(s.real_sold, 0) AS real_sold
              FROM products p 
              LEFT JOIN categories c ON p.category_id = c.id 
+             LEFT JOIN (
+                SELECT product_id, COUNT(*) AS real_sold
+                FROM accounts WHERE status = 'sold' GROUP BY product_id
+             ) s ON s.product_id = p.id
              ORDER BY p.priority DESC, p.id DESC`
         );
         return NextResponse.json(rows);
+    } catch (error) {
+        console.error(error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+export async function PATCH(request: Request) {
+    try {
+        const { id, sold_count } = await request.json();
+        const target = Math.max(0, Math.trunc(Number(sold_count)));
+        if (!id || !Number.isFinite(target)) {
+            return NextResponse.json({ error: 'Invalid product or sold count' }, { status: 400 });
+        }
+
+        const [rows] = await pool.query<RowDataPacket[]>(
+            `SELECT COUNT(*) AS real_sold FROM accounts WHERE product_id = ? AND status = 'sold'`,
+            [id]
+        );
+        const realSold = Number(rows[0]?.real_sold || 0);
+        await pool.query('UPDATE products SET sold_adjustment = ? WHERE id = ?', [target - realSold, id]);
+
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'UPDATE',
+            targetType: 'PRODUCT',
+            targetId: id,
+            details: { sold_count: target, real_sold: realSold },
+            request
+        });
+
+        return NextResponse.json({ success: true, sold_count: target, real_sold: realSold });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

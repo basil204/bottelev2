@@ -318,7 +318,7 @@ export default function SettingsPage() {
                                 <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800 mb-4">
                                     <div>
                                         <div className="font-medium text-white">{t('settings.auto_deposit')}</div>
-                                        <div className="text-sm text-slate-400">{t('settings.auto_deposit_desc')}</div>
+                                        <div className="text-sm text-zinc-500">{t('settings.auto_deposit_desc')}</div>
                                     </div>
                                     <Switch
                                         checked={settings.mb_auto_deposit}
@@ -334,7 +334,7 @@ export default function SettingsPage() {
                                             <select
                                                 value={settings.active_bank}
                                                 onChange={(e) => handleChange('active_bank', e.target.value)}
-                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                             >
                                                 <option value="viettel">ViettelPay (Sieuthicode)</option>
                                                 <option value="vcb">Vietcombank & VietQR (Sieuthicode)</option>
@@ -345,7 +345,7 @@ export default function SettingsPage() {
                                                 <option value="vp">VPBank & VietQR (Sieuthicode)</option>
                                                 <option value="timo">Timo & VietQR (Sieuthicode)</option>
                                             </select>
-                                            <p className="text-xs text-slate-400 mt-1">Hệ thống Bot Telegram chỉ kích hoạt nhận tiền duy nhất ngân hàng được chọn tại đây.</p>
+                                            <p className="text-xs text-zinc-500 mt-1">Hệ thống Bot Telegram chỉ kích hoạt nhận tiền duy nhất ngân hàng được chọn tại đây.</p>
                                         </div>
 
                                         <div>
@@ -353,7 +353,7 @@ export default function SettingsPage() {
                                             <select
                                                 value={configuringBank}
                                                 onChange={(e) => setConfiguringBank(e.target.value as any)}
-                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                             >
                                                 <option value="viettel">ViettelPay</option>
                                                 <option value="vcb">Vietcombank & VietQR</option>
@@ -364,7 +364,7 @@ export default function SettingsPage() {
                                                 <option value="vp">VPBank & VietQR</option>
                                                 <option value="timo">Timo & VietQR</option>
                                             </select>
-                                            <p className="text-xs text-slate-400 mt-1">Cài đặt thông tin tài khoản cho ngân hàng được chọn để lưu trữ trước khi bật.</p>
+                                            <p className="text-xs text-zinc-500 mt-1">Cài đặt thông tin tài khoản cho ngân hàng được chọn để lưu trữ trước khi bật.</p>
                                         </div>
                                     </div>
                                 )}
@@ -375,27 +375,27 @@ export default function SettingsPage() {
                                         <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
                                             📱 {t('settings.viettel_config')}
                                         </div>
-                                        <div className="text-sm text-slate-400 mb-4">
+                                        <div className="text-sm text-zinc-500 mb-4">
                                             {t('settings.viettel_desc')}
                                         </div>
                                         <div className="space-y-3">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Token Viettel (Sieuthicode)</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Token Viettel (Sieuthicode)</label>
                                                 <input
                                                     type="text"
                                                     value={settings.viettel_token}
                                                     onChange={(e) => handleChange('viettel_token', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="Token Viettel từ Sieuthicode..."
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản Viettel Money (STK)</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Số tài khoản Viettel Money (STK)</label>
                                                 <input
                                                     type="text"
                                                     value={settings.viettel_account}
                                                     onChange={(e) => handleChange('viettel_account', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="Số điện thoại Viettel Money..."
                                                 />
                                             </div>
@@ -407,10 +407,10 @@ export default function SettingsPage() {
                                 {settings.mb_auto_deposit && configuringBank !== 'viettel' && (
                                     (() => {
                                         const bankDetails: Record<string, { name: string; color: string; tokenKey: keyof Settings; accountKey: keyof Settings }> = {
-                                            vcb: { name: 'Vietcombank', color: 'bg-blue-900/20 border-blue-800 text-blue-400', tokenKey: 'vcb_token', accountKey: 'vcb_account' },
-                                            tpb: { name: 'TPBank', color: 'bg-purple-900/20 border-purple-800 text-purple-400', tokenKey: 'tpb_token', accountKey: 'tpb_account' },
+                                            vcb: { name: 'Vietcombank', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'vcb_token', accountKey: 'vcb_account' },
+                                            tpb: { name: 'TPBank', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'tpb_token', accountKey: 'tpb_account' },
                                             mb: { name: 'MBBank', color: 'bg-cyan-900/20 border-cyan-800 text-cyan-400', tokenKey: 'mb_token', accountKey: 'mb_account' },
-                                            acb: { name: 'ACB', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-400', tokenKey: 'acb_token', accountKey: 'acb_account' },
+                                            acb: { name: 'ACB', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'acb_token', accountKey: 'acb_account' },
                                             tcb: { name: 'Techcombank', color: 'bg-red-900/20 border-red-800 text-red-400', tokenKey: 'tcb_token', accountKey: 'tcb_account' },
                                             vp: { name: 'VPBank', color: 'bg-green-900/20 border-green-800 text-green-400', tokenKey: 'vp_token', accountKey: 'vp_account' },
                                             timo: { name: 'Timo', color: 'bg-orange-900/20 border-orange-800 text-orange-400', tokenKey: 'timo_token', accountKey: 'timo_account' }
@@ -422,37 +422,37 @@ export default function SettingsPage() {
                                                 <div className={`font-medium mb-2 flex items-center gap-2 ${detail.color.split(' ')[2]}`}>
                                                     🏦 Cấu hình {detail.name} & VietQR (Sieuthicode)
                                                 </div>
-                                                <div className="text-sm text-slate-400 mb-4">
+                                                <div className="text-sm text-zinc-500 mb-4">
                                                     Cấu hình token {detail.name} từ Sieuthicode và thông tin số tài khoản {detail.name} để nhận chuyển khoản.
                                                 </div>
                                                 <div className="space-y-3">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Token {detail.name} (Sieuthicode)</label>
+                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Token {detail.name} (Sieuthicode)</label>
                                                         <input
                                                             type="text"
                                                             value={settings[detail.tokenKey] as string}
                                                             onChange={(e) => handleChange(detail.tokenKey, e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                             placeholder={`Token ${detail.name} từ Sieuthicode...`}
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Số tài khoản ngân hàng (STK)</label>
+                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Số tài khoản ngân hàng (STK)</label>
                                                         <input
                                                             type="text"
                                                             value={settings[detail.accountKey] as string}
                                                             onChange={(e) => handleChange(detail.accountKey, e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                             placeholder={`Số tài khoản ${detail.name} nhận tiền...`}
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-1">Tên chủ tài khoản (Không dấu - Dùng chung)</label>
+                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Tên chủ tài khoản (Không dấu - Dùng chung)</label>
                                                         <input
                                                             type="text"
                                                             value={settings.vietqr_account_name}
                                                             onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                             placeholder="Ví dụ: NGUYEN VAN A..."
                                                         />
                                                     </div>
@@ -465,28 +465,28 @@ export default function SettingsPage() {
                                 {/* Deposit Configuration */}
                                 <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800 mt-4">
                                     <div className="font-medium text-white mb-2">💰 {t('settings.deposit_settings')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.deposit_settings_desc')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.deposit_settings_desc')}</div>
                                     <div className="space-y-3">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.min_deposit')}</label>
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.min_deposit')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.min_deposit}
                                                 onChange={(e) => handleChange('min_deposit', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                 placeholder="50000"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">💵 {t('settings.exchange_rate')}</label>
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">💵 {t('settings.exchange_rate')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.exchange_rate}
                                                 onChange={(e) => handleChange('exchange_rate', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                 placeholder="26000"
                                             />
-                                            <div className="text-xs text-slate-500 mt-1">{t('settings.exchange_rate_hint')}</div>
+                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.exchange_rate_hint')}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -503,7 +503,7 @@ export default function SettingsPage() {
                                     <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
                                         <div>
                                             <div className="font-medium text-white">{t('settings.gmail_edu_enable')}</div>
-                                            <div className="text-sm text-slate-400">{t('settings.gmail_edu_enable_desc')}</div>
+                                            <div className="text-sm text-zinc-500">{t('settings.gmail_edu_enable_desc')}</div>
                                         </div>
                                         <Switch
                                             checked={settings.gmail_edu_enabled}
@@ -513,44 +513,44 @@ export default function SettingsPage() {
 
                                     <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_price')}</label>
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_price')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.gmail_edu_price}
                                                 onChange={(e) => handleChange('gmail_edu_price', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                 placeholder="10000"
                                             />
-                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_price_hint')}</div>
+                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_price_hint')}</div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_domain')}</label>
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_domain')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.gmail_edu_domain}
                                                 onChange={(e) => handleChange('gmail_edu_domain', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                 placeholder="suafpoly.app"
                                             />
-                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_domain_hint')}</div>
+                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_domain_hint')}</div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.gmail_edu_delete_hours')}</label>
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_delete_hours')}</label>
                                             <input
                                                 type="number"
                                                 value={settings.gmail_edu_delete_hours}
                                                 onChange={(e) => handleChange('gmail_edu_delete_hours', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                 placeholder="1"
                                             />
-                                            <div className="text-xs text-slate-500 mt-1">{t('settings.gmail_edu_delete_hours_hint')}</div>
+                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_delete_hours_hint')}</div>
                                         </div>
                                     </div>
 
                                     <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                         <div>
                                             <div className="font-medium text-white mb-2">🔑 Gmail Checker API Keys</div>
-                                            <div className="text-sm text-slate-400 mb-4">Các API key dùng để check live Gmail. Hệ thống sẽ chọn ngẫu nhiên.</div>
+                                            <div className="text-sm text-zinc-500 mb-4">Các API key dùng để check live Gmail. Hệ thống sẽ chọn ngẫu nhiên.</div>
                                         </div>
                                         <div className="flex gap-2">
                                             <Input
@@ -607,7 +607,7 @@ export default function SettingsPage() {
                                                 ))}
                                             </div>
                                         )}
-                                        <div className="text-xs text-slate-500">Key lỗi sẽ tự động bị xóa trong quá trình check.</div>
+                                        <div className="text-xs text-zinc-500">Key lỗi sẽ tự động bị xóa trong quá trình check.</div>
                                     </div>
                                 </div>
                             </div>
@@ -617,29 +617,29 @@ export default function SettingsPage() {
                             {/* Admin Login Accounts - Only visible to Super Admin */}
                             {adminRole === 'super_admin' && (
                                 <>
-                                    <div className="grid gap-4 p-4 bg-blue-900/20 rounded-lg border border-blue-800">
+                                    <div className="grid gap-4 p-4 bg-emerald-900/20 rounded-lg border border-emerald-800">
                                         <div>
-                                            <div className="font-medium text-blue-400 mb-2">👤 Tài khoản Admin 1 (Super Admin)</div>
-                                            <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập chính - có toàn quyền quản trị</div>
+                                            <div className="font-medium text-emerald-700 mb-2">👤 Tài khoản Admin 1 (Super Admin)</div>
+                                            <div className="text-sm text-zinc-500 mb-4">Tài khoản đăng nhập chính - có toàn quyền quản trị</div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Username</label>
                                                 <input
                                                     type="text"
                                                     value={settings.admin_username}
                                                     onChange={(e) => handleChange('admin_username', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="admin"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Password</label>
                                                 <input
                                                     type="password"
                                                     value={settings.admin_password}
                                                     onChange={(e) => handleChange('admin_password', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="••••••••"
                                                 />
                                             </div>
@@ -649,26 +649,26 @@ export default function SettingsPage() {
                                     <div className="grid gap-4 p-4 bg-green-900/20 rounded-lg border border-green-800">
                                         <div>
                                             <div className="font-medium text-green-400 mb-2">👤 Tài khoản Admin 2 (Admin thường)</div>
-                                            <div className="text-sm text-slate-400 mb-4">Tài khoản đăng nhập phụ - không có quyền quản lý tài khoản admin</div>
+                                            <div className="text-sm text-zinc-500 mb-4">Tài khoản đăng nhập phụ - không có quyền quản lý tài khoản admin</div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Username</label>
                                                 <input
                                                     type="text"
                                                     value={settings.admin_username2}
                                                     onChange={(e) => handleChange('admin_username2', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="admin2"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Password</label>
                                                 <input
                                                     type="password"
                                                     value={settings.admin_password2}
                                                     onChange={(e) => handleChange('admin_password2', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                                     placeholder="••••••••"
                                                 />
                                             </div>
@@ -681,39 +681,39 @@ export default function SettingsPage() {
                             {adminRole !== 'super_admin' && (
                                 <div className="p-4 bg-yellow-900/20 rounded-lg border border-yellow-800">
                                     <div className="font-medium text-yellow-400 mb-2">⚠️ Quyền hạn giới hạn</div>
-                                    <div className="text-sm text-slate-400">Bạn đang đăng nhập với tài khoản Admin thường. Chỉ Super Admin mới có quyền quản lý tài khoản đăng nhập admin.</div>
+                                    <div className="text-sm text-zinc-500">Bạn đang đăng nhập với tài khoản Admin thường. Chỉ Super Admin mới có quyền quản lý tài khoản đăng nhập admin.</div>
                                 </div>
                             )}
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">🔐 {t('settings.change_password')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.change_password_desc')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.change_password_desc')}</div>
                                 </div>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.current_password')}</label>
+                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.current_password')}</label>
                                         <input
                                             type="password"
                                             id="currentPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                             placeholder={t('settings.current_password_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.new_password')}</label>
+                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.new_password')}</label>
                                         <input
                                             type="password"
                                             id="newPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                             placeholder={t('settings.new_password_placeholder')}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.confirm_password')}</label>
+                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.confirm_password')}</label>
                                         <input
                                             type="password"
                                             id="confirmPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                             placeholder={t('settings.confirm_password_placeholder')}
                                         />
                                     </div>
@@ -764,16 +764,16 @@ export default function SettingsPage() {
 
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
-                                    <div className="font-medium text-white mb-2">🤖 {t('settings.telegram_bot_token')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.telegram_bot_token_desc')}</div>
+                                    <div className="font-medium text-white mb-2">{t('settings.telegram_bot_token')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.telegram_bot_token_desc')}</div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Bot Token</label>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Bot Token</label>
                                     <input
                                         type="password"
                                         value={settings.telegram_bot_token}
                                         onChange={(e) => handleChange('telegram_bot_token', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
                                         placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
                                     />
                                 </div>
@@ -782,15 +782,15 @@ export default function SettingsPage() {
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">🏠 {t('settings.shop_name')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.shop_name_desc')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.shop_name_desc')}</div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Shop Name</label>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Shop Name</label>
                                     <input
                                         type="text"
                                         value={settings.shop_name}
                                         onChange={(e) => handleChange('shop_name', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                         placeholder="DUCVIETSTORE"
                                     />
                                 </div>
@@ -799,15 +799,15 @@ export default function SettingsPage() {
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">👥 {t('settings.support_group')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.support_group_desc')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.support_group_desc')}</div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Telegram Group Link</label>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Telegram Group Link</label>
                                     <input
                                         type="text"
                                         value={settings.telegram_group_link}
                                         onChange={(e) => handleChange('telegram_group_link', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                         placeholder="https://t.me/+xxxxxx"
                                     />
                                 </div>
@@ -817,14 +817,14 @@ export default function SettingsPage() {
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">👤 Admin Telegram IDs</div>
-                                    <div className="text-sm text-slate-400 mb-4">Telegram ID của các admin có quyền quản trị bot (hỗ trợ nhiều ID)</div>
+                                    <div className="text-sm text-zinc-500 mb-4">Telegram ID của các admin có quyền quản trị bot (hỗ trợ nhiều ID)</div>
                                 </div>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
                                         value={newAdminId}
                                         onChange={(e) => setNewAdminId(e.target.value.replace(/\D/g, ''))}
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                         placeholder="Nhập Telegram ID (VD: 123456789)"
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && newAdminId) {
@@ -856,7 +856,7 @@ export default function SettingsPage() {
                                         {settings.admin_ids.map((id) => (
                                             <span
                                                 key={id}
-                                                className="inline-flex items-center gap-1 px-3 py-1 bg-blue-500/20 border border-blue-500 rounded-full text-sm text-blue-400"
+                                                className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500/20 border border-emerald-500 rounded-full text-sm text-emerald-700"
                                             >
                                                 {id}
                                                 <button
@@ -870,7 +870,7 @@ export default function SettingsPage() {
                                         ))}
                                     </div>
                                 )}
-                                <div className="text-xs text-slate-500">Nhấn Enter hoặc bấm Thêm để thêm ID. Bấm × để xóa.</div>
+                                <div className="text-xs text-zinc-500">Nhấn Enter hoặc bấm Thêm để thêm ID. Bấm × để xóa.</div>
                             </div>
                         </TabsContent>
 
@@ -878,15 +878,15 @@ export default function SettingsPage() {
                             <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
                                 <div>
                                     <div className="font-medium text-white mb-2">💎 {t('settings.usdt_wallet')}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{t('settings.usdt_wallet_desc')}</div>
+                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.usdt_wallet_desc')}</div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">{t('settings.usdt_wallet_address')}</label>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.usdt_wallet_address')}</label>
                                     <input
                                         type="text"
                                         value={settings.usdt_trc20_wallet}
                                         onChange={(e) => handleChange('usdt_trc20_wallet', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
                                         placeholder="TJErNxge2EkC2PAkXy9hBag4x5kWPJNKRJ"
                                     />
                                 </div>

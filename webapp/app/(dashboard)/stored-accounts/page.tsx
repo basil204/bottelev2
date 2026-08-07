@@ -171,7 +171,7 @@ export default function StoredAccountsPage() {
     const fetchAccounts = useCallback(async () => {
         try {
             setLoading(true);
-            let url = '/api/stored-accounts?';
+            const url = '/api/stored-accounts?';
             const params = new URLSearchParams();
 
             if (filterType !== 'all') params.append('type', filterType);
@@ -489,13 +489,13 @@ export default function StoredAccountsPage() {
                         </Card>
                         <Card>
                             <CardContent className="pt-4">
-                                <div className="text-2xl font-bold text-blue-600">{stats.inStock}</div>
+                                <div className="text-2xl font-bold text-emerald-600">{stats.inStock}</div>
                                 <p className="text-xs text-muted-foreground">Còn hàng</p>
                             </CardContent>
                         </Card>
                         <Card>
                             <CardContent className="pt-4">
-                                <div className="text-2xl font-bold text-purple-600">{stats.sold}</div>
+                                <div className="text-2xl font-bold text-emerald-600">{stats.sold}</div>
                                 <p className="text-xs text-muted-foreground">Đã bán</p>
                             </CardContent>
                         </Card>
@@ -680,8 +680,8 @@ export default function StoredAccountsPage() {
                                         <span className="text-sm text-muted-foreground font-medium">
                                             Đã chọn {selectedIds.size}
                                         </span>
-                                        <Button size="sm" variant="outline" className="h-7 text-xs border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-700 dark:hover:bg-purple-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'sold')}>Đánh dấu Đã bán</Button>
-                                        <Button size="sm" variant="outline" className="h-7 text-xs border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:hover:bg-blue-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'in_stock')}>Đánh dấu Còn hàng</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:hover:bg-emerald-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'sold')}>Đánh dấu Đã bán</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:hover:bg-emerald-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'in_stock')}>Đánh dấu Còn hàng</Button>
                                         <Button size="sm" variant="outline" className="h-7 text-xs border-teal-300 text-teal-600 hover:bg-teal-50 dark:border-teal-700 dark:hover:bg-teal-900/20" onClick={() => handleBulkUpdateStatus('bot_status', 'uploaded')}>Đã lên Bot</Button>
                                         <Button size="sm" variant="outline" className="h-7 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:hover:bg-orange-900/20" onClick={() => handleBulkUpdateStatus('bot_status', 'not_uploaded')}>Chưa lên Bot</Button>
                                         <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleBulkDelete}>
@@ -750,7 +750,7 @@ export default function StoredAccountsPage() {
                                                                 />
                                                             </TableCell>
                                                             <TableCell>
-                                                                <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
+                                                                <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-700 whitespace-nowrap">
                                                                     {account.type_name}
                                                                 </span>
                                                             </TableCell>
@@ -887,8 +887,8 @@ export default function StoredAccountsPage() {
                                                                     value={account.sale_status}
                                                                     onValueChange={(val: string) => handleUpdateStatus(account.id, 'sale_status', val)}
                                                                 >
-                                                                    <SelectTrigger className={`w-[72px] h-6 text-[11px] ${account.sale_status === 'sold' ? 'border-purple-500 text-purple-600' :
-                                                                        'border-blue-500 text-blue-600'
+                                                                    <SelectTrigger className={`w-[72px] h-6 text-[11px] ${account.sale_status === 'sold' ? 'border-emerald-500 text-emerald-600' :
+                                                                        'border-emerald-500 text-emerald-600'
                                                                         }`}>
                                                                         <SelectValue />
                                                                     </SelectTrigger>
@@ -1085,7 +1085,7 @@ export default function StoredAccountsPage() {
                                                     return (
                                                         <TableRow key={account.id}>
                                                             <TableCell>
-                                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-700">
                                                                     {account.type_name}
                                                                 </span>
                                                             </TableCell>
@@ -1115,7 +1115,7 @@ export default function StoredAccountsPage() {
                                                                 </code>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-700">
                                                                     <User className="w-3 h-3" />
                                                                     {account.buyer_username || 'N/A'}
                                                                 </span>

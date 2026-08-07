@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Shuffle keys to pick a random one
-        let shuffledKeys = [...apiKeys].sort(() => Math.random() - 0.5);
+        const shuffledKeys = [...apiKeys].sort(() => Math.random() - 0.5);
         let lastError = 'Không thể check mail với các key hiện tại';
         let successResponse = null;
 

@@ -10,16 +10,16 @@ export function Button({ className, variant = 'default', size = 'default', ...pr
     return (
         <button
             className={clsx(
-                "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 cursor-pointer",
+                "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-700/10 disabled:pointer-events-none disabled:opacity-50 cursor-pointer active:scale-[0.98]",
                 {
-                    'bg-primary text-primary-foreground shadow hover:bg-primary/90': variant === 'default',
-                    'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90': variant === 'destructive',
-                    'border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground': variant === 'outline',
+                    'bg-[#17623f] text-white shadow-[0_10px_25px_-16px_rgba(23,98,63,.8)] hover:bg-[#1d714a]': variant === 'default',
+                    'bg-red-600 text-white shadow-sm hover:bg-red-700': variant === 'destructive',
+                    'border border-zinc-200 bg-white text-zinc-700 shadow-sm hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950': variant === 'outline',
                     'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80': variant === 'secondary',
-                    'hover:bg-accent hover:text-accent-foreground': variant === 'ghost',
+                    'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950': variant === 'ghost',
                     'text-primary underline-offset-4 hover:underline': variant === 'link',
-                    'h-9 px-4 py-2': size === 'default',
-                    'h-8 rounded-md px-3 text-xs': size === 'sm',
+                    'h-10 px-4 py-2': size === 'default',
+                    'h-9 rounded-lg px-3 text-xs': size === 'sm',
                     'h-10 rounded-md px-8': size === 'lg',
                     'h-9 w-9': size === 'icon',
                 },

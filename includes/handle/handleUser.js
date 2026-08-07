@@ -14,11 +14,16 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
   // Chỉ hiển thị tiêu đề menu
   const text = t('menu_title', lang);
+  const serviceRows = [
+    [{ text: '📧 Gmail EDU' }],
+    [{ text: '🎬 CapCut Workspace' }]
+  ];
+
   const opts = {
     reply_markup: {
       keyboard: [
         [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-        [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+        ...serviceRows,
         [{ text: t('history', lang) }, { text: t('change_language', lang) }],
         [{ text: t('admin_group', lang) }]
       ],

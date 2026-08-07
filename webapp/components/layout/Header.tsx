@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { LanguageSwitcher } from "../LanguageSwitcher";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { LogOut, User, ChevronDown, Command } from "lucide-react";
 
 export function Header() {
     const pathname = usePathname();
@@ -14,8 +14,9 @@ export function Header() {
     const [loggingOut, setLoggingOut] = useState(false);
 
     // Simple mapping or dynamic translation
-    const key = pathname === "/" ? "dashboard" : pathname.split("/")[1];
-    const pageName = t(`sidebar.${key}`) || (pathname === "/" ? "Dashboard" : pathname.split("/")[1].charAt(0).toUpperCase() + pathname.split("/")[1].slice(1));
+    const currentPath = pathname || "/";
+    const key = currentPath === "/" ? "dashboard" : currentPath.split("/")[1];
+    const pageName = t(`sidebar.${key}`) || (currentPath === "/" ? "Dashboard" : key.charAt(0).toUpperCase() + key.slice(1));
 
     const handleLogout = async () => {
         setLoggingOut(true);
@@ -30,24 +31,30 @@ export function Header() {
     };
 
     return (
-        <header className="h-16 border-b border-white/5 bg-zinc-950/20 backdrop-blur-md sticky top-0 z-30 w-full flex items-center justify-between px-6 md:px-8">
+        <header className="sticky top-0 z-30 flex h-[4.5rem] w-full items-center justify-between border-b border-zinc-200/80 bg-[#fafbf8]/90 px-4 backdrop-blur-xl md:px-8">
             {/* Page Title */}
-            <div className="flex items-center gap-4 md:pl-0 pl-12">
-                <h2 className="text-md font-semibold tracking-wide text-slate-200 uppercase">{pageName}</h2>
+            <div className="flex items-center gap-3 pl-12 md:pl-0">
+                <div className="hidden h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/80 bg-zinc-100/80 md:flex">
+                    <Command className="h-4 w-4 text-emerald-700" />
+                </div>
+                <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Không gian quản trị</p>
+                    <h2 className="text-sm font-semibold tracking-tight text-zinc-900">{pageName}</h2>
+                </div>
             </div>
             
             {/* Header Actions */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2.5">
                 <LanguageSwitcher />
                 
                 {/* User Dropdown */}
                 <div className="relative">
                     <button
                         onClick={() => setShowDropdown(!showDropdown)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10 transition-all text-sm text-slate-300 hover:text-white"
+                        className="flex h-9 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100/80 px-2.5 text-sm text-zinc-700 transition-all hover:border-zinc-300 hover:bg-zinc-200/70 active:scale-[0.98]"
                     >
-                        <div className="w-5 h-5 rounded-full bg-violet-600/20 flex items-center justify-center border border-violet-500/20">
-                            <User className="w-3 h-3 text-violet-400" />
+                        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10">
+                            <User className="h-3 w-3 text-emerald-700" />
                         </div>
                         <ChevronDown className="w-3.5 h-3.5 opacity-60" />
                     </button>
@@ -61,9 +68,9 @@ export function Header() {
                             />
                             
                             {/* Glass Dropdown list */}
-                            <div className="absolute right-0 mt-2 w-48 bg-zinc-950/90 border border-white/10 backdrop-blur-xl rounded-xl shadow-xl z-50 py-1.5 overflow-hidden">
-                                <div className="px-3 py-2 border-b border-white/5 text-xs text-slate-500 font-medium">
-                                    Admin Session
+                            <div className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white/95 py-1.5 shadow-[0_18px_50px_-20px_rgba(0,0,0,.8)] backdrop-blur-xl">
+                                <div className="px-3 py-2 border-b border-zinc-200/70 text-xs text-zinc-500 font-medium">
+                                    Phiên quản trị
                                 </div>
                                 <button
                                     onClick={handleLogout}

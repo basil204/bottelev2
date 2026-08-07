@@ -4,7 +4,7 @@ import { RowDataPacket } from 'mysql2';
 import { sendPhoto } from '@/lib/telegram';
 
 // Kiểm tra lỗi Telegram có phải user đã block/deactivated không
-function isUserBlockedError(response: Response | null, error: any): boolean {
+function isUserBlockedError(response: Response | null, error: unknown): boolean {
     // Telegram error codes:
     // 403 - Forbidden: bot was blocked by the user
     // 400 - Bad Request: chat not found (user deleted account)
@@ -12,7 +12,7 @@ function isUserBlockedError(response: Response | null, error: any): boolean {
         return true;
     }
     if (error) {
-        const msg = String(error.message || error).toLowerCase();
+        const msg = String(error instanceof Error ? error.message : error).toLowerCase();
         if (msg.includes('blocked') || msg.includes('chat not found') ||
             msg.includes('user is deactivated') || msg.includes('forbidden')) {
             return true;
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         let botToken = '';
         let botUsername = '';
 
-        settings.forEach((row: any) => {
+        settings.forEach((row) => {
             if (row.key === 'shop_name') shopName = row.value || 'SHOP';
             if (row.key === 'telegram_bot_token') botToken = row.value;
             if (row.key === 'bot_username') botUsername = row.value;
@@ -121,8 +121,8 @@ export async function POST(request: Request) {
                         fetchedPrice = productRows[0].price;
                     }
                 }
-            } catch (err: any) {
-                console.error('Error fetching product details for broadcast:', err.message);
+            } catch (err: unknown) {
+                console.error('Error fetching product details for broadcast:', err instanceof Error ? err.message : err);
             }
         }
 
@@ -159,6 +159,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
 
+        // Product broadcasts start with the product itself — no generic SHOP heading.
+        if (type === 'new_product') {
+            broadcastMessage = `🎁 Sản phẩm: ${productName}\n` +
+                `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}đ\n\n` +
+                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
+        } else if (type === 'stock_added') {
+            broadcastMessage = `🎁 Sản phẩm: ${productName} ${Number(fetchedPrice).toLocaleString('vi-VN')}đ\n` +
+                `➕ Vừa thêm: ${addedCount} tài khoản\n` +
+                `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
+                `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
+        }
+
         const imageUrl = body.imageUrl;
         let finalImageUrl = imageUrl;
         if (imageUrl && imageUrl.startsWith('/')) {
@@ -170,7 +182,7 @@ export async function POST(request: Request) {
         }
 
         // Build inline keyboard reply markup if bot username and product ID are present
-        let replyMarkup: any = undefined;
+        let replyMarkup: { inline_keyboard: Array<Array<{ text: string; url: string; style?: 'primary' | 'success' | 'danger' }>> } | undefined;
         if (botUsername && productId) {
             replyMarkup = {
                 inline_keyboard: [
@@ -183,6 +195,8 @@ export async function POST(request: Request) {
 
         // Gửi theo batch song song (25 tin/batch, delay 1s giữa các batch)
         // User nào block bot hoặc deactivated sẽ tự động bị xóa khỏi DB
+        if (replyMarkup) replyMarkup.inline_keyboard[0][0].style = 'primary';
+
         const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
             try {
                 if (finalImageUrl) {

@@ -11,6 +11,9 @@ export const config = {
     // Telegram
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || fileConfig.TELEGRAM_BOT_TOKEN,
     BOT_USERNAME: null, // Will be set in main.js
+    MINI_APP_URL: process.env.MINI_APP_URL || fileConfig.MINI_APP_URL || '',
+    CAPCUT_API_BASE: process.env.CAPCUT_API_BASE || fileConfig.CAPCUT_API_BASE || 'https://tienich.manhit.dev',
+    CAPCUT_PROXY_URL: process.env.CAPCUT_PROXY_URL || fileConfig.CAPCUT_PROXY_URL || '',
     ADMIN_IDS: (() => {
         let ids = process.env.ADMIN_IDS ? JSON.parse(process.env.ADMIN_IDS) : fileConfig.ADMIN_IDS || [];
         if (!Array.isArray(ids)) {

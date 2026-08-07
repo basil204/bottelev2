@@ -295,13 +295,13 @@ export default function BankHistoryPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+                <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Tháng này</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-blue-500" />
+                        <TrendingUp className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-blue-500">+{formatPrice(thisMonthSummary.totalCredit)}</div>
+                        <div className="text-2xl font-bold text-emerald-500">+{formatPrice(thisMonthSummary.totalCredit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             {thisMonthSummary.count} giao dịch nhận
                         </p>
@@ -321,13 +321,13 @@ export default function BankHistoryPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+                <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Đang lọc</CardTitle>
-                        <DollarSign className="h-4 w-4 text-purple-500" />
+                        <DollarSign className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-purple-500">+{formatPrice(filteredSummary.totalCredit)}</div>
+                        <div className="text-2xl font-bold text-emerald-500">+{formatPrice(filteredSummary.totalCredit)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
                             {filteredSummary.count} giao dịch
                         </p>
@@ -592,14 +592,14 @@ export default function BankHistoryPage() {
                                                         const bankBadges: Record<string, { label: string; style: string }> = {
                                                             VIETTEL: { label: 'ViettelPay', style: 'bg-red-500/10 text-red-400 border border-red-500/20' },
                                                             VCB: { label: 'Vietcombank', style: 'bg-green-500/10 text-green-400 border border-green-500/20' },
-                                                            TPB: { label: 'TPBank', style: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' },
+                                                            TPB: { label: 'TPBank', style: 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20' },
                                                             MB: { label: 'MBBank', style: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' },
-                                                            ACB: { label: 'ACB', style: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
+                                                            ACB: { label: 'ACB', style: 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20' },
                                                             TCB: { label: 'Techcombank', style: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' },
                                                             VP: { label: 'VPBank', style: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' },
                                                             TIMO: { label: 'Timo', style: 'bg-orange-500/10 text-orange-400 border border-orange-500/20' }
                                                         };
-                                                        const badge = bankBadges[tx.bank || ''] || { label: tx.bank || 'Unknown', style: 'bg-slate-500/10 text-slate-400 border border-slate-500/20' };
+                                                        const badge = bankBadges[tx.bank || ''] || { label: tx.bank || 'Unknown', style: 'bg-slate-500/10 text-zinc-500 border border-slate-500/20' };
                                                         return (
                                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.style}`}>
                                                                 {badge.label}

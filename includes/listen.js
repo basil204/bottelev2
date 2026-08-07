@@ -2,7 +2,7 @@ import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/h
 import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
-import { showChatGPTInfo, handleChatGPTEmailInput } from './handle/handleChatGPT.js';
+import { showCapCutMenu, startCapCutFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
 
 import {
   adminMenu,
@@ -98,7 +98,7 @@ export const registerListeners = (bot, config) => {
       reply_markup: {
         keyboard: [
           [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-          [{ text: lang === 'en' ? '📧 Gmail EDU' : '📧 Gmail EDU' }, { text: lang === 'en' ? '🤖 ChatGPT Pro' : '🤖 ChatGPT Pro' }],
+          [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
           [{ text: t('history', lang) }, { text: t('admin_group', lang) }],
           [{ text: t('change_language', lang) }]
         ],
@@ -181,10 +181,9 @@ export const registerListeners = (bot, config) => {
     await showGmailEduInfo(bot, msg.chat.id, user);
   });
 
-  // Command /chatgpt để mua slot ChatGPT Team
-  bot.onText(/^\/chatgpt/i, async (msg) => {
-    const user = await ensureUser(bot, msg);
-    await showChatGPTInfo(bot, msg.chat.id, user);
+  bot.onText(/^\/capcut/i, async (msg) => {
+    await ensureUser(bot, msg);
+    await showCapCutMenu(bot, msg.chat.id);
   });
 
   // Command /buymail gmail <số lượng> để mua Gmail nhanh
@@ -233,12 +232,16 @@ export const registerListeners = (bot, config) => {
       delCache(`waiting_usdt_amount_${msg.from.id}`);
       delCache(`chatgpt_waiting_${msg.from.id}`);
       delCache(`gmail_edu_waiting_${msg.from.id}`);
+      delCache(`capcut_flow_${msg.from.id}`);
       delCache(`waiting_trc20_amount_${msg.from.id}`);
       delCache(`waiting_trc20_hash_${msg.from.id}`);
       delCache(`trc20_amount_${msg.from.id}`);
       delCache(`waiting_payment_proof_${msg.from.id}`);
       return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
     }
+
+    const handledCapCut = await handleCapCutInput(bot, msg, config);
+    if (handledCapCut) return;
 
     // Check USDT amount input (new step for Bybit flow)
     const { handleUsdtAmountInput, handleTrc20AmountInput, handleTrc20HashInput } = await import('./handle/handleDeposit.js');
@@ -261,10 +264,6 @@ export const registerListeners = (bot, config) => {
     const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
     if (handledGmailEdu) return; // Đã xử lý input số lượng Gmail EDU
 
-    // Kiểm tra input email ChatGPT
-    const handledChatGPT = await handleChatGPTEmailInput(bot, msg, config);
-    if (handledChatGPT) return; // Đã xử lý input email ChatGPT
-
     // Kiểm tra manual order input (email/note)
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
@@ -272,7 +271,7 @@ export const registerListeners = (bot, config) => {
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
     if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
-    if (text === '🤖 ChatGPT Pro') return showChatGPTInfo(bot, msg.chat.id, user);
+    if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Xử lý nút đổi ngôn ngữ
@@ -478,6 +477,8 @@ export const registerListeners = (bot, config) => {
       }
 
       switch (action) {
+        case 'capcut_start':
+          return startCapCutFlow(bot, chatId, query.from.id);
         case 'select_lang':
           // Xử lý chọn ngôn ngữ lần đầu
           {
@@ -513,7 +514,7 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', selectedLang) }, { text: t('buy_product', selectedLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+                  [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
                   [{ text: t('history', selectedLang) }, { text: t('admin_group', selectedLang) }],
                   [{ text: t('change_language', selectedLang) }]
                 ],
@@ -544,7 +545,7 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', newLang) }, { text: t('buy_product', newLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: '🤖 ChatGPT Pro' }],
+                  [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
                   [{ text: t('history', newLang) }, { text: t('admin_group', newLang) }],
                   [{ text: t('change_language', newLang) }]
                 ],
@@ -707,6 +708,9 @@ export const registerListeners = (bot, config) => {
         case 'admin_complete_order':
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return adminCompleteManualOrder(bot, chatId, data.orderId, query.from);
+
+        case 'gmail_buy_again':
+          return showGmailEduInfo(bot, chatId, user);
 
         // Gmail EDU deposit options
         case 'gmail_deposit_bank':

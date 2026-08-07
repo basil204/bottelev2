@@ -27,6 +27,14 @@ interface Deposit {
     created_at: string;
 }
 
+const parseVndAmount = (value: string) => {
+    const normalized = value.trim().replace(/\s|₫|vnd/gi, '');
+    // MySQL DECIMAL thường trả về chuỗi dạng 100000.00; đây không phải hai số 0 của tiền VNĐ.
+    const withoutDecimalPart = normalized.replace(/[.,]00$/, '');
+    const digitsOnly = withoutDecimalPart.replace(/\D/g, '');
+    return Number.parseInt(digitsOnly, 10);
+};
+
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function DepositsPage() {
@@ -68,7 +76,7 @@ export default function DepositsPage() {
             case 'approved': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
             case 'pending': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
             case 'rejected': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-            default: return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400';
+            default: return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-zinc-500';
         }
     };
 
@@ -148,10 +156,10 @@ export default function DepositsPage() {
                                                                 // For now, if amount is 0, we MUST prompt.
                                                                 // If amount > 0, we can prompt with default value.
 
-                                                                const input = prompt('Nhập số tiền thực nhận (VNĐ):', deposit.amount.toString());
+                                                                const input = prompt('Nhập số tiền thực nhận (VNĐ):', Math.trunc(Number(deposit.amount) || 0).toString());
                                                                 if (input === null) return; // Cancelled
 
-                                                                const parsed = parseInt(input.replace(/\D/g, ''));
+                                                                const parsed = parseVndAmount(input);
                                                                 if (isNaN(parsed) || parsed <= 0) {
                                                                     alert('Số tiền không hợp lệ');
                                                                     return;

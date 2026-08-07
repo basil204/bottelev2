@@ -19,6 +19,18 @@ const contentKey = (token) => `content_${token}`;
 // Helper for 3-lang text
 const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
 
+const bankNotConfiguredMessage = (lang) => L(
+  lang,
+  'Hiện tại admin chưa cài đặt thông tin ngân hàng. Vui lòng quay lại sau hoặc liên hệ admin để được hỗ trợ.',
+  'Bank transfer is not configured by the admin yet. Please try again later or contact the admin for support.',
+  '管理员尚未配置银行转账信息。请稍后再试或联系管理员。'
+);
+
+const isBankConfigured = (bankConfig) => Boolean(
+  String(bankConfig?.bankCode || '').trim() &&
+  String(bankConfig?.accountNo || '').trim()
+);
+
 const buildQrUrl = (bankCode, accountNo, amount, content, accountName = null) => {
   let url = `https://img.vietqr.io/image/${bankCode}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(content)}`;
   if (accountName) {
@@ -160,6 +172,11 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
     console.error('Error fetching active_bank setting:', e);
   }
 
+  const bankConfig = await getBankConfig(config, activeBank);
+  if (!isBankConfigured(bankConfig)) {
+    return bot.sendMessage(chatId, bankNotConfiguredMessage(lang));
+  }
+
   setCache(`bank_selection_${userId}`, activeBank, 15 * 60 * 1000);
 
   // Directly ask for amount
@@ -175,6 +192,11 @@ export const selectBankMethod = async (bot, chatId, userId, bank) => {
   const { getUserByTelegram } = await import('../controllers/userController.js');
   const user = await getUserByTelegram(userId);
   const lang = user?.language || 'vi';
+
+  const bankConfig = await getBankConfig(globalConfig, bank);
+  if (!isBankConfigured(bankConfig)) {
+    return bot.sendMessage(chatId, bankNotConfiguredMessage(lang));
+  }
 
   setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
 
@@ -790,6 +812,10 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
 
   // Create VietQR
   const bankConfig = await getBankConfig(config, selectedBank);
+  if (!isBankConfigured(bankConfig)) {
+    delCache(`bank_selection_${msg.from.id}`);
+    return bot.sendMessage(msg.chat.id, bankNotConfiguredMessage(lang));
+  }
   const bankCode = bankConfig.bankCode;
   const accountNo = bankConfig.accountNo;
   const accountName = bankConfig.accountName;

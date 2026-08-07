@@ -1,7 +1,9 @@
+'use client';
+
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { X } from 'lucide-react';
-import { Button } from './button';
+import { X } from '@phosphor-icons/react';
 
 interface DialogProps {
     open: boolean;
@@ -13,31 +15,54 @@ interface DialogProps {
 }
 
 export function Dialog({ open, onOpenChange, children, title, description, className }: DialogProps) {
-    if (!open) return null;
+    React.useEffect(() => {
+        if (!open) return;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in-0">
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onOpenChange(false);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [open, onOpenChange]);
+
+    if (!open || typeof document === 'undefined') return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-zinc-950/35 p-4 backdrop-blur-md animate-in fade-in-0">
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={title ? 'dialog-title' : undefined}
                 className={clsx(
-                    "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full",
+                    "relative z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_30px_90px_-35px_rgba(0,0,0,.45)] duration-200",
                     className
                 )}
             >
-                <div className="flex flex-col space-y-1.5 text-center sm:text-left">
-                    {title && <h2 className="text-lg font-semibold leading-none tracking-tight">{title}</h2>}
-                    {description && <p className="text-sm text-muted-foreground">{description}</p>}
+                <div className="shrink-0 border-b border-zinc-100 px-5 py-5 pr-14 sm:px-6">
+                    {title && <h2 id="dialog-title" className="text-lg font-semibold leading-none tracking-tight text-zinc-900">{title}</h2>}
+                    {description && <p className="text-sm leading-6 text-zinc-500">{description}</p>}
                 </div>
 
-                {children}
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 [scrollbar-gutter:stable] sm:px-6 sm:pb-6">
+                    {children}
+                </div>
 
                 <button
                     onClick={() => onOpenChange(false)}
-                    className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+                    className="absolute right-4 top-4 rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
                 >
                     <X className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
+                    <span className="sr-only">Đóng</span>
                 </button>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

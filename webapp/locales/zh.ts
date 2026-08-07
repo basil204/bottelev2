@@ -24,6 +24,8 @@ export const zh = {
         dashboard: '仪表盘',
         users: '用户',
         products: '产品',
+        categories: '分类',
+        'stored-accounts': '账号库存',
         orders: '订单',
         settings: '设置',
         deposits: '充值',

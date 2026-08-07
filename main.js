@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
-import { initDb, query } from './includes/database/index.js';
+import { initDb, query, closeDb } from './includes/database/index.js';
 import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
 import { startGmailCleanup } from './includes/services/gmailCleanup.js';
@@ -12,14 +12,6 @@ import { config } from './config.js';
 const bootstrap = async () => {
   // Initialize DB first
   await initDb(config);
-
-  // Auto-migrate database schema
-  try {
-    const { default: migrate } = await import('./scripts/migration_add_columns.js');
-    await migrate();
-  } catch (error) {
-    console.error('❌ Auto-migration failed:', error);
-  }
 
   // Get token from DB, fallback to config/env
   let botToken = config.TELEGRAM_BOT_TOKEN;
@@ -41,6 +33,15 @@ const bootstrap = async () => {
   }
 
   const bot = new TelegramBot(botToken, { polling: true });
+
+  const shutdown = async () => {
+    await bot.stopPolling().catch(() => {});
+    await closeDb().catch(() => {});
+    process.exit(0);
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+  process.once('SIGUSR2', shutdown);
 
   // Lấy bot info để có username
   try {

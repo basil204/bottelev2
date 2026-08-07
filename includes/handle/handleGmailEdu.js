@@ -50,6 +50,26 @@ const getSettingBoolean = async (key, defaultValue = true) => {
     }
 };
 
+// Tổng đã bán gồm số bán thực tế và phần điều chỉnh thủ công từ trang quản trị.
+const getGmailEduSoldCount = async () => {
+    try {
+        const soldRows = await query(
+            'SELECT COUNT(*) AS total FROM gmail_accounts WHERE type = ? AND status = ?',
+            ['edu', 'sold']
+        );
+        const adjustmentRows = await query(
+            'SELECT `value` FROM settings WHERE `key` = ? LIMIT 1',
+            ['gmail_edu_sold_adjustment']
+        );
+        const actualSold = Number(soldRows?.[0]?.total || 0);
+        const adjustment = Number(adjustmentRows?.[0]?.value || 0);
+        return Math.max(0, actualSold + adjustment);
+    } catch (error) {
+        console.error('[GMAIL_EDU_SOLD_COUNT] Error:', error.message);
+        return 0;
+    }
+};
+
 // Lấy số giờ xóa
 const getDeleteHours = async () => {
     try {
@@ -145,19 +165,22 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
                 [
                     {
                         text: L(lang, '🔄 Tự động tạo password', '🔄 Auto-generate password', '🔄 自动生成密码'),
-                        callback_data: createCallbackData({ action: 'gmail_pw_auto', qty: quantity })
+                        callback_data: createCallbackData({ action: 'gmail_pw_auto', qty: quantity }),
+                        style: 'success'
                     }
                 ],
                 [
                     {
                         text: L(lang, '✏️ Tự đặt mật khẩu', '✏️ Set custom password', '✏️ 自定义密码'),
-                        callback_data: createCallbackData({ action: 'gmail_pw_custom', qty: quantity })
+                        callback_data: createCallbackData({ action: 'gmail_pw_custom', qty: quantity }),
+                        style: 'primary'
                     }
                 ],
                 [
                     {
                         text: L(lang, '❌ Huỷ', '❌ Cancel', '❌ 取消'),
-                        callback_data: createCallbackData({ action: 'gmail_pw_cancel' })
+                        callback_data: createCallbackData({ action: 'gmail_pw_cancel' }),
+                        style: 'danger'
                     }
                 ]
             ]
@@ -254,19 +277,22 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                         [
                             {
                                 text: L(lang, `🏦 Chuyển khoản (${formatCurrency(missingAmount)})`, `🏦 Bank QR (${formatCurrency(missingAmount)})`, `🏦 银行转账 (${formatCurrency(missingAmount)})`),
-                                callback_data: createCallbackData({ action: 'gmail_deposit_bank', amount: missingAmount })
+                                callback_data: createCallbackData({ action: 'gmail_deposit_bank', amount: missingAmount }),
+                                style: 'primary'
                             }
                         ],
                         [
                             {
                                 text: `💵 USDT (≥${usdtNeeded}U)`,
-                                callback_data: createCallbackData({ action: 'gmail_deposit_usdt', amount: usdtNeeded })
+                                callback_data: createCallbackData({ action: 'gmail_deposit_usdt', amount: usdtNeeded }),
+                                style: 'success'
                             }
                         ],
                         [
                             {
                                 text: L(lang, '❌ Huỷ', '❌ Cancel', '❌ 取消'),
-                                callback_data: createCallbackData({ action: 'gmail_deposit_cancel' })
+                                callback_data: createCallbackData({ action: 'gmail_deposit_cancel' }),
+                                style: 'danger'
                             }
                         ]
                     ]
@@ -387,7 +413,16 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
             `✅ **支付成功！**\n\n📧 产品: **Gmail EDU**\n📦 数量: ${createdAccounts.length}\n💰 价格: ${formatCurrency(actualPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n⚠️ **注意：** 账户将在首次登录后 ${deleteHours} 小时自动删除。`
         );
 
-        await bot.sendMessage(chatId, resultMessage, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, resultMessage, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[{
+                    text: L(lang, 'Mua tiếp', 'Buy more', '继续购买'),
+                    callback_data: createCallbackData({ action: 'gmail_buy_again' }),
+                    style: 'primary'
+                }]]
+            }
+        });
 
         // Gửi từng tài khoản riêng để dễ copy
         for (let i = 0; i < createdAccounts.length; i++) {
@@ -398,7 +433,23 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                 `📧 **账户 ${i + 1}:**\n\n🔹 **账号:** \`${acc.email}\`\n🔹 **密码:** \`${acc.password}\``
             );
 
-            await bot.sendMessage(chatId, accountMsg, { parse_mode: 'Markdown' });
+            await bot.sendMessage(chatId, accountMsg, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [[
+                        {
+                            text: L(lang, 'Sao chép email', 'Copy email', '复制邮箱'),
+                            copy_text: { text: acc.email },
+                            style: 'primary'
+                        },
+                        {
+                            text: L(lang, 'Sao chép mật khẩu', 'Copy password', '复制密码'),
+                            copy_text: { text: acc.password },
+                            style: 'success'
+                        }
+                    ]]
+                }
+            });
         }
 
         console.log(`[BUY_GMAIL_EDU] ✅ User ${telegramId} purchased ${createdAccounts.length} Gmail EDU`);
@@ -437,12 +488,13 @@ export const showGmailEduInfo = async (bot, chatId, user) => {
         const price = await getGmailEduPrice();
         const domain = await getSettingString('gmail_edu_domain', 'suafpoly.app');
         const deleteHours = await getDeleteHours();
+        const soldCount = await getGmailEduSoldCount();
         const currentBalance = Number(user.balance) || 0;
 
         const message = L(lang,
-            `📧 **MUA GMAIL EDU**\n\n💰 Giá: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n💵 Số dư của bạn: ${formatCurrency(currentBalance)}\n\n⚠️ **Lưu ý:**\n- Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi login\n- Không hoàn tiền sau khi mua\n- Tối đa 10 tài khoản mỗi lần mua\n\nNhập số lượng Gmail bạn muốn mua (ví dụ: 1, 2, 5):`,
-            `📧 **BUY GMAIL EDU**\n\n💰 Price: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n💵 Your balance: ${formatCurrency(currentBalance)}\n\n⚠️ **Note:**\n- Account will be auto-deleted ${deleteHours} hour(s) after first login\n- No refunds after purchase\n- Maximum 10 accounts per purchase\n\nEnter the quantity you want to buy (e.g., 1, 2, 5):`,
-            `📧 **购买 GMAIL EDU**\n\n💰 价格: ${formatCurrency(price)} / 1 个 Gmail\n🌐 域名: @${domain}\n💵 您的余额: ${formatCurrency(currentBalance)}\n\n⚠️ **注意：**\n- 账户将在首次登录后 ${deleteHours} 小时自动删除\n- 购买后不可退款\n- 每次最多购买10个账户\n\n请输入您要购买的数量（例如：1、2、5）：`
+            `📧 **MUA GMAIL EDU**\n\n💰 Giá: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n📊 Đã bán: ${soldCount.toLocaleString('vi-VN')} Gmail\n💵 Số dư của bạn: ${formatCurrency(currentBalance)}\n\n⚠️ **Lưu ý:**\n- Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi login\n- Không hoàn tiền sau khi mua\n- Tối đa 10 tài khoản mỗi lần mua\n\nNhập số lượng Gmail bạn muốn mua (ví dụ: 1, 2, 5):`,
+            `📧 **BUY GMAIL EDU**\n\n💰 Price: ${formatCurrency(price)} / 1 Gmail\n🌐 Domain: @${domain}\n📊 Sold: ${soldCount.toLocaleString('en-US')} Gmail accounts\n💵 Your balance: ${formatCurrency(currentBalance)}\n\n⚠️ **Note:**\n- Account will be auto-deleted ${deleteHours} hour(s) after first login\n- No refunds after purchase\n- Maximum 10 accounts per purchase\n\nEnter the quantity you want to buy (e.g., 1, 2, 5):`,
+            `📧 **购买 GMAIL EDU**\n\n💰 价格: ${formatCurrency(price)} / 1 个 Gmail\n🌐 域名: @${domain}\n📊 已售: ${soldCount.toLocaleString('zh-CN')} 个 Gmail\n💵 您的余额: ${formatCurrency(currentBalance)}\n\n⚠️ **注意：**\n- 账户将在首次登录后 ${deleteHours} 小时自动删除\n- 购买后不可退款\n- 每次最多购买10个账户\n\n请输入您要购买的数量（例如：1、2、5）：`
         );
 
         await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });

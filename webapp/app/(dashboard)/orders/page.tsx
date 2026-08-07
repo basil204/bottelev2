@@ -101,7 +101,7 @@ export default function OrdersPage() {
                                         <TableRow key={order.id}>
                                             <TableCell className="font-medium">#{order.id}</TableCell>
                                             <TableCell>{order.username || `User #${order.user_id}`}</TableCell>
-                                            <TableCell className="text-blue-600 dark:text-blue-400 font-medium">
+                                            <TableCell className="text-emerald-600 dark:text-emerald-700 font-medium">
                                                 {order.product_name || 'N/A'}
                                             </TableCell>
                                             <TableCell>{formatPrice(order.price)}</TableCell>

@@ -5,16 +5,6 @@ import path from 'path';
 let pool;
 
 export const initDb = async (config) => {
-  // Ensure database exists first (connect without database)
-  const adminConn = await mysql.createConnection({
-    host: config.DB_HOST,
-    user: config.DB_USER,
-    password: config.DB_PASS,
-    multipleStatements: true
-  });
-  await adminConn.query(`CREATE DATABASE IF NOT EXISTS \`${config.DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-  await adminConn.end();
-
   pool = mysql.createPool({
     host: config.DB_HOST,
     user: config.DB_USER,
@@ -23,16 +13,21 @@ export const initDb = async (config) => {
     multipleStatements: true,
     charset: 'utf8mb4_unicode_ci',
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 2,
     queueLimit: 0
   });
 
-  // Verify connection
-  try {
-    const [result] = await pool.execute('SELECT DATABASE() as db');
-    console.log('Connected to database:', result[0]?.db);
-  } catch (err) {
-    console.error('Database connection verification failed:', err.message);
+  // MySQL may need a moment to release connections after nodemon restarts.
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      const [result] = await pool.execute('SELECT DATABASE() as db');
+      console.log('Connected to database:', result[0]?.db);
+      break;
+    } catch (err) {
+      if (err.code !== 'ER_CON_COUNT_ERROR' || attempt === 10) throw err;
+      console.warn(`Database đang hết kết nối, thử lại ${attempt}/10 sau 3 giây...`);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
   }
 
   // bootstrap schema if available
@@ -158,6 +153,8 @@ export const initDb = async (config) => {
       }
     }
 
+    // ChatGPT Join FAM was removed; legacy migration is disabled.
+    if (false) {
     // ensure ChatGPT FAM table exists
     try {
       await pool.execute(`
@@ -228,6 +225,7 @@ export const initDb = async (config) => {
     } catch (e) {
       // ignore
     }
+    }
   } catch (err) {
     // Error handling without logging
   }
@@ -236,6 +234,13 @@ export const initDb = async (config) => {
 export const getPool = () => {
   if (!pool) throw new Error('DB not initialized');
   return pool;
+};
+
+export const closeDb = async () => {
+  if (!pool) return;
+  const currentPool = pool;
+  pool = undefined;
+  await currentPool.end();
 };
 
 export const query = async (sql, params = []) => {

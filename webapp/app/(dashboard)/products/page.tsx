@@ -2,15 +2,16 @@
 
 import { clsx } from 'clsx';
 import { useEffect, useState } from 'react';
-import { formatDate } from '@/lib/utils';
 import { useCurrency } from '@/hooks/useCurrency';
-import { Plus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight, User, Package } from 'lucide-react';
+import { Plus, Minus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight, User, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 interface Product {
     id: number;
@@ -19,6 +20,7 @@ interface Product {
     price: number;
     description: string;
     stock: number;
+    sold_count: number;
     type: 'stock' | 'order';
     priority: number;
     check_live: number;
@@ -82,6 +84,9 @@ export default function ProductsPage() {
     const [soldTotalPages, setSoldTotalPages] = useState(1);
     const [soldTotal, setSoldTotal] = useState(0);
     const [searchTelegramId, setSearchTelegramId] = useState('');
+    const [savingSoldId, setSavingSoldId] = useState<number | null>(null);
+    const [savingProduct, setSavingProduct] = useState(false);
+    const [productFormError, setProductFormError] = useState('');
 
     const fetchProducts = () => {
         setLoading(true);
@@ -95,6 +100,25 @@ export default function ProductsPage() {
                 setProducts([]);
                 setLoading(false);
             });
+    };
+
+    const updateSoldCount = async (product: Product, nextValue: number) => {
+        const soldCount = Math.max(0, Math.trunc(nextValue));
+        setSavingSoldId(product.id);
+        setProducts(current => current.map(item => item.id === product.id ? { ...item, sold_count: soldCount } : item));
+        try {
+            const response = await fetch('/api/products', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: product.id, sold_count: soldCount }),
+            });
+            if (!response.ok) throw new Error('Không thể cập nhật số lượng đã bán');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Không thể cập nhật số lượng đã bán');
+            fetchProducts();
+        } finally {
+            setSavingSoldId(null);
+        }
     };
 
     const fetchCategories = () => {
@@ -173,7 +197,16 @@ export default function ProductsPage() {
     }, [activeTab]);
 
     const handleSave = async () => {
-        if (!editingProduct?.name || !editingProduct?.price) return;
+        if (!editingProduct?.name?.trim()) {
+            setProductFormError('Vui lòng nhập tên sản phẩm.');
+            return;
+        }
+        if (!Number.isFinite(Number(editingProduct.price)) || Number(editingProduct.price) <= 0) {
+            setProductFormError('Giá sản phẩm phải lớn hơn 0.');
+            return;
+        }
+        setSavingProduct(true);
+        setProductFormError('');
 
         const isNewProduct = !editingProduct.id;
         const method = isNewProduct ? 'POST' : 'PUT';
@@ -183,6 +216,13 @@ export default function ProductsPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(editingProduct),
         });
+
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            setProductFormError(errorData.error || 'Không thể lưu sản phẩm.');
+            setSavingProduct(false);
+            return;
+        }
 
         if (res.ok) {
             const data = await res.json();
@@ -206,6 +246,7 @@ export default function ProductsPage() {
         setIsModalOpen(false);
         setEditingProduct(null);
         setNotifyNewProduct(true);
+        setSavingProduct(false);
         fetchProducts();
     };
 
@@ -262,6 +303,7 @@ export default function ProductsPage() {
 
     const openModal = (product?: Product) => {
         setEditingProduct(product || { type: 'stock' });
+        setProductFormError('');
         setIsModalOpen(true);
     };
 
@@ -459,6 +501,7 @@ export default function ProductsPage() {
                                         <TableHead>{t('products.price')}</TableHead>
                                         <TableHead>{t('products.type')}</TableHead>
                                         <TableHead>{t('products.stock')}</TableHead>
+                                        <TableHead>Đã bán</TableHead>
                                         <TableHead>Ưu tiên</TableHead>
                                         <TableHead>Check Live</TableHead>
                                         <TableHead className="text-right">{t('products.actions')}</TableHead>
@@ -467,14 +510,14 @@ export default function ProductsPage() {
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={9} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                            <TableCell colSpan={11} className="h-24 text-center">{t('common.loading')}</TableCell>
                                         </TableRow>
                                     ) : (
                                         products.map((product) => (
                                             <TableRow key={product.id}>
                                                 <TableCell>#{product.id}</TableCell>
                                                 <TableCell>
-                                                    <span className="px-2 py-1 rounded bg-slate-100 text-slate-800 dark:bg-slate-850 dark:text-slate-200 text-xs font-semibold">
+                                                    <span className="px-2 py-1 rounded bg-slate-100 text-slate-800 dark:bg-slate-850 dark:text-zinc-800 text-xs font-semibold">
                                                         {product.category_name || 'Khác'}
                                                     </span>
                                                 </TableCell>
@@ -482,11 +525,38 @@ export default function ProductsPage() {
                                                 <TableCell className="text-muted-foreground text-sm">{product.code || '-'}</TableCell>
                                                 <TableCell className="text-green-600 dark:text-green-400 font-bold">{formatPrice(product.price)}</TableCell>
                                                 <TableCell>
-                                                    <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                                    <span className={`px-2 py-1 rounded text-xs ${product.type === 'order' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-700' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-700'}`}>
                                                         {product.type === 'order' ? t('products.manual') : t('products.auto')}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="font-bold">{product.stock}</TableCell>
+                                                <TableCell>
+                                                    <div className="inline-flex items-center rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateSoldCount(product, Number(product.sold_count || 0) - 1)}
+                                                            disabled={savingSoldId === product.id || Number(product.sold_count || 0) <= 0}
+                                                            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white hover:text-zinc-900 disabled:opacity-35"
+                                                            aria-label="Giảm số đã bán"
+                                                        ><Minus className="h-3.5 w-3.5" /></button>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={Number(product.sold_count || 0)}
+                                                            onChange={(event) => setProducts(current => current.map(item => item.id === product.id ? { ...item, sold_count: Math.max(0, Number(event.target.value)) } : item))}
+                                                            onBlur={(event) => updateSoldCount(product, Number(event.target.value))}
+                                                            className="h-7 w-14 border-0 bg-transparent p-0 text-center text-sm font-semibold text-zinc-900 shadow-none focus:ring-0"
+                                                            aria-label={`Số lượng đã bán của ${product.name}`}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateSoldCount(product, Number(product.sold_count || 0) + 1)}
+                                                            disabled={savingSoldId === product.id}
+                                                            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:bg-white hover:text-emerald-700 disabled:opacity-35"
+                                                            aria-label="Tăng số đã bán"
+                                                        ><Plus className="h-3.5 w-3.5" /></button>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
                                                     <span className="inline-flex items-center px-2 py-1 rounded bg-slate-900 text-white text-xs font-mono">
                                                         {product.priority || 0}
@@ -504,7 +574,7 @@ export default function ProductsPage() {
                                                     <Button size="icon" variant="ghost" className="text-green-600" onClick={() => openStockModal(product)} title={t('products.add_stock')}>
                                                         <Database className="w-4 h-4" />
                                                     </Button>
-                                                    <Button size="icon" variant="ghost" className="text-blue-600" onClick={() => openModal(product)}>
+                                                    <Button size="icon" variant="ghost" className="text-emerald-600" onClick={() => openModal(product)}>
                                                         <Edit className="w-4 h-4" />
                                                     </Button>
                                                     <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDelete(product.id)}>
@@ -589,7 +659,7 @@ export default function ProductsPage() {
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-700">
                                                             {item.product_name}
                                                         </span>
                                                     </TableCell>
@@ -604,7 +674,7 @@ export default function ProductsPage() {
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-700">
                                                             <User className="w-3 h-3" />
                                                             {item.buyer_username || 'N/A'}
                                                         </span>
@@ -656,9 +726,139 @@ export default function ProductsPage() {
                 </Card>
             )}
 
-            {/* Edit Product Modal */}
+            {/* Product form */}
             <Dialog
                 open={isModalOpen}
+                onOpenChange={(open) => {
+                    if (savingProduct) return;
+                    setIsModalOpen(open);
+                    if (!open) {
+                        setEditingProduct(null);
+                        setProductFormError('');
+                    }
+                }}
+                title={editingProduct?.id ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm mới'}
+                description="Thiết lập thông tin bán hàng, cách kiểm tra và thông báo cho khách."
+                className="max-w-2xl self-start"
+            >
+                <div className="space-y-6 pt-2">
+                    {productFormError && (
+                        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {productFormError}
+                        </div>
+                    )}
+
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="product-name">Tên sản phẩm <span className="text-red-500">*</span></Label>
+                            <Input
+                                id="product-name"
+                                value={editingProduct?.name || ''}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, name: e.target.value }))}
+                                placeholder="Ví dụ: Gmail EDU 1 năm"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="product-category">Thư mục</Label>
+                            <select
+                                id="product-category"
+                                value={editingProduct?.category_id || ''}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, category_id: Number(e.target.value) || null }))}
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                            >
+                                <option value="">Chưa phân loại</option>
+                                {categoriesList.map(cat => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="product-code">Mã sản phẩm</Label>
+                            <Input
+                                id="product-code"
+                                value={editingProduct?.code || ''}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, code: e.target.value || null }))}
+                                placeholder="Tùy chọn"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="product-price">Giá bán (VND) <span className="text-red-500">*</span></Label>
+                            <Input
+                                id="product-price"
+                                type="number"
+                                min="0"
+                                step="1000"
+                                value={editingProduct?.price ?? ''}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, price: Number(e.target.value) }))}
+                                placeholder="100000"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="product-priority">Độ ưu tiên</Label>
+                            <Input
+                                id="product-priority"
+                                type="number"
+                                min="0"
+                                value={editingProduct?.priority ?? 0}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, priority: Number(e.target.value) }))}
+                            />
+                            <p className="text-xs text-slate-500">Số lớn hơn sẽ được hiển thị trước.</p>
+                        </div>
+
+                        <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="product-description">Mô tả</Label>
+                            <Textarea
+                                id="product-description"
+                                rows={4}
+                                value={editingProduct?.description || ''}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, description: e.target.value }))}
+                                placeholder="Thông tin khách hàng cần biết trước khi mua..."
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                            <div>
+                                <Label htmlFor="product-check-live" className="cursor-pointer">Kiểm tra trước khi bán</Label>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">Chỉ giao tài khoản còn hoạt động.</p>
+                            </div>
+                            <Switch
+                                id="product-check-live"
+                                checked={editingProduct?.check_live === 1}
+                                onCheckedChange={(checked) => setEditingProduct(prev => ({ ...prev!, check_live: checked ? 1 : 0 }))}
+                            />
+                        </div>
+
+                        {!editingProduct?.id && (
+                            <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div>
+                                    <Label htmlFor="product-notify" className="cursor-pointer">Thông báo khách hàng</Label>
+                                    <p className="mt-1 text-xs leading-5 text-slate-500">Gửi thông báo sau khi tạo sản phẩm.</p>
+                                </div>
+                                <Switch id="product-notify" checked={notifyNewProduct} onCheckedChange={setNotifyNewProduct} />
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                        <Button variant="outline" disabled={savingProduct} onClick={() => setIsModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button disabled={savingProduct} onClick={handleSave} className="min-w-32">
+                            {savingProduct ? 'Đang lưu...' : editingProduct?.id ? 'Lưu thay đổi' : 'Thêm sản phẩm'}
+                        </Button>
+                    </div>
+                </div>
+            </Dialog>
+
+            {/* Legacy product form kept unmounted during migration */}
+            <Dialog
+                open={false}
                 onOpenChange={setIsModalOpen}
                 title={editingProduct?.id ? t('products.edit') : t('products.new_product')}
             >

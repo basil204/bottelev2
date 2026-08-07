@@ -24,6 +24,8 @@ export const vi = {
         dashboard: 'Tổng quan',
         users: 'Người dùng',
         products: 'Sản phẩm',
+        categories: 'Thư mục',
+        'stored-accounts': 'Kho tài khoản',
         orders: 'Đơn hàng',
         settings: 'Cài đặt',
         deposits: 'Nạp tiền',

@@ -24,6 +24,8 @@ export const en = {
         dashboard: 'Dashboard',
         users: 'Users',
         products: 'Products',
+        categories: 'Categories',
+        'stored-accounts': 'Account Storage',
         orders: 'Orders',
         settings: 'Settings',
         deposits: 'Deposits',

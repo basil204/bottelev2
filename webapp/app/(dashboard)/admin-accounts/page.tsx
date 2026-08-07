@@ -233,8 +233,8 @@ export default function AdminAccountsPage() {
                                             <TableCell>
 
                                                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${account.role === 'super_admin'
-                                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500'
-                                                    : 'bg-blue-500/20 text-blue-400 border border-blue-500'
+                                                    ? 'bg-emerald-500/20 text-emerald-700 border border-emerald-500'
+                                                    : 'bg-emerald-500/20 text-emerald-700 border border-emerald-500'
                                                     }`}>
                                                     {account.role === 'super_admin' ? (
                                                         <><ShieldCheck className="w-3 h-3" /> Super Admin</>

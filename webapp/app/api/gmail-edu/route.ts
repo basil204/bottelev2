@@ -68,10 +68,19 @@ export async function GET(request: Request) {
             if (row.status === 'deleted') stats.deleted = row.count;
         });
 
+        const [adjustmentRows] = await pool.query<RowDataPacket[]>(
+            "SELECT `value` FROM settings WHERE `key` = 'gmail_edu_sold_adjustment' LIMIT 1"
+        );
+        const actualSold = stats.sold;
+        const soldAdjustment = Number(adjustmentRows[0]?.value || 0);
+        stats.sold = Math.max(0, actualSold + soldAdjustment);
+
         return NextResponse.json({
             success: true,
             data: rows,
             stats,
+            actualSold,
+            soldAdjustment,
             pagination: {
                 page,
                 limit,
@@ -82,6 +91,32 @@ export async function GET(request: Request) {
     } catch (error) {
         console.error('Error fetching Gmail accounts:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+export async function PATCH(request: Request) {
+    try {
+        const { sold_count } = await request.json();
+        const target = Math.max(0, Math.trunc(Number(sold_count)));
+        if (!Number.isFinite(target)) {
+            return NextResponse.json({ error: 'Invalid sold count' }, { status: 400 });
+        }
+        const [rows] = await pool.query<RowDataPacket[]>(
+            "SELECT COUNT(*) AS total FROM gmail_accounts WHERE type = 'edu' AND status = 'sold'"
+        );
+        const actualSold = Number(rows[0]?.total || 0);
+        await pool.query(
+            "INSERT INTO settings (`key`, `value`) VALUES ('gmail_edu_sold_adjustment', ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)",
+            [String(target - actualSold)]
+        );
+        return NextResponse.json({ success: true, sold_count: target, actualSold });
+    } catch (error: unknown) {
+        console.error('Error updating Gmail EDU sold count:', error);
+        const dbError = error as { code?: string };
+        const message = dbError.code === 'ER_CON_COUNT_ERROR'
+            ? 'Database đang quá tải kết nối. Vui lòng khởi động lại webapp rồi thử lại.'
+            : 'Không thể cập nhật số Gmail EDU đã bán';
+        return NextResponse.json({ error: message, code: dbError.code }, { status: 500 });
     }
 }
 

@@ -110,12 +110,12 @@ export default function NotificationsPage() {
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => setImageFile(e.target.files ? e.target.files[0] : null)}
-                                className="block w-full text-sm text-slate-500
+                                className="block w-full text-sm text-zinc-500
                                   file:mr-4 file:py-2 file:px-4
                                   file:rounded-full file:border-0
                                   file:text-sm file:font-semibold
-                                  file:bg-violet-50 file:text-violet-700
-                                  hover:file:bg-violet-100"
+                                  file:bg-emerald-50 file:text-emerald-700
+                                  hover:file:bg-emerald-100"
                             />
                         </div>
                     </div>

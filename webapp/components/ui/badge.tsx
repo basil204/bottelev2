@@ -13,11 +13,11 @@ function Badge({
     return (
         <div
             className={clsx(
-                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                variant === "default" && "border-transparent bg-primary text-primary-foreground",
-                variant === "secondary" && "border-transparent bg-secondary text-secondary-foreground",
-                variant === "destructive" && "border-transparent bg-destructive text-destructive-foreground",
-                variant === "outline" && "text-foreground",
+                "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-700/20",
+                variant === "default" && "border-emerald-200 bg-emerald-50 text-emerald-800",
+                variant === "secondary" && "border-zinc-200 bg-zinc-100 text-zinc-700",
+                variant === "destructive" && "border-red-200 bg-red-50 text-red-700",
+                variant === "outline" && "border-zinc-200 bg-white text-zinc-700",
                 className
             )}
             {...props}

@@ -41,6 +41,10 @@ export const sendCategoryList = async (bot, chatId, user) => {
   const buttons = categories.map(cat => {
     // Check if this category has stock
     const productsInCat = rows.filter(p => p.category_id === cat.id);
+    const totalAccounts = productsInCat.reduce(
+      (total, product) => total + Math.max(0, Number(product.stock) || 0),
+      0
+    );
     const hasStock = productsInCat.some(p => p.type === 'order' || (p.stock && p.stock > 0));
     const icon = hasStock ? '🟢' : '🔴';
 
@@ -48,7 +52,7 @@ export const sendCategoryList = async (bot, chatId, user) => {
     const cleanName = cat.name.replace(/^[🟢🔴]\s*/, '');
 
     return {
-      text: `${icon} ${cleanName}`,
+      text: `${icon} ${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`,
       callback_data: createCallbackData({ action: 'category_products', catId: cat.id })
     };
   });
@@ -118,7 +122,8 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
     const priceText = await formatMoney(p.price, lang);
     return [{
       text: `${icon} ${p.name} - ${priceText}${stockText}`,
-      callback_data: createCallbackData({ action: 'view_product', productId: p.id })
+      callback_data: createCallbackData({ action: 'view_product', productId: p.id }),
+      style: p.type === 'order' || p.stock > 0 ? 'success' : 'danger'
     }];
   }));
 
@@ -182,6 +187,7 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   if (productType === 'manual') productType = 'order';
 
   const stock = Number(product.stock) || 0;
+  const soldCount = Math.max(0, Number(product.sold_count) || 0);
   const defaultDesc = L(lang, 'Không có mô tả', 'No description', '暂无描述');
   const description = product.description || defaultDesc;
 
@@ -190,11 +196,19 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   const priceLabel = L(lang, 'Giá', 'Price', '价格');
   const descLabel = L(lang, 'Mô tả', 'Description', '描述');
   const stockLabel = L(lang, 'Tồn kho', 'Stock', '库存');
+  const soldLabel = L(lang, 'Đã bán', 'Sold', '已售');
+  const soldText = L(
+    lang,
+    `${soldCount.toLocaleString('vi-VN')} sản phẩm`,
+    `${soldCount.toLocaleString('en-US')} products`,
+    `${soldCount.toLocaleString('zh-CN')} 件商品`
+  );
 
   let detailText = `${titleLabel}\n\n` +
     `🎁 **${nameLabel}:** ${product.name}\n` +
     `💰 **${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n` +
-    `📝 **${descLabel}:** ${description}\n`;
+    `📝 **${descLabel}:** ${description}\n` +
+    `📊 **${soldLabel}:** ${soldText}\n`;
 
   if (productType === 'stock') {
     const stockText = stock > 0
@@ -222,7 +236,7 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
 
   const backBtn = L(lang, '⬅️ Quay lại', '⬅️ Back', '⬅️ 返回');
   const inline_keyboard = [
-    [{ text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }) }]
+    [{ text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }), style: 'danger' }]
   ];
 
   await bot.sendMessage(chatId, detailText, {
@@ -771,7 +785,16 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       const accountInfo = buildAccountInfo(acc, lang);
       const timeStr = getTimeStr();
       const content = buildSuccessMsg(lang, orderResult.invoiceCode, timeStr, product.name, totalPrice, finalBalance, accountInfo);
-      await bot.sendMessage(msg.chat.id, content, { parse_mode: 'Markdown' });
+      await bot.sendMessage(msg.chat.id, content, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{
+            text: L(lang, 'Mua tiếp', 'Buy more', '继续购买'),
+            callback_data: createCallbackData({ action: 'products', page: 1 }),
+            style: 'primary'
+          }]]
+        }
+      });
       console.log(`[BUY_PRODUCT] ✅ Đã gửi tài khoản trực tiếp (số lượng: 1)`);
     } else {
       // Mua từ 2 tài khoản trở lên: gửi file TXT
@@ -797,7 +820,14 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
 
         await bot.sendDocument(msg.chat.id, tempFilePath, {
           caption: caption,
-          parse_mode: 'Markdown'
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{
+              text: L(lang, 'Mua tiếp', 'Buy more', '继续购买'),
+              callback_data: createCallbackData({ action: 'products', page: 1 }),
+              style: 'primary'
+            }]]
+          }
         });
         console.log(`[BUY_PRODUCT] ✅ Đã gửi file tài khoản thành công (số lượng: ${quantity})`);
       } catch (sendError) {

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Globe, ChevronDown } from 'lucide-react';
+import { Globe, ChevronDown, Check } from 'lucide-react';
 
 export function LanguageSwitcher() {
     const { language, setLanguage } = useLanguage();
@@ -32,7 +32,7 @@ export function LanguageSwitcher() {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="p-2 rounded-lg hover:bg-accent/50 transition-colors flex items-center gap-2 text-sm font-medium border border-border"
+                className="flex h-9 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100/80 px-3 text-xs font-semibold text-zinc-700 transition-all hover:border-zinc-300 hover:bg-zinc-200/70 active:scale-[0.98]"
                 title={langTitle[language] || 'Change language'}
             >
                 <Globe className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function LanguageSwitcher() {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-background border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
                     <button
                         onClick={() => handleSelect('vi')}
                         className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 hover:bg-accent/50 transition-colors ${language === 'vi' ? 'bg-accent/30 font-medium' : ''}`}

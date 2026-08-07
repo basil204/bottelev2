@@ -32,7 +32,17 @@ export const deleteProduct = async (id) => {
 };
 
 export const getProduct = async (id) => {
-  const rows = await query('SELECT * FROM products WHERE id = ?', [id]);
+  const rows = await query(
+    `SELECT p.*,
+            GREATEST(
+              0,
+              (SELECT COUNT(*) FROM accounts a WHERE a.product_id = p.id AND a.status = 'sold')
+              + COALESCE(p.sold_adjustment, 0)
+            ) AS sold_count
+     FROM products p
+     WHERE p.id = ?`,
+    [id]
+  );
   return rows[0];
 };
 

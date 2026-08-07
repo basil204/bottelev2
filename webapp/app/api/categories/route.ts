@@ -5,6 +5,8 @@ import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminL
 
 export async function GET(request: Request) {
     try {
+        const { searchParams } = new URL(request.url);
+        const detailId = searchParams.get('detailId');
         // Log action
         const adminName = await getAdminFromCookie(request);
         await logAdminAction({
@@ -15,7 +17,38 @@ export async function GET(request: Request) {
             request
         });
 
-        const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM categories ORDER BY priority DESC, id DESC');
+        if (detailId) {
+            const [categoryRows] = await pool.query<RowDataPacket[]>(
+                'SELECT id, name, priority FROM categories WHERE id = ?', [detailId]
+            );
+            if (!categoryRows.length) return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+            const [products] = await pool.query<RowDataPacket[]>(`
+                SELECT p.id, p.name, p.code, p.price, p.type,
+                       COUNT(DISTINCT a.id) AS total_accounts,
+                       COUNT(DISTINCT CASE WHEN a.status = 'available' THEN a.id END) AS available_accounts,
+                       COUNT(DISTINCT CASE WHEN a.status = 'sold' THEN a.id END) AS sold_accounts
+                FROM products p
+                LEFT JOIN accounts a ON a.product_id = p.id
+                WHERE p.category_id = ?
+                GROUP BY p.id
+                ORDER BY p.priority DESC, p.id DESC
+            `, [detailId]);
+            return NextResponse.json({ category: categoryRows[0], products });
+        }
+
+        const [rows] = await pool.query<RowDataPacket[]>(`
+            SELECT
+                c.*,
+                COUNT(DISTINCT p.id) AS product_count,
+                COUNT(DISTINCT a.id) AS all_accounts,
+                COUNT(DISTINCT CASE WHEN a.status = 'available' THEN a.id END) AS total_accounts,
+                COUNT(DISTINCT CASE WHEN a.status = 'sold' THEN a.id END) AS sold_accounts
+            FROM categories c
+            LEFT JOIN products p ON p.category_id = c.id
+            LEFT JOIN accounts a ON a.product_id = p.id
+            GROUP BY c.id
+            ORDER BY c.priority DESC, c.id DESC
+        `);
         return NextResponse.json(rows);
     } catch (error) {
         console.error(error);

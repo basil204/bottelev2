@@ -5,10 +5,10 @@ const Table = React.forwardRef<
     HTMLTableElement,
     React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-    <div className="w-full overflow-auto">
+    <div className="w-full overflow-auto rounded-xl border border-zinc-200/80">
         <table
             ref={ref}
-            className={clsx("w-full caption-bottom text-sm", className)}
+        className={clsx("w-full caption-bottom text-sm", className)}
             {...props}
         />
     </div>
@@ -19,7 +19,7 @@ const TableHeader = React.forwardRef<
     HTMLTableSectionElement,
     React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-    <thead ref={ref} className={clsx("[&_tr]:border-b", className)} {...props} />
+    <thead ref={ref} className={clsx("sticky top-0 z-[1] bg-[#fafaf8] [&_tr]:border-b [&_tr]:border-zinc-200/80", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -57,7 +57,7 @@ const TableRow = React.forwardRef<
     <tr
         ref={ref}
         className={clsx(
-            "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+            "border-b border-zinc-200/70 transition-colors hover:bg-emerald-400/[0.025] data-[state=selected]:bg-emerald-400/[0.05]",
             className
         )}
         {...props}
@@ -72,7 +72,7 @@ const TableHead = React.forwardRef<
     <th
         ref={ref}
         className={clsx(
-            "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+            "h-11 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 [&:has([role=checkbox])]:pr-0",
             className
         )}
         {...props}
@@ -86,7 +86,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <td
         ref={ref}
-        className={clsx("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+        className={clsx("px-4 py-3.5 align-middle text-zinc-700 [&:has([role=checkbox])]:pr-0", className)}
         {...props}
     />
 ))

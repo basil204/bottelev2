@@ -36,8 +36,58 @@ import { getCache, setCache, delCache } from '../lib/cache/index.js';
 // Lưu config ở module level để có thể truy cập từ các callback
 export let globalConfig = {};
 
+const BUTTON_COLOR_PATCHED = Symbol.for('bottele.inline-button-colors');
+
+const inferButtonStyle = (button) => {
+  if (button.style) return button.style;
+  const text = String(button.text || '').toLowerCase();
+  let action = '';
+  if (button.callback_data) {
+    try {
+      const data = JSON.parse(button.callback_data);
+      action = String(data.action || data.a || '').toLowerCase();
+    } catch {}
+  }
+  const intent = `${text} ${action}`;
+  if (/(hủy|huỷ|xóa|xoá|từ chối|reject|delete|cancel|disable|tắt|stop)/i.test(intent)) return 'danger';
+  if (/(mua|buy|duyệt|approve|xác nhận|confirm|hoàn thành|complete|thêm|add|upload|bắt đầu|start|join|mời|invite|available|bật|enable|success|check_payment)/i.test(intent)) return 'success';
+  return 'primary';
+};
+
+const colorizeReplyMarkup = (options) => {
+  const keyboard = options?.reply_markup?.inline_keyboard;
+  if (!Array.isArray(keyboard)) return;
+  for (const row of keyboard) {
+    if (!Array.isArray(row)) continue;
+    for (const button of row) {
+      if (button && typeof button === 'object') button.style = inferButtonStyle(button);
+    }
+  }
+};
+
+const installButtonColors = (bot) => {
+  if (bot[BUTTON_COLOR_PATCHED]) return;
+  const optionIndexes = {
+    sendMessage: 2,
+    sendPhoto: 2,
+    sendDocument: 2,
+    editMessageText: 1,
+    editMessageCaption: 1
+  };
+  for (const [method, optionIndex] of Object.entries(optionIndexes)) {
+    if (typeof bot[method] !== 'function') continue;
+    const original = bot[method].bind(bot);
+    bot[method] = (...args) => {
+      colorizeReplyMarkup(args[optionIndex]);
+      return original(...args);
+    };
+  }
+  bot[BUTTON_COLOR_PATCHED] = true;
+};
+
 export const registerListeners = (bot, config) => {
   globalConfig = config;
+  installButtonColors(bot);
 
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);

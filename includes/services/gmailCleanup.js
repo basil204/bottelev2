@@ -54,6 +54,14 @@ export const checkSoldAccountsLogin = async () => {
                 const userInfo = await getUserInfo(account.email, account.type);
 
                 if (!userInfo.success) {
+                    if (userInfo.notFound) {
+                        await query(
+                            'UPDATE gmail_accounts SET status = "deleted" WHERE id = ?',
+                            [account.id]
+                        );
+                        console.log(`[GMAIL_CLEANUP] Account ${account.email} không còn trên Google, đã đánh dấu deleted`);
+                        continue;
+                    }
                     console.log(`[GMAIL_CLEANUP] Không lấy được info cho ${account.email}: ${userInfo.error}`);
                     continue;
                 }

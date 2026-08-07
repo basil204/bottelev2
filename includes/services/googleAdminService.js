@@ -180,10 +180,16 @@ export const getUserInfo = async (email, type = 'edu') => {
             lastLoginTime: response.data.lastLoginTime || null
         };
     } catch (error) {
-        console.error(`[GOOGLE_ADMIN] ❌ Error getting user info:`, error.message);
+        const notFound = error?.code === 404 || error?.response?.status === 404 ||
+            String(error.message || '').includes('Resource Not Found') ||
+            String(error.message || '').includes('notFound');
+        if (!notFound) {
+            console.error(`[GOOGLE_ADMIN] ❌ Error getting user info:`, error.message);
+        }
         return {
             success: false,
-            error: error.message
+            error: error.message,
+            notFound
         };
     }
 };

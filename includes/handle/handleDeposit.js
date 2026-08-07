@@ -690,7 +690,7 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
     // Notify admin
     try {
       const { notifyAdminAboutDeposit, getAdminIds } = await import('./handleNotify.js');
-      const adminIds = await getAdminIds([]);
+      const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
       if (adminIds.length > 0) {
         await notifyAdminAboutDeposit(bot, adminIds, {
           depositId,
@@ -965,7 +965,7 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
   await bot.sendMessage(chatId, adminMessage);
 
   const { notifyAdminAboutDeposit, getAdminIds } = await import('./handleNotify.js');
-  const adminIds = await getAdminIds([]);
+  const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
   if (adminIds.length > 0) {
     await notifyAdminAboutDeposit(bot, adminIds, {
       depositId: depositId,

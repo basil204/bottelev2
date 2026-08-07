@@ -9,19 +9,42 @@ const escapeMarkdown = (text) => {
 
 // Helper function to get admin IDs from database settings
 export const getAdminIds = async (configAdminIds = []) => {
+  const ids = new Set(
+    (Array.isArray(configAdminIds) ? configAdminIds : [configAdminIds])
+      .map(Number)
+      .filter(Number.isFinite)
+  );
+
   try {
     const rows = await query("SELECT `value` FROM settings WHERE `key` = 'admin_ids'");
     if (rows && rows.length > 0 && rows[0].value) {
-      const adminIds = JSON.parse(rows[0].value);
-      if (Array.isArray(adminIds) && adminIds.length > 0) {
-        return adminIds.map(id => Number(id));
+      let configuredIds;
+      try {
+        configuredIds = JSON.parse(rows[0].value);
+      } catch {
+        configuredIds = String(rows[0].value).split(',');
       }
+      (Array.isArray(configuredIds) ? configuredIds : [configuredIds])
+        .map(Number)
+        .filter(Number.isFinite)
+        .forEach((id) => ids.add(id));
     }
   } catch (e) {
     console.error('[getAdminIds] Error fetching from DB:', e);
   }
-  // Fallback to config admin IDs
-  return Array.isArray(configAdminIds) ? configAdminIds : [];
+
+  try {
+    const accounts = await query(
+      'SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL'
+    );
+    accounts.map((row) => Number(row.telegram_id)).filter(Number.isFinite).forEach((id) => ids.add(id));
+  } catch (e) {
+    if (e.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('[getAdminIds] Error fetching admin_accounts:', e);
+    }
+  }
+
+  return [...ids];
 };
 
 export const notifyNewProduct = async (bot, chatId, product) => {

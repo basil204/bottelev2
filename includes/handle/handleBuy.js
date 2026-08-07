@@ -370,7 +370,7 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   // Notify admins
   const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
   if (adminIds.length > 0) {
-    notifyAdminAboutPurchase(bot, adminIds, {
+    await notifyAdminAboutPurchase(bot, adminIds, {
       orderId: orderResult.invoiceCode || orderResult.insertId || 'AUTO',
       productName: product.name,
       username: user.username,
@@ -768,7 +768,7 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
     // Notify admins
     const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
     if (adminIds.length > 0) {
-      notifyAdminAboutPurchase(bot, adminIds, {
+      await notifyAdminAboutPurchase(bot, adminIds, {
         orderId: orderResult.insertId || 'AUTO',
         productName: product.name,
         username: user.username,
@@ -985,6 +985,20 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
 
     const updatedUser = await getUserByTelegram(telegramId);
     const finalBalance = Number(updatedUser.balance);
+
+    const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
+    if (adminIds.length > 0) {
+      await notifyAdminAboutPurchase(bot, adminIds, {
+        orderId: orderResult.invoiceCode || orderResult.insertId || 'AUTO',
+        productName: product.name,
+        username: user.username,
+        telegramId: user.telegram_id,
+        quantity,
+        price: totalPrice,
+        finalBalance,
+        accounts: purchasedAccounts
+      });
+    }
 
     if (quantity === 1) {
       const acc = purchasedAccounts[0];

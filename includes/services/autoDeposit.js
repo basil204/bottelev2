@@ -320,7 +320,7 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
     const { getAdminIds } = await import('../handle/handleNotify.js');
     const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
     if (adminIds.length > 0) {
-      notifyAdminAboutDeposit(bot, adminIds, {
+      await notifyAdminAboutDeposit(bot, adminIds, {
         depositId: cached.depositId || ref,
         username: user.username,
         telegramId: user.telegram_id,

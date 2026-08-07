@@ -1,4 +1,4 @@
-import { sendMenu, ensureUser, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
+import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
@@ -98,9 +98,8 @@ export const registerListeners = (bot, config) => {
       reply_markup: {
         keyboard: [
           [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-          [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
-          [{ text: t('history', lang) }, { text: t('admin_group', lang) }],
-          [{ text: t('change_language', lang) }]
+          [{ text: '📧 Gmail EDU' }],
+          [{ text: t('history', lang) }, { text: t('change_language', lang) }]
         ],
         resize_keyboard: true
       }
@@ -179,6 +178,12 @@ export const registerListeners = (bot, config) => {
   bot.onText(/^\/gmail/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     await showGmailEduInfo(bot, msg.chat.id, user);
+  });
+
+  // Lịch sử được ẩn khỏi bàn phím chính nhưng vẫn truy cập được bằng lệnh.
+  bot.onText(/^\/(history|orders)(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
   });
 
   bot.onText(/^\/capcut/i, async (msg) => {
@@ -514,9 +519,8 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', selectedLang) }, { text: t('buy_product', selectedLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
-                  [{ text: t('history', selectedLang) }, { text: t('admin_group', selectedLang) }],
-                  [{ text: t('change_language', selectedLang) }]
+                  [{ text: '📧 Gmail EDU' }],
+                  [{ text: t('history', selectedLang) }, { text: t('change_language', selectedLang) }]
                 ],
                 resize_keyboard: true
               }
@@ -545,9 +549,8 @@ export const registerListeners = (bot, config) => {
               reply_markup: {
                 keyboard: [
                   [{ text: t('deposit', newLang) }, { text: t('buy_product', newLang) }],
-                  [{ text: '📧 Gmail EDU' }, { text: '🎬 CapCut Workspace' }],
-                  [{ text: t('history', newLang) }, { text: t('admin_group', newLang) }],
-                  [{ text: t('change_language', newLang) }]
+                  [{ text: '📧 Gmail EDU' }],
+                  [{ text: t('history', newLang) }, { text: t('change_language', newLang) }]
                 ],
                 resize_keyboard: true
               }
@@ -610,6 +613,8 @@ export const registerListeners = (bot, config) => {
           return cancelQr(bot, chatId, query.from);
         case 'user_orders':
           return sendOrderHistory(bot, chatId, user.id, data.page || 1, config.PAGE_SIZE);
+        case 'user_order_detail':
+          return sendOrderCredentials(bot, chatId, user.id, data.orderId);
         case 'back_to_menu':
           return sendMenu(bot, chatId, user, globalConfig.TELEGRAM_GROUP_LINKS);
 

@@ -81,6 +81,16 @@ export const initDb = async (config) => {
       // ignore if already exists
     }
 
+    // Orders store delivered username|password lines here. TEXT prevents
+    // multi-account purchases from being truncated and keeps history usable.
+    try {
+      await pool.execute('ALTER TABLE orders MODIFY COLUMN email TEXT NULL');
+    } catch (e) {
+      if (!e.message.includes("doesn't exist")) {
+        console.error('Migration error for orders.email:', e.message);
+      }
+    }
+
     // ensure delete_at column exists for gmail_accounts table
     try {
       // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)

@@ -1,6 +1,6 @@
 import { findOrCreateUser, getUserByTelegram } from '../controllers/userController.js';
-import { listOrdersByUser } from '../controllers/orderController.js';
-import { formatCurrency, buildPaginationKeyboard } from '../../utils/index.js';
+import { getOrderByIdForUser, listTodayOrdersByUser } from '../controllers/orderController.js';
+import { formatCurrency } from '../../utils/index.js';
 import { query } from '../database/index.js';
 
 export const ensureUser = async (bot, msg) => {
@@ -14,18 +14,14 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
   // Chỉ hiển thị tiêu đề menu
   const text = t('menu_title', lang);
-  const serviceRows = [
-    [{ text: '📧 Gmail EDU' }],
-    [{ text: '🎬 CapCut Workspace' }]
-  ];
+  const serviceRows = [[{ text: '📧 Gmail EDU' }]];
 
   const opts = {
     reply_markup: {
       keyboard: [
         [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
         ...serviceRows,
-        [{ text: t('history', lang) }, { text: t('change_language', lang) }],
-        [{ text: t('admin_group', lang) }]
+        [{ text: t('history', lang) }, { text: t('change_language', lang) }]
       ],
       resize_keyboard: true
     }
@@ -33,25 +29,62 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
   await bot.sendMessage(chatId, text, opts);
 };
 
-export const sendOrderHistory = async (bot, chatId, userId, page, pageSize) => {
+export const sendOrderHistory = async (bot, chatId, userId) => {
   const { getUserById } = await import('../controllers/userController.js');
   const user = await getUserById(userId);
   const lang = user?.language || 'vi';
 
-  const offset = (page - 1) * pageSize;
-  const { rows, total } = await listOrdersByUser(userId, offset, pageSize);
+  const rows = await listTodayOrdersByUser(userId, 10);
   if (!rows.length) {
-    const { t } = await import('../helpers/langHelper.js');
-    return bot.sendMessage(chatId, t('no_orders', lang));
+    const emptyMessages = {
+      en: 'There are no purchases today.',
+      zh: '今天暂无购买记录。'
+    };
+    return bot.sendMessage(chatId, emptyMessages[lang] || 'Hôm nay chưa có giao dịch mua hàng.');
   }
-  const lines = rows.map((o) => `#${o.id} - ${o.name} - ${formatCurrency(o.price)} - ${o.created_at}`);
-  const hasPrev = page > 1;
-  const hasNext = offset + rows.length < total;
-  await bot.sendMessage(chatId, lines.join('\n'), {
-    reply_markup: {
-      inline_keyboard: buildPaginationKeyboard({ action: 'user_orders', page }, page, hasPrev, hasNext)
-    }
+
+  const orderBlocks = rows.map((order) => {
+    const purchased = String(order.email || '').split(/\r?\n/).filter((line) => line.includes('|'));
+    const credentials = purchased.map((line, index) => {
+      const [username = '', password = '', ...extra] = line.split('|');
+      let result = `  TK ${index + 1}: ${username}\n  MK ${index + 1}: ${password}`;
+      if (extra.length) result += `\n  Thông tin thêm: ${extra.join(' | ')}`;
+      return result;
+    }).join('\n');
+    const time = order.created_at ? new Date(order.created_at).toLocaleString('vi-VN') : '';
+    return `#${order.id} · ${order.name}\nGiá: ${formatCurrency(order.price)}\nThời gian: ${time}${credentials ? `\n${credentials}` : '\nKhông có TK/MK tự động'}`;
   });
+
+  const chunks = [];
+  let current = `🧾 10 GIAO DỊCH GẦN NHẤT HÔM NAY\n\n`;
+  for (const block of orderBlocks) {
+    if ((current + block).length > 3900) {
+      chunks.push(current.trim());
+      current = `${block}\n\n`;
+    } else {
+      current += `${block}\n\n`;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  for (const chunk of chunks) await bot.sendMessage(chatId, chunk);
+};
+
+export const sendOrderCredentials = async (bot, chatId, userId, orderId) => {
+  const order = await getOrderByIdForUser(orderId, userId);
+  if (!order) return bot.sendMessage(chatId, '❌ Không tìm thấy đơn hàng này.');
+  if (!order.email || !String(order.email).includes('|')) {
+    return bot.sendMessage(chatId, 'Đơn hàng này không có tài khoản tự động để xem lại.');
+  }
+
+  const accounts = String(order.email).split(/\r?\n/).filter(Boolean);
+  const details = accounts.map((line, index) => {
+    const [username = '', password = '', ...extra] = line.split('|');
+    let item = `Tài khoản ${index + 1}:\nTK: ${username}\nMK: ${password}`;
+    if (extra.length) item += `\nThông tin thêm: ${extra.join(' | ')}`;
+    return item;
+  }).join('\n\n');
+
+  return bot.sendMessage(chatId, `🔐 THÔNG TIN ĐÃ MUA\n\nĐơn: #${order.id}\nSản phẩm: ${order.name}\n\n${details}`);
 };
 
 export const getUserCache = async (telegramId) => {

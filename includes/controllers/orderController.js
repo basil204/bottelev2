@@ -88,6 +88,30 @@ export const listOrdersByUser = async (userId, offset, limit) => {
   return { rows, total };
 };
 
+export const listTodayOrdersByUser = async (userId, limit = 10) => {
+  return query(
+    `SELECT o.*, COALESCE(p.name, o.note, 'Sản phẩm') as name
+     FROM orders o
+     LEFT JOIN products p ON p.id = o.product_id
+     WHERE o.user_id = ? AND DATE(o.created_at) = CURDATE()
+     ORDER BY o.id DESC
+     LIMIT ?`,
+    [userId, limit]
+  );
+};
+
+export const getOrderByIdForUser = async (orderId, userId) => {
+  const rows = await query(
+    `SELECT o.*, COALESCE(p.name, o.note, 'Sản phẩm') as name
+     FROM orders o
+     LEFT JOIN products p ON p.id = o.product_id
+     WHERE o.id = ? AND o.user_id = ?
+     LIMIT 1`,
+    [orderId, userId]
+  );
+  return rows[0] || null;
+};
+
 // Lấy danh sách manual orders cần xử lý (status = 'pending')
 // Manual orders là những orders có email/note và status = 'pending'
 export const listPendingManualOrders = async (offset, limit) => {

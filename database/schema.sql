@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS orders (
   user_id INT NOT NULL,
   product_id INT NOT NULL,
   price DECIMAL(18,2) NOT NULL,
-  email VARCHAR(255) NULL,
+  email TEXT NULL,
   note TEXT NULL,
   status ENUM('pending', 'completed') DEFAULT 'completed',
   invoice_code VARCHAR(50) NULL,

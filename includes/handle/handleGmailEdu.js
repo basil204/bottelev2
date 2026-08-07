@@ -424,8 +424,27 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
             }
         });
 
-        // Gửi từng tài khoản riêng để dễ copy
-        for (let i = 0; i < createdAccounts.length; i++) {
+        // Một tài khoản: gửi trực tiếp. Từ hai tài khoản: gom vào file TXT.
+        if (createdAccounts.length >= 2) {
+            const fileContent = createdAccounts
+                .map((acc) => `${acc.email}|${acc.password}`)
+                .join('\n');
+            const fileName = `gmail_edu_${createdAccounts.length}_${Date.now()}.txt`;
+            await bot.sendDocument(
+                chatId,
+                Buffer.from(fileContent, 'utf8'),
+                {
+                    caption: L(
+                        lang,
+                        `📄 Danh sách ${createdAccounts.length} tài khoản Gmail EDU (định dạng TK|MK)`,
+                        `📄 ${createdAccounts.length} Gmail EDU accounts (username|password)`,
+                        `📄 ${createdAccounts.length} 个 Gmail EDU 账号（账号|密码）`
+                    )
+                },
+                { filename: fileName, contentType: 'text/plain' }
+            );
+        } else {
+          for (let i = 0; i < createdAccounts.length; i++) {
             const acc = createdAccounts[i];
             const accountMsg = L(lang,
                 `📧 **Tài khoản ${i + 1}:**\n\n🔹 **TK:** \`${acc.email}\`\n🔹 **MK:** \`${acc.password}\``,
@@ -450,6 +469,7 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                     ]]
                 }
             });
+          }
         }
 
         console.log(`[BUY_GMAIL_EDU] ✅ User ${telegramId} purchased ${createdAccounts.length} Gmail EDU`);

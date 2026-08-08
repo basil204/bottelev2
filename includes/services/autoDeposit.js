@@ -12,6 +12,7 @@ import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
 import { deleteQrMessage } from '../handle/handleDeposit.js';
 import { notifyAdminAboutDeposit } from '../handle/handleNotify.js';
+import { globalConfig } from '../listen.js';
 
 
 import { query } from '../database/index.js';
@@ -405,10 +406,18 @@ export const checkExpiredQrs = async (bot) => {
     for (const key of qrKeys) {
       const cache = getCache(key);
       if (cache && cache.expiresAt && cache.expiresAt < Date.now()) {
-        // QR đã hết hạn, xóa message
+        const telegramId = Number(key.slice(3));
+        if (Number.isFinite(telegramId)) {
+          const paymentResult = await checkPaymentForUser(bot, telegramId, globalConfig);
+          if (paymentResult.success) continue;
+        }
+        if (cache.depositId) await updateDepositStatus(cache.depositId, 'rejected');
         await deleteQrMessage(bot, cache);
         delCache(key);
         if (cache.token) delCache(contentKey(cache.token));
+        if (Number.isFinite(telegramId)) {
+          await bot.sendMessage(telegramId, '⌛ QR đã hết hạn và chưa nhận được thanh toán. Yêu cầu nạp tiền đã được hủy.').catch(() => {});
+        }
       }
     }
   } catch (err) {
@@ -531,6 +540,4 @@ export const startAutoDepositWatcher = (bot, config) => {
 
   setInterval(tick, CHECK_INTERVAL);
   tick();
-
-  startQrExpirationChecker(bot);
 };

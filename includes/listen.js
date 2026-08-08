@@ -1,5 +1,5 @@
 import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
-import { startDepositFlow, handleDepositAmount, cancelQr } from './handle/handleDeposit.js';
+import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
 import { showCapCutMenu, startCapCutFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
@@ -55,12 +55,32 @@ const inferButtonStyle = (button) => {
 };
 
 const colorizeReplyMarkup = (options) => {
-  const keyboard = options?.reply_markup?.inline_keyboard;
-  if (!Array.isArray(keyboard)) return;
-  for (const row of keyboard) {
-    if (!Array.isArray(row)) continue;
-    for (const button of row) {
-      if (button && typeof button === 'object') button.style = inferButtonStyle(button);
+  const markup = options?.reply_markup;
+  if (!markup) return;
+
+  const inlineKeyboard = markup.inline_keyboard;
+  if (Array.isArray(inlineKeyboard)) {
+    for (const row of inlineKeyboard) {
+      if (!Array.isArray(row)) continue;
+      for (const button of row) {
+        if (button && typeof button === 'object') button.style = inferButtonStyle(button);
+      }
+    }
+  }
+
+  // Reply keyboard is the bot's main menu: green by default. Destructive
+  // actions such as cancel remain red.
+  const menuKeyboard = markup.keyboard;
+  if (Array.isArray(menuKeyboard)) {
+    for (const row of menuKeyboard) {
+      if (!Array.isArray(row)) continue;
+      for (const button of row) {
+        if (!button || typeof button !== 'object' || button.style) continue;
+        const text = String(button.text || '');
+        button.style = /(hủy|huỷ|cancel|từ chối|reject|xóa|xoá|delete)/i.test(text)
+          ? 'danger'
+          : 'success';
+      }
     }
   }
 };
@@ -506,10 +526,12 @@ export const registerListeners = (bot, config) => {
       const data = JSON.parse(query.data);
       const chatId = query.message.chat.id;
 
-      // Also delete the message containing the clicked button
-      try {
-        await bot.deleteMessage(chatId, query.message.message_id);
-      } catch (e) {}
+      // Giữ QR khi user chỉ kiểm tra; reload/cancel tự xóa trong handler.
+      if (data.action !== 'check_payment') {
+        try {
+          await bot.deleteMessage(chatId, query.message.message_id);
+        } catch (e) {}
+      }
 
       const user = await ensureUser(bot, { ...query.message, from: query.from, text: query.data });
 
@@ -661,6 +683,8 @@ export const registerListeners = (bot, config) => {
           return bot.sendMessage(chatId, result.message);
         case 'cancel_qr':
           return cancelQr(bot, chatId, query.from);
+        case 'reload_qr':
+          return reloadQr(bot, chatId, query.from);
         case 'user_orders':
           return sendOrderHistory(bot, chatId, user.id, data.page || 1, config.PAGE_SIZE);
         case 'user_order_detail':

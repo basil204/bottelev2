@@ -15,6 +15,8 @@ import { query } from '../database/index.js';
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const qrCancelKey = (telegramId) => `qr_cancel_${telegramId}`;
 const contentKey = (token) => `content_${token}`;
+const QR_DURATION_MS = 5 * 60 * 1000;
+const QR_CACHE_TTL_MS = 6 * 60 * 1000;
 
 // Helper for 3-lang text
 const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
@@ -142,6 +144,7 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
   if (existing) {
     if (existing.expiresAt && existing.expiresAt < Date.now()) {
       await deleteQrMessage(bot, existing);
+      if (existing.depositId) await updateDepositStatus(existing.depositId, 'rejected');
       delCache(qrKey(userId));
       if (existing.token) delCache(contentKey(existing.token));
       const expiredMsg = L(lang,
@@ -821,7 +824,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const accountName = bankConfig.accountName;
 
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
-  const expiresAt = Date.now() + 15 * 60 * 1000;
+  const expiresAt = Date.now() + QR_DURATION_MS;
   const depositId = await createDeposit(user.id, amount, content);
 
   const bankNames = {
@@ -837,9 +840,9 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const bankDisplayName = bankNames[selectedBank] || selectedBank.toUpperCase();
 
   let caption = L(lang,
-    `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 15 phút.`,
-    `Deposit request created: ${formatCurrency(amount)}.\n\n🏦 Bank: **${bankDisplayName}**\n💳 Account: \`${accountNo}\` (Click to copy)\n📝 Content: \`${content}\` (Click to copy)\n\n⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 15 minutes.`,
-    `已创建充值请求: ${formatCurrency(amount)}。\n\n🏦 银行: **${bankDisplayName}**\n💳 账号: \`${accountNo}\` (点击复制)\n📝 内容: \`${content}\` (点击复制)\n\n⚠️ **注意：** 请输入正确的转账内容以自动到账。QR 将在15分钟后过期。`
+    `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 5 phút.`,
+    `Deposit request created: ${formatCurrency(amount)}.\n\n🏦 Bank: **${bankDisplayName}**\n💳 Account: \`${accountNo}\` (Click to copy)\n📝 Content: \`${content}\` (Click to copy)\n\n⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 5 minutes.`,
+    `已创建充值请求: ${formatCurrency(amount)}。\n\n🏦 银行: **${bankDisplayName}**\n💳 账号: \`${accountNo}\` (点击复制)\n📝 内容: \`${content}\` (点击复制)\n\n⚠️ **注意：** 请输入正确的转账内容以自动到账。QR 将在5分钟后过期。`
   );
 
   if (promotionResult.bonusAmount > 0) {
@@ -859,13 +862,15 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     reply_markup: {
       inline_keyboard: [
         [{ text: confirmBtn, callback_data: createCallbackData({ action: 'check_payment' }) }],
+        [{ text: '🔄 Tải lại QR (1 lần)', callback_data: createCallbackData({ action: 'reload_qr' }) }],
         [{ text: cancelBtn, callback_data: createCallbackData({ action: 'cancel_qr' }) }]
       ]
     }
   });
 
-  setCache(qrKey(msg.from.id), { depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 15 * 60 * 1000);
-  setCache(contentKey(token), { userId: user.id, depositId, amount, expiresAt, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id }, 15 * 60 * 1000);
+  const qrState = { userId: user.id, depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id, reloadUsed: false };
+  setCache(qrKey(msg.from.id), qrState, QR_CACHE_TTL_MS);
+  setCache(contentKey(token), qrState, QR_CACHE_TTL_MS);
 };
 
 // Admin functions (Vietnamese-only, admin-facing)
@@ -1008,6 +1013,42 @@ export const rejectDeposit = async (bot, chatId, depositId, admin) => {
   if (!deposit || deposit.status !== 'pending') return bot.sendMessage(chatId, 'Không hợp lệ.');
   await updateDepositStatus(depositId, 'rejected');
   await bot.sendMessage(chatId, `Đã từ chối nạp #${depositId}.`);
+};
+
+export const reloadQr = async (bot, chatId, from) => {
+  const cache = getCache(qrKey(from.id));
+  if (!cache) return bot.sendMessage(chatId, 'QR đã hết hạn hoặc không còn tồn tại.');
+  if (cache.reloadUsed) return bot.sendMessage(chatId, 'Bạn đã dùng lượt tải lại QR. Vui lòng thanh toán trước khi QR hết hạn.');
+
+  const deposit = cache.depositId ? await getDeposit(cache.depositId) : null;
+  if (!deposit || deposit.status !== 'pending' || cache.expiresAt < Date.now()) {
+    if (deposit?.status === 'pending') await updateDepositStatus(cache.depositId, 'rejected');
+    await deleteQrMessage(bot, cache);
+    delCache(qrKey(from.id));
+    if (cache.token) delCache(contentKey(cache.token));
+    return bot.sendMessage(chatId, 'QR đã hết hạn và yêu cầu nạp đã được hủy.');
+  }
+
+  // Khóa lượt reload ngay để hai lần bấm liên tiếp không tạo hai QR.
+  const locked = { ...cache, reloadUsed: true };
+  setCache(qrKey(from.id), locked, QR_CACHE_TTL_MS);
+  setCache(contentKey(cache.token), locked, QR_CACHE_TTL_MS);
+  await deleteQrMessage(bot, cache);
+  const expiresAt = Date.now() + QR_DURATION_MS;
+  const qrMessage = await bot.sendPhoto(chatId, cache.qrUrl, {
+    caption: `🔄 **QR ĐÃ ĐƯỢC TẢI LẠI**\n\n💰 Số tiền: ${formatCurrency(cache.amount)}\n📝 Nội dung: \`${cache.content}\`\n\n⏱ QR có hiệu lực thêm 5 phút. Đây là lượt tải lại duy nhất.`,
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ Tôi đã chuyển khoản', callback_data: createCallbackData({ action: 'check_payment' }) }],
+        [{ text: '❌ Hủy QR', callback_data: createCallbackData({ action: 'cancel_qr' }) }]
+      ]
+    }
+  });
+
+  const refreshed = { ...cache, expiresAt, reloadUsed: true, messageId: qrMessage.message_id, chatId };
+  setCache(qrKey(from.id), refreshed, QR_CACHE_TTL_MS);
+  setCache(contentKey(cache.token), refreshed, QR_CACHE_TTL_MS);
 };
 
 export const cancelQr = async (bot, chatId, from) => {

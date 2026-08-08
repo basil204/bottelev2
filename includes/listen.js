@@ -3,6 +3,7 @@ import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './han
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
 import { showCapCutMenu, startCapCutFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
+import { startDownloadFlow, handleDownloadInput } from './handle/handleDownload.js';
 
 import {
   adminMenu,
@@ -169,6 +170,7 @@ export const registerListeners = (bot, config) => {
         keyboard: [
           [{ text: t('deposit', lang), style: 'danger' }, { text: t('buy_product', lang), style: 'primary' }],
           [{ text: '📧 Gmail EDU', style: 'primary' }],
+          [{ text: '⬇️ Download All', style: 'primary' }],
           [{ text: t('history', lang), style: 'danger' }, { text: t('change_language', lang), style: 'success' }]
         ],
         resize_keyboard: true
@@ -250,6 +252,11 @@ export const registerListeners = (bot, config) => {
     await showGmailEduInfo(bot, msg.chat.id, user);
   });
 
+  bot.onText(/^\/getlink(?:@\w+)?$/i, async (msg) => {
+    await ensureUser(bot, msg);
+    await startDownloadFlow(bot, msg.chat.id, msg.from.id);
+  });
+
   // Lịch sử được ẩn khỏi bàn phím chính nhưng vẫn truy cập được bằng lệnh.
   bot.onText(/^\/(history|orders)(?:@\w+)?$/i, async (msg) => {
     const user = await ensureUser(bot, msg);
@@ -312,8 +319,12 @@ export const registerListeners = (bot, config) => {
       delCache(`waiting_trc20_hash_${msg.from.id}`);
       delCache(`trc20_amount_${msg.from.id}`);
       delCache(`waiting_payment_proof_${msg.from.id}`);
+      delCache(`download_all_waiting_${msg.from.id}`);
       return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
     }
+
+    const handledDownload = await handleDownloadInput(bot, msg, config);
+    if (handledDownload) return;
 
     const handledCapCut = await handleCapCutInput(bot, msg, config);
     if (handledCapCut) return;
@@ -346,6 +357,7 @@ export const registerListeners = (bot, config) => {
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
     if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (text === '⬇️ Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
     if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
@@ -592,6 +604,7 @@ export const registerListeners = (bot, config) => {
                 keyboard: [
                   [{ text: t('deposit', selectedLang), style: 'danger' }, { text: t('buy_product', selectedLang), style: 'primary' }],
                   [{ text: '📧 Gmail EDU', style: 'primary' }],
+                  [{ text: '⬇️ Download All', style: 'primary' }],
                   [{ text: t('history', selectedLang), style: 'danger' }, { text: t('change_language', selectedLang), style: 'success' }]
                 ],
                 resize_keyboard: true
@@ -622,6 +635,7 @@ export const registerListeners = (bot, config) => {
                 keyboard: [
                   [{ text: t('deposit', newLang), style: 'danger' }, { text: t('buy_product', newLang), style: 'primary' }],
                   [{ text: '📧 Gmail EDU', style: 'primary' }],
+                  [{ text: '⬇️ Download All', style: 'primary' }],
                   [{ text: t('history', newLang), style: 'danger' }, { text: t('change_language', newLang), style: 'success' }]
                 ],
                 resize_keyboard: true

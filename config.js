@@ -14,6 +14,9 @@ export const config = {
     MINI_APP_URL: process.env.MINI_APP_URL || fileConfig.MINI_APP_URL || '',
     CAPCUT_API_BASE: process.env.CAPCUT_API_BASE || fileConfig.CAPCUT_API_BASE || 'https://tienich.manhit.dev',
     CAPCUT_PROXY_URL: process.env.CAPCUT_PROXY_URL || fileConfig.CAPCUT_PROXY_URL || '',
+    J2DOWNLOAD_API_URL: process.env.J2DOWNLOAD_API_URL || fileConfig.J2DOWNLOAD_API_URL || 'https://j2download.com/api/autolink',
+    J2DOWNLOAD_AUTHORIZATION: process.env.J2DOWNLOAD_AUTHORIZATION || fileConfig.J2DOWNLOAD_AUTHORIZATION || '',
+    J2DOWNLOAD_COOKIE: process.env.J2DOWNLOAD_COOKIE || fileConfig.J2DOWNLOAD_COOKIE || '',
     ADMIN_IDS: (() => {
         let ids = process.env.ADMIN_IDS ? JSON.parse(process.env.ADMIN_IDS) : fileConfig.ADMIN_IDS || [];
         if (!Array.isArray(ids)) {

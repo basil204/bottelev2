@@ -228,25 +228,25 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
       return;
     }
 
-    let message = `🛒 **MUA HÀNG THÀNH CÔNG**\n\n` +
-      `🆔 Mã đơn: #${escapeMarkdown(purchaseInfo.orderId || 'N/A')}\n` +
-      `🎁 Sản phẩm: ${escapeMarkdown(purchaseInfo.productName)}\n` +
-      `👤 User: ${escapeMarkdown(purchaseInfo.username || purchaseInfo.telegramId)}\n` +
-      `📧 ID: ${escapeMarkdown(purchaseInfo.telegramId)}\n` +
-      `📦 Số lượng: ${escapeMarkdown(purchaseInfo.quantity)}\n` +
-      `💰 Giá: ${escapeMarkdown(formatCurrency(purchaseInfo.price))}\n` +
-      `💵 Số dư sau mua: ${escapeMarkdown(formatCurrency(purchaseInfo.finalBalance))}`;
+    let message = `🛒 MUA HÀNG THÀNH CÔNG\n\n` +
+      `🆔 Mã đơn: #${purchaseInfo.orderId || 'N/A'}\n` +
+      `🎁 Sản phẩm: ${purchaseInfo.productName || 'N/A'}\n` +
+      `👤 User: ${purchaseInfo.username || purchaseInfo.telegramId}\n` +
+      `📧 ID: ${purchaseInfo.telegramId}\n` +
+      `📦 Số lượng: ${purchaseInfo.quantity}\n` +
+      `💰 Giá: ${formatCurrency(purchaseInfo.price)}\n` +
+      `💵 Số dư sau mua: ${formatCurrency(purchaseInfo.finalBalance)}`;
 
     // Nếu có thông tin tài khoản, hiển thị thêm
     if (purchaseInfo.accounts) {
-      message += `\n\n📋 **CHI TIẾT TÀI KHOẢN:**\n`;
+      message += `\n\n📋 CHI TIẾT TÀI KHOẢN:\n`;
       if (Array.isArray(purchaseInfo.accounts)) {
-        // Nếu là array object {username/email, password, ...}
         const accountList = purchaseInfo.accounts.map(acc => {
-          const user = escapeMarkdown(acc.username || acc.email);
-          const pass = escapeMarkdown(acc.password);
-          const twofa = acc.twofa ? ` | 2FA: ${escapeMarkdown(acc.twofa)}` : '';
-          return `• \`${user}\` | \`${pass}\`${twofa}`;
+          const user = acc.username || acc.email || '';
+          const pass = acc.password || '';
+          const extra = acc.extra_data ? ` | Extra: ${acc.extra_data}` : '';
+          const twofa = acc.twofa ? ` | 2FA: ${acc.twofa}` : '';
+          return `• ${user} | ${pass}${extra}${twofa}`;
         }).join('\n');
         message += accountList;
       } else if (typeof purchaseInfo.accounts === 'string') {
@@ -261,7 +261,7 @@ export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
     // Gửi thông báo cho từng admin
     for (const adminId of adminIds) {
       try {
-        await bot.sendMessage(adminId, message, { parse_mode: 'Markdown' });
+        await bot.sendMessage(adminId, message);
         successCount++;
 
         // Delay nhỏ để tránh rate limit

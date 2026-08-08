@@ -14,7 +14,10 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
   // Chỉ hiển thị tiêu đề menu
   const text = t('menu_title', lang);
-  const serviceRows = [[{ text: '📧 Gmail EDU', style: 'primary' }]];
+  const serviceRows = [
+    [{ text: '📧 Gmail EDU', style: 'primary' }],
+    [{ text: '⬇️ Download All', style: 'primary' }]
+  ];
 
   const opts = {
     reply_markup: {

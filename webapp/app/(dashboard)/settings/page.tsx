@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Banknote, CreditCard, Trash2, Power } from 'lucide-react';
+import { Save, Banknote, CreditCard, Trash2, Power, Download, DatabaseBackup, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -120,6 +120,7 @@ export default function SettingsPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [exportingSql, setExportingSql] = useState(false);
 
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -282,6 +283,42 @@ export default function SettingsPage() {
         }
     };
 
+    const handleExportSql = async () => {
+        setExportingSql(true);
+        setMessage(null);
+        try {
+            const response = await fetch('/api/database/export', {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                throw new Error(data?.error || 'Không thể xuất dữ liệu SQL.');
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('content-disposition') || '';
+            const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `database_${Date.now()}.sql`;
+            const downloadUrl = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = downloadUrl;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(downloadUrl);
+            setMessage({ type: 'success', text: `Đã xuất bản sao ${filename}.` });
+        } catch (error) {
+            setMessage({
+                type: 'error',
+                text: error instanceof Error ? error.message : 'Không thể xuất dữ liệu SQL.'
+            });
+        } finally {
+            setExportingSql(false);
+        }
+    };
+
 
     if (loading) return (
         <div className="flex h-[50vh] items-center justify-center">
@@ -299,12 +336,15 @@ export default function SettingsPage() {
             <Card>
                 <Tabs defaultValue="general" className="w-full">
                     <CardHeader className="pb-3">
-                        <TabsList className="flex flex-wrap gap-1 h-auto p-1 sm:grid sm:grid-cols-5">
+                        <TabsList className={`flex flex-wrap gap-1 h-auto p-1 sm:grid ${adminRole === 'super_admin' ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
                             <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.general')}</TabsTrigger>
                             <TabsTrigger value="gmail" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.gmail')}</TabsTrigger>
                             <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.admin')}</TabsTrigger>
                             <TabsTrigger value="usdt" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.usdt')}</TabsTrigger>
                             <TabsTrigger value="promotions" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.promotions')}</TabsTrigger>
+                            {adminRole === 'super_admin' && (
+                                <TabsTrigger value="backup" className="text-xs sm:text-sm px-2 sm:px-3">Sao lưu SQL</TabsTrigger>
+                            )}
                         </TabsList>
                     </CardHeader>
 
@@ -981,6 +1021,39 @@ export default function SettingsPage() {
                                 </CardContent>
                             </Card>
                         </TabsContent>
+
+                        {adminRole === 'super_admin' && (
+                            <TabsContent value="backup" className="space-y-6">
+                                <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-slate-800 dark:bg-slate-900/40">
+                                    <div className="grid gap-8 p-6 md:grid-cols-[1fr_auto] md:items-center">
+                                        <div className="max-w-xl">
+                                            <div className="flex items-center gap-3">
+                                                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-700/15 bg-emerald-700/[0.07] text-emerald-700 dark:text-emerald-400">
+                                                    <DatabaseBackup className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-semibold tracking-tight text-zinc-900 dark:text-white">Xuất toàn bộ database</h3>
+                                                    <p className="mt-1 text-sm text-zinc-500">Tạo file SQL gồm cấu trúc bảng và toàn bộ dữ liệu hiện tại.</p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-5 flex items-start gap-2 border-t border-zinc-200 pt-4 text-xs leading-5 text-zinc-500 dark:border-slate-800">
+                                                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                                                File sao lưu có thể chứa token, tài khoản và thông tin giao dịch. Chỉ Super Admin được phép tải xuống.
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            onClick={handleExportSql}
+                                            disabled={exportingSql}
+                                            className="min-w-44 active:scale-[0.98]"
+                                        >
+                                            <Download className="mr-2 h-4 w-4" />
+                                            {exportingSql ? 'Đang tạo file...' : 'Tải file SQL'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </TabsContent>
+                        )}
 
                         {
                             message && (

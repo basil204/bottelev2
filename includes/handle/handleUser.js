@@ -14,14 +14,14 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
   // Chỉ hiển thị tiêu đề menu
   const text = t('menu_title', lang);
-  const serviceRows = [[{ text: '📧 Gmail EDU' }]];
+  const serviceRows = [[{ text: '📧 Gmail EDU', style: 'primary' }]];
 
   const opts = {
     reply_markup: {
       keyboard: [
-        [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
+        [{ text: t('deposit', lang), style: 'danger' }, { text: t('buy_product', lang), style: 'primary' }],
         ...serviceRows,
-        [{ text: t('history', lang) }, { text: t('change_language', lang) }]
+        [{ text: t('history', lang), style: 'danger' }, { text: t('change_language', lang), style: 'success' }]
       ],
       resize_keyboard: true
     }

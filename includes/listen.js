@@ -167,9 +167,9 @@ export const registerListeners = (bot, config) => {
       parse_mode: 'Markdown',
       reply_markup: {
         keyboard: [
-          [{ text: t('deposit', lang) }, { text: t('buy_product', lang) }],
-          [{ text: '📧 Gmail EDU' }],
-          [{ text: t('history', lang) }, { text: t('change_language', lang) }]
+          [{ text: t('deposit', lang), style: 'danger' }, { text: t('buy_product', lang), style: 'primary' }],
+          [{ text: '📧 Gmail EDU', style: 'primary' }],
+          [{ text: t('history', lang), style: 'danger' }, { text: t('change_language', lang), style: 'success' }]
         ],
         resize_keyboard: true
       }
@@ -590,9 +590,9 @@ export const registerListeners = (bot, config) => {
               parse_mode: 'Markdown',
               reply_markup: {
                 keyboard: [
-                  [{ text: t('deposit', selectedLang) }, { text: t('buy_product', selectedLang) }],
-                  [{ text: '📧 Gmail EDU' }],
-                  [{ text: t('history', selectedLang) }, { text: t('change_language', selectedLang) }]
+                  [{ text: t('deposit', selectedLang), style: 'danger' }, { text: t('buy_product', selectedLang), style: 'primary' }],
+                  [{ text: '📧 Gmail EDU', style: 'primary' }],
+                  [{ text: t('history', selectedLang), style: 'danger' }, { text: t('change_language', selectedLang), style: 'success' }]
                 ],
                 resize_keyboard: true
               }
@@ -620,9 +620,9 @@ export const registerListeners = (bot, config) => {
               parse_mode: 'Markdown',
               reply_markup: {
                 keyboard: [
-                  [{ text: t('deposit', newLang) }, { text: t('buy_product', newLang) }],
-                  [{ text: '📧 Gmail EDU' }],
-                  [{ text: t('history', newLang) }, { text: t('change_language', newLang) }]
+                  [{ text: t('deposit', newLang), style: 'danger' }, { text: t('buy_product', newLang), style: 'primary' }],
+                  [{ text: '📧 Gmail EDU', style: 'primary' }],
+                  [{ text: t('history', newLang), style: 'danger' }, { text: t('change_language', newLang), style: 'success' }]
                 ],
                 resize_keyboard: true
               }

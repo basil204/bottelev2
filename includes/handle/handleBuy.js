@@ -45,7 +45,8 @@ export const sendCategoryList = async (bot, chatId, user) => {
       (total, product) => total + Math.max(0, Number(product.stock) || 0),
       0
     );
-    const hasStock = productsInCat.some(p => p.type === 'order' || (p.stock && p.stock > 0));
+    // Màu danh mục bám đúng con số đang hiển thị: (0) đỏ, (>0) xanh.
+    const hasStock = totalAccounts > 0;
     const icon = hasStock ? '🟢' : '🔴';
 
     // Remove any existing duplicate status circle emojis
@@ -53,7 +54,8 @@ export const sendCategoryList = async (bot, chatId, user) => {
 
     return {
       text: `${icon} ${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`,
-      callback_data: createCallbackData({ action: 'category_products', catId: cat.id })
+      callback_data: createCallbackData({ action: 'category_products', catId: cat.id }),
+      style: hasStock ? 'success' : 'danger'
     };
   });
 

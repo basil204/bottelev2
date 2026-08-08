@@ -2,6 +2,22 @@ import { findOrCreateUser, getUserByTelegram } from '../controllers/userControll
 import { getOrderByIdForUser, listTodayOrdersByUser } from '../controllers/orderController.js';
 import { formatCurrency } from '../../utils/index.js';
 import { query } from '../database/index.js';
+import { getCache, setCache, delCache } from '../../lib/cache/index.js';
+
+const menuMessageKey = (chatId) => `active_menu_message_${chatId}`;
+
+export const sendTrackedMenu = async (bot, chatId, text, options = {}) => {
+  const previousMessageId = getCache(menuMessageKey(chatId));
+  if (previousMessageId) {
+    try {
+      await bot.deleteMessage(chatId, previousMessageId);
+    } catch {}
+    delCache(menuMessageKey(chatId));
+  }
+  const sent = await bot.sendMessage(chatId, text, options);
+  if (sent?.message_id) setCache(menuMessageKey(chatId), sent.message_id, 24 * 60 * 60 * 1000);
+  return sent;
+};
 
 export const ensureUser = async (bot, msg) => {
   const user = await findOrCreateUser(msg.from.id, msg.from.username);
@@ -19,7 +35,7 @@ export const buildMainKeyboard = (t, lang) => ({
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
   const { t } = await import('../helpers/langHelper.js');
   const lang = user.language || 'vi';
-  await bot.sendMessage(chatId, t('menu_title', lang), {
+  await sendTrackedMenu(bot, chatId, t('menu_title', lang), {
     reply_markup: buildMainKeyboard(t, lang)
   });
 };
@@ -27,7 +43,7 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 export const sendPurchaseMenu = async (bot, chatId, user) => {
   const { t } = await import('../helpers/langHelper.js');
   const lang = user.language || 'vi';
-  return bot.sendMessage(chatId, '🛒 MUA HÀNG\n\nChọn loại sản phẩm hoặc xem lại lịch sử:', {
+  return sendTrackedMenu(bot, chatId, '🛒 MUA HÀNG\n\nChọn loại sản phẩm hoặc xem lại lịch sử:', {
     reply_markup: {
       keyboard: [
         [{ text: '🛒 Mua tài khoản', style: 'primary' }],
@@ -40,7 +56,7 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
   });
 };
 
-export const sendUtilityMenu = async (bot, chatId) => bot.sendMessage(chatId, '🧰 TIỆN ÍCH\n\nChọn tiện ích cần sử dụng:', {
+export const sendUtilityMenu = async (bot, chatId) => sendTrackedMenu(bot, chatId, '🧰 TIỆN ÍCH\n\nChọn tiện ích cần sử dụng:', {
   reply_markup: {
     keyboard: [
       [{ text: '🔎 Check Live', style: 'primary' }, { text: '⬇️ Download All', style: 'primary' }],

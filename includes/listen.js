@@ -1,4 +1,4 @@
-import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo, buildMainKeyboard, sendPurchaseMenu, sendUtilityMenu } from './handle/handleUser.js';
+import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo, buildMainKeyboard, sendPurchaseMenu, sendUtilityMenu, sendTrackedMenu } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
@@ -186,7 +186,7 @@ export const registerListeners = (bot, config) => {
       reply_markup: buildMainKeyboard(t, lang)
     };
 
-    await bot.sendMessage(msg.chat.id, messageText, opts);
+    await sendTrackedMenu(bot, msg.chat.id, messageText, opts);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
@@ -627,7 +627,7 @@ export const registerListeners = (bot, config) => {
             welcomeText += t('user_info', selectedLang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
             welcomeText += t('guide', selectedLang) + '\n\n';
 
-            await bot.sendMessage(chatId, welcomeText, {
+            await sendTrackedMenu(bot, chatId, welcomeText, {
               parse_mode: 'Markdown',
               reply_markup: buildMainKeyboard(t, selectedLang)
             });
@@ -649,7 +649,7 @@ export const registerListeners = (bot, config) => {
             await bot.sendMessage(chatId, t('lang_switched', newLang), { parse_mode: 'Markdown' });
 
             // Cập nhật menu keyboard theo ngôn ngữ mới
-            await bot.sendMessage(chatId, t('menu_title', newLang), {
+            await sendTrackedMenu(bot, chatId, t('menu_title', newLang), {
               parse_mode: 'Markdown',
               reply_markup: buildMainKeyboard(t, newLang)
             });

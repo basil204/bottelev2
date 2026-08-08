@@ -1,9 +1,11 @@
-import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo } from './handle/handleUser.js';
+import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo, buildMainKeyboard, sendPurchaseMenu, sendUtilityMenu } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
 import { showCapCutMenu, startCapCutFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
-import { startDownloadFlow, handleDownloadInput } from './handle/handleDownload.js';
+import { startDownloadFlow, handleDownloadInput, handleDownloadSelection } from './handle/handleDownload.js';
+import { handleCheckLiveCommand } from './handle/handleCheckLive.js';
+import { startLocketFlow, handleLocketInput } from './handle/handleLocket.js';
 
 import {
   adminMenu,
@@ -36,6 +38,17 @@ import { getCache, setCache, delCache } from '../lib/cache/index.js';
 
 // Lưu config ở module level để có thể truy cập từ các callback
 export let globalConfig = {};
+
+const PUBLIC_COMMANDS_TEXT = `📋 CÁC LỆNH CỦA BOT
+/start - Khởi động và xem hướng dẫn
+/menu - Mở menu chính
+/info - Xem tài khoản và số dư
+/gmail - Mua Gmail EDU
+/buymail gmail <số lượng> - Mua Gmail nhanh
+/history - Xem lịch sử mua hôm nay
+/getlink - Tải video, ảnh hoặc audio
+/checklive - Kiểm tra Facebook, Instagram, TikTok
+/lang - Đổi ngôn ngữ`;
 
 const BUTTON_COLOR_PATCHED = Symbol.for('bottele.inline-button-colors');
 
@@ -119,7 +132,7 @@ export const registerListeners = (bot, config) => {
 
     // Kiểm tra nếu user chưa chọn ngôn ngữ (lần đầu /start)
     if (!user.language) {
-      const selectLangText = t('select_language', 'vi');
+      const selectLangText = `${t('select_language', 'vi')}\n\n${PUBLIC_COMMANDS_TEXT}`;
       await bot.sendMessage(msg.chat.id, selectLangText, {
         parse_mode: 'Markdown',
         reply_markup: {
@@ -163,22 +176,17 @@ export const registerListeners = (bot, config) => {
     messageText += t('welcome', lang) + '\n\n';
     messageText += t('user_info', lang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
     messageText += t('guide', lang) + '\n\n';
+    messageText += PUBLIC_COMMANDS_TEXT;
+    if (config.ADMIN_IDS.includes(msg.from.id)) {
+      messageText += `\n/admin - Mở bảng điều khiển Admin\n/kmnap - Quản lý khuyến mãi nạp`;
+    }
 
     const opts = {
       parse_mode: 'Markdown',
-      reply_markup: {
-        keyboard: [
-          [{ text: t('deposit', lang), style: 'danger' }, { text: t('buy_product', lang), style: 'primary' }],
-          [{ text: '📧 Gmail EDU', style: 'primary' }],
-          [{ text: '⬇️ Download All', style: 'primary' }],
-          [{ text: t('history', lang), style: 'danger' }, { text: t('change_language', lang), style: 'success' }]
-        ],
-        resize_keyboard: true
-      }
+      reply_markup: buildMainKeyboard(t, lang)
     };
 
     await bot.sendMessage(msg.chat.id, messageText, opts);
-    await sendCategoryList(bot, msg.chat.id, user);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
@@ -257,6 +265,11 @@ export const registerListeners = (bot, config) => {
     await startDownloadFlow(bot, msg.chat.id, msg.from.id);
   });
 
+  bot.onText(/^\/checklive(?:@\w+)?(?:\s+([\s\S]+))?$/i, async (msg, match) => {
+    await ensureUser(bot, msg);
+    await handleCheckLiveCommand(bot, msg, match?.[1] || '');
+  });
+
   // Lịch sử được ẩn khỏi bàn phím chính nhưng vẫn truy cập được bằng lệnh.
   bot.onText(/^\/(history|orders)(?:@\w+)?$/i, async (msg) => {
     const user = await ensureUser(bot, msg);
@@ -320,8 +333,12 @@ export const registerListeners = (bot, config) => {
       delCache(`trc20_amount_${msg.from.id}`);
       delCache(`waiting_payment_proof_${msg.from.id}`);
       delCache(`download_all_waiting_${msg.from.id}`);
+      delCache(`locket_lookup_waiting_${msg.from.id}`);
       return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
     }
+
+    const handledLocket = await handleLocketInput(bot, msg);
+    if (handledLocket) return;
 
     const handledDownload = await handleDownloadInput(bot, msg, config);
     if (handledDownload) return;
@@ -356,8 +373,13 @@ export const registerListeners = (bot, config) => {
 
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
-    if (text === '📧 Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+    if (text === '📧 Gmail EDU' || text === '📧 Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (text === '🧰 Tiện ích') return sendUtilityMenu(bot, msg.chat.id);
+    if (text === '🔎 Check Live') return handleCheckLiveCommand(bot, msg, '');
     if (text === '⬇️ Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
+    if (text === '🔐 Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
+    if (text === '↩️ Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
     if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
@@ -539,7 +561,7 @@ export const registerListeners = (bot, config) => {
       const chatId = query.message.chat.id;
 
       // Giữ QR khi user chỉ kiểm tra; reload/cancel tự xóa trong handler.
-      if (data.action !== 'check_payment') {
+      if (data.action !== 'check_payment' && !['dl', 'dla'].includes(data.a)) {
         try {
           await bot.deleteMessage(chatId, query.message.message_id);
         } catch (e) {}
@@ -566,6 +588,12 @@ export const registerListeners = (bot, config) => {
       }
 
       switch (action) {
+        case 'dl':
+          return handleDownloadSelection(bot, query, 'download_one', data.i);
+        case 'dla':
+          return handleDownloadSelection(bot, query, 'download_all');
+        case 'dlc':
+          return handleDownloadSelection(bot, query, 'download_cancel');
         case 'capcut_start':
           return startCapCutFlow(bot, chatId, query.from.id);
         case 'select_lang':
@@ -600,19 +628,10 @@ export const registerListeners = (bot, config) => {
 
             await bot.sendMessage(chatId, welcomeText, {
               parse_mode: 'Markdown',
-              reply_markup: {
-                keyboard: [
-                  [{ text: t('deposit', selectedLang), style: 'danger' }, { text: t('buy_product', selectedLang), style: 'primary' }],
-                  [{ text: '📧 Gmail EDU', style: 'primary' }],
-                  [{ text: '⬇️ Download All', style: 'primary' }],
-                  [{ text: t('history', selectedLang), style: 'danger' }, { text: t('change_language', selectedLang), style: 'success' }]
-                ],
-                resize_keyboard: true
-              }
+              reply_markup: buildMainKeyboard(t, selectedLang)
             });
 
-            // Hiển thị danh sách danh mục
-            return sendCategoryList(bot, chatId, user);
+            return;
           }
 
         case 'change_lang':
@@ -631,15 +650,7 @@ export const registerListeners = (bot, config) => {
             // Cập nhật menu keyboard theo ngôn ngữ mới
             await bot.sendMessage(chatId, t('menu_title', newLang), {
               parse_mode: 'Markdown',
-              reply_markup: {
-                keyboard: [
-                  [{ text: t('deposit', newLang), style: 'danger' }, { text: t('buy_product', newLang), style: 'primary' }],
-                  [{ text: '📧 Gmail EDU', style: 'primary' }],
-                  [{ text: '⬇️ Download All', style: 'primary' }],
-                  [{ text: t('history', newLang), style: 'danger' }, { text: t('change_language', newLang), style: 'success' }]
-                ],
-                resize_keyboard: true
-              }
+              reply_markup: buildMainKeyboard(t, newLang)
             });
             return;
           }

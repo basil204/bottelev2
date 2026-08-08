@@ -8,29 +8,47 @@ export const ensureUser = async (bot, msg) => {
   return user;
 };
 
+export const buildMainKeyboard = (t, lang) => ({
+  keyboard: [
+    [{ text: t('deposit', lang), style: 'danger' }, { text: '🛒 Mua hàng Gmail', style: 'primary' }],
+    [{ text: '🧰 Tiện ích', style: 'primary' }, { text: t('change_language', lang), style: 'success' }]
+  ],
+  resize_keyboard: true
+});
+
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
   const { t } = await import('../helpers/langHelper.js');
   const lang = user.language || 'vi';
+  await bot.sendMessage(chatId, t('menu_title', lang), {
+    reply_markup: buildMainKeyboard(t, lang)
+  });
+};
 
-  // Chỉ hiển thị tiêu đề menu
-  const text = t('menu_title', lang);
-  const serviceRows = [
-    [{ text: '📧 Gmail EDU', style: 'primary' }],
-    [{ text: '⬇️ Download All', style: 'primary' }]
-  ];
-
-  const opts = {
+export const sendPurchaseMenu = async (bot, chatId, user) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const lang = user.language || 'vi';
+  return bot.sendMessage(chatId, '🛒 MUA HÀNG GMAIL\n\nChọn chức năng:', {
     reply_markup: {
       keyboard: [
-        [{ text: t('deposit', lang), style: 'danger' }, { text: t('buy_product', lang), style: 'primary' }],
-        ...serviceRows,
-        [{ text: t('history', lang), style: 'danger' }, { text: t('change_language', lang), style: 'success' }]
+        [{ text: '📧 Mua Gmail EDU', style: 'primary' }],
+        [{ text: t('history', lang), style: 'danger' }],
+        [{ text: '↩️ Menu chính', style: 'success' }]
       ],
       resize_keyboard: true
     }
-  };
-  await bot.sendMessage(chatId, text, opts);
+  });
 };
+
+export const sendUtilityMenu = async (bot, chatId) => bot.sendMessage(chatId, '🧰 TIỆN ÍCH\n\nChọn tiện ích cần sử dụng:', {
+  reply_markup: {
+    keyboard: [
+      [{ text: '🔎 Check Live', style: 'primary' }, { text: '⬇️ Download All', style: 'primary' }],
+      [{ text: '🔐 Locket', style: 'primary' }],
+      [{ text: '↩️ Menu chính', style: 'success' }]
+    ],
+    resize_keyboard: true
+  }
+});
 
 export const sendOrderHistory = async (bot, chatId, userId) => {
   const { getUserById } = await import('../controllers/userController.js');

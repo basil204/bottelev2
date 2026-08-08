@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 
 const waitingKey = (telegramId) => `download_all_waiting_${telegramId}`;
+const mediaKey = (telegramId) => `download_media_choices_${telegramId}`;
+const downloadLockKey = (telegramId) => `download_media_lock_${telegramId}`;
 const MAX_MEDIA = 10;
 const MAX_TELEGRAM_FILE_SIZE = 49 * 1024 * 1024;
 const J2_ORIGIN = 'https://j2download.com';
@@ -239,27 +241,43 @@ export const handleDownloadInput = async (bot, msg, config) => {
 
     const medias = result.medias.slice(0, MAX_MEDIA);
     const title = String(result.title || '').slice(0, 500);
-    await bot.editMessageText(
-      `✅ Đã tìm thấy ${medias.length} tệp${result.author ? `\n👤 ${result.author}` : ''}${title ? `\n📝 ${title}` : ''}`,
-      { chat_id: msg.chat.id, message_id: status.message_id }
-    );
+    setCache(mediaKey(msg.from.id), {
+      id: result.id,
+      author: result.author,
+      title,
+      medias
+    }, 10 * 60 * 1000);
 
-    let sent = 0;
-    for (let index = 0; index < medias.length; index += 1) {
-      try {
-        await sendMedia(bot, msg.chat.id, medias[index], index, {
-          id: result.id,
-          total: medias.length
-        });
-        sent += 1;
-      } catch (error) {
-        console.error(`[DOWNLOAD_ALL] Media ${index + 1}:`, error.message);
-        await bot.sendMessage(msg.chat.id, `⚠️ Không gửi được tệp ${index + 1}. Link tải trực tiếp:\n${medias[index].url}`);
-      }
-    }
-    await bot.sendMessage(msg.chat.id, `✅ Hoàn tất: ${sent}/${medias.length} tệp đã được gửi.`, {
-      reply_markup: { remove_keyboard: true }
+    const mediaButtons = medias.map((media, index) => {
+      const icon = media.type === 'audio' ? '🎵' : media.type === 'image' ? '🖼️' : '🎬';
+      const resolution = media.width && media.height ? ` · ${media.width}x${media.height}` : '';
+      const size = media.data_size ? ` · ${(Number(media.data_size) / 1024 / 1024).toFixed(1)}MB` : '';
+      const quality = media.quality || media.extension || `Tệp ${index + 1}`;
+      return [{
+        text: `${icon} ${quality}${resolution}${size}`.slice(0, 60),
+        callback_data: JSON.stringify({ a: 'dl', i: index }),
+        style: 'primary'
+      }];
     });
+    mediaButtons.push([{
+      text: `⬇️ Tải tất cả (${medias.length})`,
+      callback_data: JSON.stringify({ a: 'dla' }),
+      style: 'success'
+    }]);
+    mediaButtons.push([{
+      text: '❌ Hủy',
+      callback_data: JSON.stringify({ a: 'dlc' }),
+      style: 'danger'
+    }]);
+
+    await bot.editMessageText(
+      `✅ Đã tìm thấy ${medias.length} lựa chọn${result.author ? `\n👤 ${result.author}` : ''}${title ? `\n📝 ${title}` : ''}\n\nChọn tệp cần tải:`,
+      {
+        chat_id: msg.chat.id,
+        message_id: status.message_id,
+        reply_markup: { inline_keyboard: mediaButtons }
+      }
+    );
   } catch (error) {
     const detail = error.response?.data?.message || error.response?.data?.error || error.message;
     console.error('[DOWNLOAD_ALL] Error:', detail);
@@ -269,4 +287,55 @@ export const handleDownloadInput = async (bot, msg, config) => {
     );
   }
   return true;
+};
+
+export const handleDownloadSelection = async (bot, query, action, index) => {
+  const telegramId = query.from.id;
+  const chatId = query.message.chat.id;
+  if (action === 'download_cancel') {
+    delCache(mediaKey(telegramId));
+    await bot.answerCallbackQuery(query.id, { text: 'Đã hủy tải.' });
+    return bot.sendMessage(chatId, '❌ Đã hủy lựa chọn tải.');
+  }
+
+  const saved = getCache(mediaKey(telegramId));
+  if (!saved?.medias?.length) {
+    await bot.answerCallbackQuery(query.id, { text: 'Danh sách đã hết hạn.', show_alert: true });
+    return bot.sendMessage(chatId, '⌛ Danh sách tải đã hết hạn. Hãy dùng /getlink và dán lại link.');
+  }
+  if (getCache(downloadLockKey(telegramId))) {
+    return bot.answerCallbackQuery(query.id, { text: 'Bot đang tải tệp trước đó, vui lòng chờ.', show_alert: true });
+  }
+
+  const selected = action === 'download_all'
+    ? saved.medias
+    : [saved.medias[Number(index)]].filter(Boolean);
+  if (!selected.length) {
+    return bot.answerCallbackQuery(query.id, { text: 'Lựa chọn không hợp lệ.', show_alert: true });
+  }
+
+  setCache(downloadLockKey(telegramId), true, 2 * 60 * 1000);
+  await bot.answerCallbackQuery(query.id, { text: `Bắt đầu tải ${selected.length} tệp...` });
+  const status = await bot.sendMessage(chatId, `⏳ Đang tải ${selected.length} tệp đã chọn...`);
+  let sent = 0;
+  try {
+    for (let position = 0; position < selected.length; position += 1) {
+      try {
+        await sendMedia(bot, chatId, selected[position], position, {
+          id: saved.id,
+          total: selected.length
+        });
+        sent += 1;
+      } catch (error) {
+        console.error(`[DOWNLOAD_SELECTION] Media ${position + 1}:`, error.message);
+        await bot.sendMessage(chatId, `⚠️ Không gửi được tệp ${position + 1}. Link tải trực tiếp:\n${selected[position].url}`);
+      }
+    }
+    await bot.editMessageText(`✅ Hoàn tất: ${sent}/${selected.length} tệp đã được gửi.`, {
+      chat_id: chatId,
+      message_id: status.message_id
+    });
+  } finally {
+    delCache(downloadLockKey(telegramId));
+  }
 };

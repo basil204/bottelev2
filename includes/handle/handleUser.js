@@ -10,7 +10,7 @@ export const ensureUser = async (bot, msg) => {
 
 export const buildMainKeyboard = (t, lang) => ({
   keyboard: [
-    [{ text: t('deposit', lang), style: 'danger' }, { text: '🛒 Mua hàng Gmail', style: 'primary' }],
+    [{ text: t('deposit', lang), style: 'danger' }, { text: '🛒 Mua hàng', style: 'primary' }],
     [{ text: '🧰 Tiện ích', style: 'primary' }, { text: t('change_language', lang), style: 'success' }]
   ],
   resize_keyboard: true
@@ -27,9 +27,10 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 export const sendPurchaseMenu = async (bot, chatId, user) => {
   const { t } = await import('../helpers/langHelper.js');
   const lang = user.language || 'vi';
-  return bot.sendMessage(chatId, '🛒 MUA HÀNG GMAIL\n\nChọn chức năng:', {
+  return bot.sendMessage(chatId, '🛒 MUA HÀNG\n\nChọn loại sản phẩm hoặc xem lại lịch sử:', {
     reply_markup: {
       keyboard: [
+        [{ text: '🛒 Mua tài khoản', style: 'primary' }],
         [{ text: '📧 Mua Gmail EDU', style: 'primary' }],
         [{ text: t('history', lang), style: 'danger' }],
         [{ text: '↩️ Menu chính', style: 'success' }]

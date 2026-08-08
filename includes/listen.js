@@ -373,7 +373,8 @@ export const registerListeners = (bot, config) => {
 
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
-    if (text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+    if (text === '🛒 Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+    if (text === '🛒 Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
     if (text === '📧 Gmail EDU' || text === '📧 Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
     if (text === '🧰 Tiện ích') return sendUtilityMenu(bot, msg.chat.id);
     if (text === '🔎 Check Live') return handleCheckLiveCommand(bot, msg, '');

@@ -46,6 +46,25 @@ interface MonthlySummary {
     count: number;
 }
 
+interface BankBalanceSummary {
+    bank: string;
+    totalCredit: number;
+    totalDebit: number;
+    balance: number;
+    transactionCount: number;
+}
+
+const BANK_LABELS: Record<string, string> = {
+    VIETTEL: 'ViettelPay',
+    VCB: 'Vietcombank',
+    TPB: 'TPBank',
+    MB: 'MBBank',
+    ACB: 'ACB',
+    TCB: 'Techcombank',
+    VP: 'VPBank',
+    TIMO: 'Timo',
+};
+
 export default function BankHistoryPage() {
     const { t } = useLanguage();
     const { formatPrice } = useCurrency();
@@ -258,6 +277,38 @@ export default function BankHistoryPage() {
         return { totalCredit, totalDebit, count: filteredTransactions.length };
     }, [filteredTransactions]);
 
+    // Calculate the net balance of every bank from all loaded transactions.
+    // A bank is shown automatically as soon as it has at least one transaction.
+    const bankBalanceSummaries = useMemo(() => {
+        const summaryMap = new Map<string, BankBalanceSummary>();
+
+        transactions.forEach(tx => {
+            const bank = (tx.bank || 'UNKNOWN').toUpperCase();
+            const amount = Number(tx.amount) || 0;
+            const existing = summaryMap.get(bank) || {
+                bank,
+                totalCredit: 0,
+                totalDebit: 0,
+                balance: 0,
+                transactionCount: 0,
+            };
+
+            if ((tx.paymentType || 'CREDIT') === 'CREDIT') {
+                existing.totalCredit += amount;
+            } else {
+                existing.totalDebit += amount;
+            }
+
+            existing.balance = existing.totalCredit - existing.totalDebit;
+            existing.transactionCount++;
+            summaryMap.set(bank, existing);
+        });
+
+        return Array.from(summaryMap.values()).sort((a, b) =>
+            (BANK_LABELS[a.bank] || a.bank).localeCompare(BANK_LABELS[b.bank] || b.bank)
+        );
+    }, [transactions]);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -279,6 +330,49 @@ export default function BankHistoryPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Balance by bank */}
+            <section className="space-y-3" aria-labelledby="bank-balances-title">
+                <div>
+                    <h3 id="bank-balances-title" className="text-lg font-semibold">Tổng tiền theo ngân hàng</h3>
+                    <p className="text-sm text-muted-foreground">Số dư = tổng tiền vào - tổng tiền chi</p>
+                </div>
+
+                {!loading && bankBalanceSummaries.length === 0 ? (
+                    <div className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                        Chưa có giao dịch ngân hàng để tính số dư.
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {bankBalanceSummaries.map(summary => (
+                            <Card key={summary.bank}>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">
+                                        {BANK_LABELS[summary.bank] || summary.bank}
+                                    </CardTitle>
+                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div className={`text-2xl font-bold ${summary.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {summary.balance < 0 ? '-' : ''}{formatPrice(Math.abs(summary.balance))}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 border-t pt-3 text-xs">
+                                        <div>
+                                            <p className="text-muted-foreground">Tiền vào</p>
+                                            <p className="mt-1 font-semibold text-emerald-600">+{formatPrice(summary.totalCredit)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-muted-foreground">Tiền chi</p>
+                                            <p className="mt-1 font-semibold text-red-600">-{formatPrice(summary.totalDebit)}</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{summary.transactionCount} giao dịch</p>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             {/* Summary Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

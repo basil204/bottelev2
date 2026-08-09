@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { getUserById, updateBalance } from '../controllers/userController.js';
 import {
   createDepositWithStatus,
@@ -11,7 +12,7 @@ import { getActivePromotion, calculatePromotedAmount } from '../controllers/depo
 import { formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache, getAllKeys } from '../../lib/cache/index.js';
 import { deleteQrMessage } from '../handle/handleDeposit.js';
-import { notifyAdminAboutDeposit } from '../handle/handleNotify.js';
+import { notifyAdminAboutDeposit, notifyAdminAboutIncomingTransfer, getAdminIds } from '../handle/handleNotify.js';
 import { globalConfig } from '../listen.js';
 
 
@@ -435,14 +436,63 @@ export const startQrExpirationChecker = (bot) => {
 export const startAutoDepositWatcher = (bot, config) => {
   const CHECK_INTERVAL = 5000; // Check every 5 seconds
 
+  let schemaReady = false;
+  let tickRunning = false;
+  const ensureNotificationSchema = async () => {
+    if (schemaReady) return;
+    await query(`
+      CREATE TABLE IF NOT EXISTS bank_incoming_transactions (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        bank VARCHAR(20) NOT NULL,
+        transaction_ref VARCHAR(191) NOT NULL,
+        amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+        description TEXT NULL,
+        transaction_date VARCHAR(100) NULL,
+        notification_sent TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_bank_transaction (bank, transaction_ref),
+        INDEX idx_notification_sent (notification_sent)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await query(`
+      CREATE TABLE IF NOT EXISTS bank_notification_state (
+        bank VARCHAR(20) PRIMARY KEY,
+        initialized_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    schemaReady = true;
+  };
+
+  const transactionReference = (tx, bank) => {
+    if (tx.id) return String(tx.id).slice(0, 191);
+    return crypto.createHash('sha256')
+      .update(`${bank}|${tx.amount}|${tx.transDate}|${tx.description}`)
+      .digest('hex');
+  };
+
+  const extractTransactions = (data, bank) => {
+    if (bank === 'viettel' && data?.status?.code === '00' && data.data) {
+      return data.data.content || data.data.trans || [];
+    }
+    if (bank === 'vcb' && (data?.code === '00' || data?.status?.code === '00')) return data.transactions || [];
+    if (bank === 'tpb') return data?.transactionInfos || [];
+    if (bank === 'mb' && data?.status === 'success') return data.TranList || [];
+    if (bank === 'acb') return data?.data || [];
+    if (bank === 'tcb' && data?.status === 'success') return data.transactions || [];
+    if ((bank === 'vp' || bank === 'timo') && data?.status === 'success') return data.data || [];
+    return [];
+  };
+
   const tick = async () => {
+    if (tickRunning) return;
+    tickRunning = true;
     try {
+      await ensureNotificationSchema();
       const pendingKeys = getAllKeys('qr_');
-      if (!pendingKeys || pendingKeys.length === 0) return;
 
       // Group pending keys by bank
       const pendingByBank = {};
-      pendingKeys.forEach(key => {
+      (pendingKeys || []).forEach(key => {
         const qr = getCache(key);
         if (qr && qr.bank) {
           if (!pendingByBank[qr.bank]) pendingByBank[qr.bank] = [];
@@ -450,10 +500,15 @@ export const startAutoDepositWatcher = (bot, config) => {
         }
       });
 
-      const activeBanks = Object.keys(pendingByBank);
+      // Luôn theo dõi ngân hàng đang bật, kể cả khi không có QR chờ.
+      const activeBankRows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank' LIMIT 1");
+      const configuredBank = String(activeBankRows?.[0]?.value || 'viettel').toLowerCase();
+      const activeBanks = [...new Set([...Object.keys(pendingByBank), configuredBank])]
+        .filter((bank) => getBankUrl(bank, 'token'));
       if (activeBanks.length === 0) return;
 
       const promotion = await getActivePromotion();
+      const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
 
       for (const bank of activeBanks) {
         const token = await getBankToken(bank);
@@ -466,68 +521,79 @@ export const startAutoDepositWatcher = (bot, config) => {
           const response = await axios.get(url);
           const data = response.data;
 
-          let rawTransactions = [];
-          if (bank === 'viettel') {
-            if (data && data.status?.code === '00' && data.data) {
-              rawTransactions = data.data.content || data.data.trans || [];
-            }
-          } else if (bank === 'vcb') {
-            if (data && (data.code === '00' || data.status?.code === '00') && data.transactions) {
-              rawTransactions = data.transactions || [];
-            }
-          } else if (bank === 'tpb') {
-            if (data && data.transactionInfos) {
-              rawTransactions = data.transactionInfos || [];
-            }
-          } else if (bank === 'mb') {
-            if (data && data.status === 'success' && data.TranList) {
-              rawTransactions = data.TranList || [];
-            }
-          } else if (bank === 'acb') {
-            if (data && data.data) {
-              rawTransactions = data.data || [];
-            }
-          } else if (bank === 'tcb') {
-            if (data && data.status === 'success' && data.transactions) {
-              rawTransactions = data.transactions || [];
-            }
-          } else if (bank === 'vp' || bank === 'timo') {
-            if (data && data.status === 'success' && data.data) {
-              rawTransactions = data.data || [];
-            }
-          }
+          const rawTransactions = extractTransactions(data, bank);
+          const [state] = await query('SELECT bank FROM bank_notification_state WHERE bank = ? LIMIT 1', [bank]);
+          const isInitialSnapshot = !state;
 
           for (const rawTx of rawTransactions) {
             const tx = normalizeTransaction(rawTx, bank);
             if (!tx) continue;
 
             if (tx.paymentType && tx.paymentType !== 'CREDIT') continue;
+            if (!(Number(tx.amount) > 0)) continue;
 
+            const reference = transactionReference(tx, bank);
+            await query(
+              `INSERT IGNORE INTO bank_incoming_transactions
+               (bank, transaction_ref, amount, description, transaction_date, notification_sent)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [bank.toUpperCase(), reference, tx.amount, tx.description || '', tx.transDate || '', isInitialSnapshot ? 1 : 0]
+            );
             const note = tx.description || '';
             const amount = tx.amount;
             const txToken = extractToken(note);
+            let depositProcessed = false;
 
-            if (!txToken) continue;
-
-            const cached = getCache(contentKey(txToken));
-            if (!cached || cached.bank !== bank) continue;
-
-            const user = await getUserById(cached.userId);
-            if (!user) continue;
-
-            const requestedAmount = Number(cached.amount);
-            if (amount < requestedAmount) {
-              console.log(`[AUTO_${bank.toUpperCase()}] Underpayment for ${txToken}: ${amount} < ${requestedAmount}`);
-              continue;
+            if (txToken) {
+              const cached = getCache(contentKey(txToken));
+              if (cached && cached.bank === bank) {
+                const user = await getUserById(cached.userId);
+                const requestedAmount = Number(cached.amount);
+                if (user && amount >= requestedAmount) {
+                  console.log(`[AUTO_${bank.toUpperCase()}] Found matching transaction: Token=${txToken}, Amount=${amount}`);
+                  depositProcessed = await processDepositTransaction(bot, {
+                    amount_in: amount,
+                    id: tx.id || reference,
+                    transaction_content: note,
+                    ref_prefix: bank.toUpperCase()
+                  }, cached, user, promotion);
+                } else if (user) {
+                  console.log(`[AUTO_${bank.toUpperCase()}] Underpayment for ${txToken}: ${amount} < ${requestedAmount}`);
+                }
+              }
             }
 
-            console.log(`[AUTO_${bank.toUpperCase()}] Found matching transaction: Token=${txToken}, Amount=${amount}`);
-            await processDepositTransaction(bot, {
-              amount_in: amount,
-              id: tx.id,
-              transaction_content: note,
-              ref_prefix: bank.toUpperCase()
-            }, cached, user, promotion);
+            if (depositProcessed) {
+              await query(
+                'UPDATE bank_incoming_transactions SET notification_sent = 1 WHERE bank = ? AND transaction_ref = ?',
+                [bank.toUpperCase(), reference]
+              );
+            } else if (!isInitialSnapshot && adminIds.length > 0) {
+              const [notificationRow] = await query(
+                'SELECT notification_sent FROM bank_incoming_transactions WHERE bank = ? AND transaction_ref = ? LIMIT 1',
+                [bank.toUpperCase(), reference]
+              );
+              if (Number(notificationRow?.notification_sent || 0) === 0) {
+                const notified = await notifyAdminAboutIncomingTransfer(bot, adminIds, {
+                  bank: tx.bank || bank.toUpperCase(),
+                  amount,
+                  description: note,
+                  reference,
+                  transDate: tx.transDate
+                });
+                if (notified) {
+                  await query(
+                    'UPDATE bank_incoming_transactions SET notification_sent = 1 WHERE bank = ? AND transaction_ref = ?',
+                    [bank.toUpperCase(), reference]
+                  );
+                }
+              }
+            }
+          }
+
+          if (isInitialSnapshot) {
+            await query('INSERT IGNORE INTO bank_notification_state (bank) VALUES (?)', [bank]);
+            console.log(`[AUTO_${bank.toUpperCase()}] Đã tạo mốc ban đầu, không thông báo giao dịch cũ.`);
           }
         } catch (err) {
           console.error(`[AUTO_${bank.toUpperCase()}] Polling Error:`, err.message);
@@ -535,6 +601,8 @@ export const startAutoDepositWatcher = (bot, config) => {
       }
     } catch (err) {
       console.error('[AUTO_WATCHER] General Error:', err.message);
+    } finally {
+      tickRunning = false;
     }
   };
 

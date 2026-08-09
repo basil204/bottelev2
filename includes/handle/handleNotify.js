@@ -329,6 +329,31 @@ export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
   }
 };
 
+// Thông báo giao dịch tiền vào chưa được khớp với một yêu cầu nạp thành công.
+export const notifyAdminAboutIncomingTransfer = async (bot, adminIds, transaction) => {
+  if (!Array.isArray(adminIds) || adminIds.length === 0) return false;
+
+  const message = `💸 CÓ TIỀN CHUYỂN VÀO TÀI KHOẢN\n\n` +
+    `🏦 Ngân hàng: ${transaction.bank || 'N/A'}\n` +
+    `💰 Số tiền: ${formatCurrency(transaction.amount)}\n` +
+    `📝 Nội dung: ${transaction.description || 'Không có nội dung'}\n` +
+    `🆔 Mã giao dịch: ${transaction.reference || 'N/A'}\n` +
+    `🕐 Thời gian: ${transaction.transDate || new Date().toLocaleString('vi-VN')}\n\n` +
+    `⚠️ Giao dịch này chưa được khớp với yêu cầu nạp tiền thành công.`;
+
+  let successCount = 0;
+  for (const adminId of adminIds) {
+    try {
+      await bot.sendMessage(adminId, message);
+      successCount += 1;
+    } catch (error) {
+      console.error(`[NOTIFY_INCOMING_TRANSFER] Admin ${adminId}:`, error.message);
+    }
+  }
+  console.log(`[NOTIFY_INCOMING_TRANSFER] ${successCount}/${adminIds.length} admin đã nhận thông báo`);
+  return successCount > 0;
+};
+
 // Thông báo vào nhóm khi có sản phẩm mới được thêm vào kho
 export const notifyGroupAboutNewStock = async (bot, notificationChatId, productId, accountCount) => {
   try {

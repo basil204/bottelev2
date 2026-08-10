@@ -21,11 +21,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Dialog } from '@/components/ui/dialog';
-import { RefreshCw, Plus, Trash2, Package, Copy, Check, Edit2, Save, X, User, ChevronLeft, ChevronRight, KeyRound, Loader2 } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, Package, Copy, Check, Edit2, Save, X, User, ChevronLeft, ChevronRight, KeyRound, Loader2, Settings2, FolderOpen } from 'lucide-react';
 
 interface AccountType {
     id: number;
     name: string;
+    account_count: number;
 }
 
 interface StoredAccount {
@@ -124,6 +125,10 @@ export default function StoredAccountsPage() {
     const [showAddTypeDialog, setShowAddTypeDialog] = useState(false);
     const [newTypeName, setNewTypeName] = useState('');
     const [addingType, setAddingType] = useState(false);
+    const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+    const [editingTypeName, setEditingTypeName] = useState('');
+    const [typeActionId, setTypeActionId] = useState<number | null>(null);
+    const [typeError, setTypeError] = useState('');
     const [copiedAll, setCopiedAll] = useState(false);
 
     // Selection state
@@ -204,6 +209,7 @@ export default function StoredAccountsPage() {
 
         try {
             setAddingType(true);
+            setTypeError('');
             const res = await fetch('/api/account-types', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -211,16 +217,66 @@ export default function StoredAccountsPage() {
             });
             const data = await res.json();
             if (data.success) {
-                fetchTypes();
+                await fetchTypes();
                 setNewTypeName('');
-                setShowAddTypeDialog(false);
             } else {
-                alert(data.error);
+                setTypeError(data.error);
             }
         } catch (error) {
             console.error('Error adding type:', error);
+            setTypeError('Không thể thêm loại tài khoản. Vui lòng thử lại.');
         } finally {
             setAddingType(false);
+        }
+    };
+
+    const handleRenameType = async (id: number) => {
+        if (!editingTypeName.trim()) return;
+        try {
+            setTypeActionId(id);
+            setTypeError('');
+            const res = await fetch('/api/account-types', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, name: editingTypeName.trim() })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            await fetchTypes();
+            await fetchAccounts();
+            setEditingTypeId(null);
+            setEditingTypeName('');
+        } catch (error) {
+            setTypeError(error instanceof Error ? error.message : 'Không thể đổi tên loại tài khoản.');
+        } finally {
+            setTypeActionId(null);
+        }
+    };
+
+    const handleDeleteType = async (type: AccountType) => {
+        if (Number(type.account_count) > 0) {
+            setTypeError(`“${type.name}” đang có ${type.account_count} tài khoản nên chưa thể xóa.`);
+            return;
+        }
+        if (!window.confirm(`Xóa loại “${type.name}”? Thao tác này không thể hoàn tác.`)) return;
+
+        try {
+            setTypeActionId(type.id);
+            setTypeError('');
+            const res = await fetch('/api/account-types', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: type.id, reason: 'Xóa từ màn quản lý loại tài khoản' })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            if (selectedType === type.id.toString()) setSelectedType('');
+            if (filterType === type.id.toString()) setFilterType('all');
+            await fetchTypes();
+        } catch (error) {
+            setTypeError(error instanceof Error ? error.message : 'Không thể xóa loại tài khoản.');
+        } finally {
+            setTypeActionId(null);
         }
     };
 
@@ -538,10 +594,15 @@ export default function StoredAccountsPage() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setShowAddTypeDialog(true)}
-                                            title="Thêm loại mới"
+                                            onClick={() => {
+                                                setTypeError('');
+                                                setShowAddTypeDialog(true);
+                                            }}
+                                            title="Quản lý loại tài khoản"
+                                            className="h-10 px-3"
                                         >
-                                            <Plus className="w-4 h-4" />
+                                            <Settings2 className="w-4 h-4" />
+                                            <span className="hidden sm:inline">Quản lý</span>
                                         </Button>
                                     </div>
                                 </div>
@@ -1173,34 +1234,115 @@ export default function StoredAccountsPage() {
                     </Card>
                 )}
 
-            {/* Add Type Dialog */}
+            {/* Account type management */}
             <Dialog
                 open={showAddTypeDialog}
-                onOpenChange={setShowAddTypeDialog}
-                title="Thêm loại tài khoản mới"
+                onOpenChange={(open) => {
+                    setShowAddTypeDialog(open);
+                    if (!open) {
+                        setEditingTypeId(null);
+                        setTypeError('');
+                    }
+                }}
+                title="Quản lý loại tài khoản"
+                description="Thêm, đổi tên và dọn dẹp các nhóm tài khoản trong kho."
+                className="max-w-2xl"
             >
-                <div className="py-4">
-                    <Input
-                        placeholder="Nhập tên loại tài khoản..."
-                        value={newTypeName}
-                        onChange={(e) => setNewTypeName(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                handleAddType();
-                            }
-                        }}
-                        autoFocus
-                    />
-                </div>
-                <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setShowAddTypeDialog(false)}>
-                        <X className="w-4 h-4 mr-1" />
-                        Hủy
-                    </Button>
-                    <Button onClick={handleAddType} disabled={addingType || !newTypeName.trim()}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        {addingType ? 'Đang thêm...' : 'Thêm'}
-                    </Button>
+                <div className="space-y-5 pt-5">
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
+                        <label htmlFor="new-account-type" className="mb-2 block text-sm font-semibold text-zinc-800">
+                            Thêm loại mới
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="new-account-type"
+                                placeholder="Ví dụ: Canva Pro, ChatGPT Plus..."
+                                value={newTypeName}
+                                onChange={(e) => setNewTypeName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleAddType();
+                                }}
+                                autoFocus
+                            />
+                            <Button onClick={handleAddType} disabled={addingType || !newTypeName.trim()}>
+                                {addingType ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                {addingType ? 'Đang thêm' : 'Thêm loại'}
+                            </Button>
+                        </div>
+                        <p className="mt-2 text-xs text-zinc-500">Tên ngắn gọn sẽ giúp chọn và lọc tài khoản nhanh hơn.</p>
+                    </div>
+
+                    {typeError && (
+                        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                            {typeError}
+                        </div>
+                    )}
+
+                    <div>
+                        <div className="mb-2 flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-zinc-900">Các loại hiện có</h3>
+                            <span className="text-xs text-zinc-500">{types.length} loại</span>
+                        </div>
+                        {types.length === 0 ? (
+                            <div className="flex flex-col items-center rounded-xl border border-dashed border-zinc-300 px-4 py-8 text-center">
+                                <FolderOpen className="mb-3 h-8 w-8 text-zinc-400" />
+                                <p className="text-sm font-medium text-zinc-700">Chưa có loại tài khoản</p>
+                                <p className="mt-1 text-xs text-zinc-500">Tạo loại đầu tiên bằng ô phía trên.</p>
+                            </div>
+                        ) : (
+                            <div className="max-h-72 divide-y divide-zinc-100 overflow-y-auto rounded-xl border border-zinc-200">
+                                {types.map((type) => (
+                                    <div key={type.id} className="flex min-h-14 items-center gap-3 px-3 py-2.5">
+                                        {editingTypeId === type.id ? (
+                                            <Input
+                                                value={editingTypeName}
+                                                onChange={(e) => setEditingTypeName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleRenameType(type.id);
+                                                    if (e.key === 'Escape') setEditingTypeId(null);
+                                                }}
+                                                className="h-9 flex-1"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-medium text-zinc-900">{type.name}</p>
+                                                <p className="text-xs text-zinc-500">{Number(type.account_count)} tài khoản</p>
+                                            </div>
+                                        )}
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            {editingTypeId === type.id ? (
+                                                <>
+                                                    <Button size="icon" onClick={() => handleRenameType(type.id)} disabled={typeActionId === type.id || !editingTypeName.trim()} title="Lưu tên mới">
+                                                        {typeActionId === type.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => setEditingTypeId(null)} title="Hủy sửa">
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(type.id); setEditingTypeName(type.name); setTypeError(''); }} title="Đổi tên">
+                                                        <Edit2 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleDeleteType(type)}
+                                                        disabled={typeActionId === type.id}
+                                                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                        title={Number(type.account_count) > 0 ? 'Loại đang chứa tài khoản' : 'Xóa loại'}
+                                                    >
+                                                        {typeActionId === type.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </Dialog>
         </div >

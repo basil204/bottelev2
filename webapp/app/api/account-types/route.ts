@@ -7,13 +7,61 @@ import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 // GET - List all account types
 export async function GET() {
     try {
-        const [rows] = await pool.query<RowDataPacket[]>(
-            'SELECT * FROM account_types ORDER BY name ASC'
-        );
+        const [rows] = await pool.query<RowDataPacket[]>(`
+            SELECT at.*, COUNT(sa.id) AS account_count
+            FROM account_types at
+            LEFT JOIN stored_accounts sa ON sa.account_type_id = at.id
+            GROUP BY at.id
+            ORDER BY at.name ASC
+        `);
 
         return NextResponse.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching account types:', error);
+        return NextResponse.json(
+            { success: false, error: 'Lỗi server' },
+            { status: 500 }
+        );
+    }
+}
+
+// PUT - Rename account type
+export async function PUT(request: Request) {
+    try {
+        const { id, name } = await request.json();
+
+        if (!id || !name?.trim()) {
+            return NextResponse.json(
+                { success: false, error: 'ID và tên loại tài khoản là bắt buộc' },
+                { status: 400 }
+            );
+        }
+
+        const [result] = await pool.query<ResultSetHeader>(
+            'UPDATE account_types SET name = ? WHERE id = ?',
+            [name.trim(), id]
+        );
+
+        if (result.affectedRows === 0) {
+            return NextResponse.json(
+                { success: false, error: 'Không tìm thấy loại tài khoản' },
+                { status: 404 }
+            );
+        }
+
+        const adminName = await getAdminFromCookie(request);
+        await logAdminAction({
+            adminName: adminName || 'System',
+            action: 'UPDATE',
+            targetType: 'ACCOUNT_TYPE',
+            targetId: id,
+            details: { name: name.trim() },
+            request
+        });
+
+        return NextResponse.json({ success: true, message: 'Đã cập nhật loại tài khoản' });
+    } catch (error) {
+        console.error('Error updating account type:', error);
         return NextResponse.json(
             { success: false, error: 'Lỗi server' },
             { status: 500 }
@@ -71,7 +119,25 @@ export async function DELETE(request: Request) {
             );
         }
 
-        await pool.query('DELETE FROM account_types WHERE id = ?', [id]);
+        const [usageRows] = await pool.query<RowDataPacket[]>(
+            'SELECT COUNT(*) AS account_count FROM stored_accounts WHERE account_type_id = ?',
+            [id]
+        );
+
+        if (Number(usageRows[0]?.account_count || 0) > 0) {
+            return NextResponse.json(
+                { success: false, error: 'Không thể xóa loại đang chứa tài khoản. Hãy chuyển hoặc xóa các tài khoản trước.' },
+                { status: 409 }
+            );
+        }
+
+        const [result] = await pool.query<ResultSetHeader>('DELETE FROM account_types WHERE id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return NextResponse.json(
+                { success: false, error: 'Không tìm thấy loại tài khoản' },
+                { status: 404 }
+            );
+        }
 
         // Log action
         const adminName = await getAdminFromCookie(request);

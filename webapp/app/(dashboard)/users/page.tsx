@@ -23,6 +23,14 @@ interface User {
     username: string;
     telegram_id: number;
     balance: number;
+    total_deposited: number;
+    rank_name: string;
+    rank_bonus_percentage: number;
+    next_rank_name: string | null;
+    next_rank_min: number | null;
+    rank_progress: number;
+    customer_tag: string | null;
+    admin_note: string | null;
     created_at: string;
 }
 
@@ -62,6 +70,9 @@ export default function UsersPage() {
     const [reason, setReason] = useState('');
     const [actionType, setActionType] = useState<'add' | 'subtract'>('add');
     const [searchQuery, setSearchQuery] = useState('');
+    const [customerTag, setCustomerTag] = useState('');
+    const [adminNote, setAdminNote] = useState('');
+    const [savingMetadata, setSavingMetadata] = useState(false);
 
     // Purchase history state
     const [activeTab, setActiveTab] = useState<'balance' | 'orders'>('balance');
@@ -115,6 +126,8 @@ export default function UsersPage() {
         if (selectedUser) {
             fetchUserOrders(selectedUser.id);
             setActiveTab('balance');
+            setCustomerTag(selectedUser.customer_tag || '');
+            setAdminNote(selectedUser.admin_note || '');
         } else {
             setUserOrders([]);
             setProductSummary([]);
@@ -152,6 +165,25 @@ export default function UsersPage() {
         }
     };
 
+    const handleMetadataUpdate = async () => {
+        if (!selectedUser) return;
+        setSavingMetadata(true);
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: selectedUser.id, type: 'admin_metadata', customer_tag: customerTag, admin_note: adminNote })
+            });
+            if (!res.ok) throw new Error('Không thể lưu thông tin quản trị');
+            setUsers(current => current.map(user => user.id === selectedUser.id ? { ...user, customer_tag: customerTag || null, admin_note: adminNote || null } : user));
+            setSelectedUser(current => current ? { ...current, customer_tag: customerTag || null, admin_note: adminNote || null } : current);
+            alert('Đã lưu nhãn và ghi chú nội bộ.');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Không thể lưu thông tin quản trị');
+        } finally {
+            setSavingMetadata(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -162,7 +194,7 @@ export default function UsersPage() {
                 <div className="flex items-center gap-2">
                     <Input
                         type="text"
-                        placeholder={t('users.search_placeholder')}
+                        placeholder="Tìm username, Telegram ID, nhãn hoặc ghi chú..."
                         className="w-64"
                         value={searchQuery}
                         onChange={handleSearchChange}
@@ -186,6 +218,8 @@ export default function UsersPage() {
                                     <TableHead>{t('users.username')}</TableHead>
                                     <TableHead>{t('users.telegram_id')}</TableHead>
                                     <TableHead>{t('users.balance')}</TableHead>
+                                    <TableHead>Tổng nạp</TableHead>
+                                    <TableHead>Rank nạp tiền</TableHead>
                                     <TableHead>{t('users.joined_date')}</TableHead>
                                     <TableHead className="text-right">{t('common.actions')}</TableHead>
                                 </TableRow>
@@ -193,16 +227,24 @@ export default function UsersPage() {
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center">{t('common.loading')}</TableCell>
+                                        <TableCell colSpan={8} className="h-24 text-center">{t('common.loading')}</TableCell>
                                     </TableRow>
                                 ) : (
                                     users.map((user) => (
                                         <TableRow key={user.id}>
                                             <TableCell>#{user.id}</TableCell>
-                                            <TableCell className="font-medium">{user.username || 'N/A'}</TableCell>
+                                            <TableCell className="font-medium"><div>{user.username || 'N/A'}</div>{user.customer_tag && <span className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">{user.customer_tag}</span>}</TableCell>
                                             <TableCell className="text-muted-foreground">{user.telegram_id}</TableCell>
                                             <TableCell className="font-bold text-green-600 dark:text-green-400">
                                                 {formatPrice(user.balance)}
+                                            </TableCell>
+                                            <TableCell className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                                                {formatPrice(Number(user.total_deposited || 0))}
+                                            </TableCell>
+                                            <TableCell className="min-w-44">
+                                                <div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-zinc-800 dark:text-zinc-200">{user.rank_name}</span>{user.rank_bonus_percentage > 0 && <span className="text-emerald-700">+{user.rank_bonus_percentage}%</span>}</div>
+                                                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full origin-left rounded-full bg-emerald-700 transition-transform" style={{ transform: `scaleX(${Number(user.rank_progress || 0) / 100})` }} /></div>
+                                                <p className="mt-1 text-[10px] text-muted-foreground">{user.next_rank_name ? `Còn ${formatPrice(Math.max(0, Number(user.next_rank_min) - Number(user.total_deposited)))} đến ${user.next_rank_name}` : 'Đã đạt rank cao nhất'}</p>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</TableCell>
                                             <TableCell className="text-right">
@@ -277,6 +319,14 @@ export default function UsersPage() {
                     {/* Balance Tab */}
                     {activeTab === 'balance' && (
                         <>
+                            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+                                <h4 className="text-sm font-semibold text-sky-950 dark:text-sky-100">Thông tin quản trị nội bộ</h4>
+                                <div className="mt-3 grid gap-3">
+                                    <div className="space-y-2"><label className="text-xs font-medium">Nhãn khách hàng</label><Input value={customerTag} onChange={e => setCustomerTag(e.target.value)} placeholder="VIP, cần hỗ trợ, rủi ro..." maxLength={50} /></div>
+                                    <div className="space-y-2"><label className="text-xs font-medium">Ghi chú nội bộ</label><Textarea value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Thông tin chỉ admin nhìn thấy..." rows={3} /></div>
+                                    <Button type="button" variant="outline" onClick={handleMetadataUpdate} disabled={savingMetadata}>{savingMetadata ? 'Đang lưu...' : 'Lưu ghi chú quản trị'}</Button>
+                                </div>
+                            </div>
                             <div className="flex gap-2">
                                 <Button
                                     type="button"

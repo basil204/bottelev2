@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   credit INT DEFAULT 0,
   referral_code VARCHAR(50) UNIQUE,
   language VARCHAR(5) DEFAULT NULL,
+  customer_tag VARCHAR(50) NULL,
+  admin_note TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -15,6 +17,7 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(18,2) NOT NULL,
   description TEXT,
   stock INT DEFAULT 0,
+  low_stock_threshold INT NOT NULL DEFAULT 5,
   sold_adjustment INT NOT NULL DEFAULT 0,
   type ENUM('auto', 'manual') DEFAULT 'auto',
   priority INT DEFAULT 0

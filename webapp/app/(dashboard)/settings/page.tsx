@@ -65,6 +65,7 @@ interface Settings {
     admin_username2: string;
     admin_password2: string;
     gmail_checker_api_keys: string[];
+    deposit_rank_promotions: { name: string; min_total: number; bonus_percentage: number }[];
 }
 
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -113,6 +114,7 @@ export default function SettingsPage() {
         admin_username2: '',
         admin_password2: '',
         gmail_checker_api_keys: [],
+        deposit_rank_promotions: [],
     });
 
     const [newAdminId, setNewAdminId] = useState('');
@@ -281,6 +283,26 @@ export default function SettingsPage() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const addDepositRank = () => {
+        setSettings(prev => ({
+            ...prev,
+            deposit_rank_promotions: [...(prev.deposit_rank_promotions || []), { name: 'Rank mới', min_total: 0, bonus_percentage: 0 }]
+        }));
+    };
+
+    const updateDepositRank = (index: number, field: 'name' | 'min_total' | 'bonus_percentage', value: string) => {
+        setSettings(prev => ({
+            ...prev,
+            deposit_rank_promotions: prev.deposit_rank_promotions.map((rank, rankIndex) => rankIndex === index
+                ? { ...rank, [field]: field === 'name' ? value : Math.max(0, Number(value)) }
+                : rank)
+        }));
+    };
+
+    const removeDepositRank = (index: number) => {
+        setSettings(prev => ({ ...prev, deposit_rank_promotions: prev.deposit_rank_promotions.filter((_, rankIndex) => rankIndex !== index) }));
     };
 
     const handleExportSql = async () => {
@@ -934,6 +956,27 @@ export default function SettingsPage() {
                         </TabsContent>
 
                         <TabsContent value="promotions">
+                            <div className="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Khuyến mại theo rank tổng nạp</CardTitle>
+                                    <CardDescription>Rank cao nhất user đạt được sẽ áp dụng cho lần nạp tiếp theo và được ưu tiên hơn khuyến mại chung.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid gap-3">
+                                        {(settings.deposit_rank_promotions || []).map((rank, index) => (
+                                            <div key={index} className="grid gap-3 rounded-xl border border-zinc-200 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+                                                <div className="space-y-2"><Label>Tên rank</Label><Input value={rank.name} onChange={e => updateDepositRank(index, 'name', e.target.value)} placeholder="Ví dụ: Vàng" /></div>
+                                                <div className="space-y-2"><Label>Tổng nạp tối thiểu</Label><Input type="number" min="0" value={rank.min_total} onChange={e => updateDepositRank(index, 'min_total', e.target.value)} /></div>
+                                                <div className="space-y-2"><Label>Thưởng mỗi lần nạp (%)</Label><Input type="number" min="0" max="100" value={rank.bonus_percentage} onChange={e => updateDepositRank(index, 'bonus_percentage', e.target.value)} /></div>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeDepositRank(index)} aria-label={`Xóa ${rank.name}`}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {(settings.deposit_rank_promotions || []).length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Chưa có rank tổng nạp.</p>}
+                                    <Button type="button" variant="outline" onClick={addDepositRank}>Thêm rank</Button>
+                                </CardContent>
+                            </Card>
                             <Card>
                                 <CardHeader>
                                     <CardTitle>{t('settings.promotions')}</CardTitle>
@@ -1020,6 +1063,7 @@ export default function SettingsPage() {
                                     </div>
                                 </CardContent>
                             </Card>
+                            </div>
                         </TabsContent>
 
                         {adminRole === 'super_admin' && (

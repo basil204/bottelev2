@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import pool, { dbReady } from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 
 
 export async function GET(request: Request) {
   try {
+    await dbReady;
     // Log action
     const adminName = await getAdminFromCookie(request);
     await logAdminAction({
@@ -29,6 +30,15 @@ export async function GET(request: Request) {
     `);
     const [deposits] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved"');
     const [ordersCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM orders');
+    const [pendingDepositStats] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM deposits WHERE status = "pending"');
+    const [inventoryAlerts] = await pool.query<RowDataPacket[]>(`
+      SELECT id, name, stock, low_stock_threshold,
+             CASE WHEN stock = 0 THEN 'out' ELSE 'low' END AS stock_status
+      FROM products
+      WHERE type = 'stock' AND stock <= COALESCE(low_stock_threshold, 5)
+      ORDER BY stock ASC, priority DESC, id DESC
+      LIMIT 8
+    `);
 
     // New stats for Dashboard
     const [todayDeposits] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved" AND DATE(created_at) = CURDATE()');
@@ -73,6 +83,9 @@ export async function GET(request: Request) {
       todayDeposits: todayDeposits[0].total || 0,
       monthDeposits: monthDeposits[0].total || 0,
       totalOrders: ordersCount[0].count,
+      pendingDeposits: Number(pendingDepositStats[0]?.count || 0),
+      pendingDepositAmount: Number(pendingDepositStats[0]?.total || 0),
+      inventoryAlerts,
       revenueChart,
       productRevenue
     });

@@ -261,6 +261,9 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   }
 
   const originalAmount = typeof cached.amount !== 'undefined' ? Number(cached.amount) : credit;
+  // Resolve per-user rank at processing time; the caller-level promotion is only a fallback.
+  const userPromotion = await getActivePromotion(user.id);
+  promotion = userPromotion || promotion;
   const promotionResult = calculatePromotedAmount(originalAmount, promotion);
 
   // Log promotion application
@@ -375,7 +378,7 @@ export const checkPaymentForUser = async (bot, userId, config) => {
   const user = await getUserById(cached.userId);
   if (!user) return { success: false, message: L(lang, 'Lỗi thông tin user.', 'User info error.', '用户信息错误。') };
 
-  const promotion = await getActivePromotion();
+  const promotion = await getActivePromotion(user.id);
 
   let success = false;
   const bankToken = await getBankToken(bank);

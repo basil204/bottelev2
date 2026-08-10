@@ -35,7 +35,7 @@ export async function GET(request: Request) {
             FROM deposits d 
             LEFT JOIN users u ON d.user_id = u.id 
             ${whereClause}
-            ORDER BY d.created_at DESC 
+            ORDER BY CASE WHEN d.status = 'pending' THEN 0 ELSE 1 END, d.created_at DESC
             LIMIT ? OFFSET ?
         `, [...params, limit, offset]);
 
@@ -115,8 +115,20 @@ export async function POST(request: Request) {
                 // To support full promotion, we'd need to fetch settings. 
 
                 // Let's fetch settings to check for basic promotion
-                const [settingsRows] = await connection.query<any[]>("SELECT `value` FROM settings WHERE `key` = 'deposit_promotion_percent'");
-                const promoPercent = Number(settingsRows[0]?.value) || 0;
+                const [settingsRows] = await connection.query<any[]>("SELECT `key`, `value` FROM settings WHERE `key` IN ('deposit_promotion_percent', 'deposit_rank_promotions')");
+                const settingsMap = Object.fromEntries(settingsRows.map(row => [row.key, row.value]));
+                let promoPercent = Number(settingsMap.deposit_promotion_percent) || 0;
+                try {
+                    const ranks = JSON.parse(settingsMap.deposit_rank_promotions || '[]');
+                    const [totalRows] = await connection.query<any[]>("SELECT COALESCE(SUM(amount), 0) AS total FROM deposits WHERE user_id = ? AND status = 'approved' AND id <> ?", [deposit.user_id, depositId]);
+                    const totalDeposited = Number(totalRows[0]?.total || 0);
+                    const matchedRank = Array.isArray(ranks) ? ranks
+                        .filter(rank => totalDeposited >= Number(rank.min_total || 0) && Number(rank.bonus_percentage || 0) > 0)
+                        .sort((a, b) => Number(b.min_total || 0) - Number(a.min_total || 0))[0] : null;
+                    if (matchedRank) promoPercent = Number(matchedRank.bonus_percentage);
+                } catch {
+                    // Keep the general promotion when rank settings are invalid.
+                }
 
                 let finalAmount = deposit.amount;
                 let bonusAmount = 0;

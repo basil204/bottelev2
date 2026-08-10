@@ -12,10 +12,13 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { useCurrency } from '@/hooks/useCurrency';
 
 interface ProductRevenue { product_id: number; product_name: string; order_count: number; total_revenue: number }
+interface InventoryAlert { id: number; name: string; stock: number; low_stock_threshold: number; stock_status: 'low' | 'out' }
 interface DashboardStats {
   totalUsers: number; totalRevenue: number; totalDeposits: number; todayDeposits: number;
   monthDeposits: number; totalOrders: number; revenueChart: { date: string; total: number }[];
   productRevenue: ProductRevenue[];
+  inventoryAlerts: InventoryAlert[];
+  pendingDeposits: number; pendingDepositAmount: number;
 }
 interface SystemInfo { usagePercent: number; usedGB: string; totalGB: string; freeGB: string; botUsername?: string }
 interface GmailSale { id: number; email: string; sold_at: string; buyer_username: string; buyer_telegram_id: string; price: number }
@@ -97,6 +100,23 @@ export default function Dashboard() {
       </div>
       <div className="relative mt-9 grid border-t border-white/10 sm:grid-cols-2 lg:grid-cols-4">{metrics.map((metric) => <article key={metric.label} className="group border-b border-white/10 py-5 sm:px-5 sm:first:pl-0 lg:border-b-0 lg:border-r lg:last:border-r-0"><div className="flex items-center justify-between gap-3"><p className="text-[11px] font-medium text-zinc-400">{metric.label}</p><metric.icon size={17} className="text-emerald-300/70 transition-transform group-hover:-translate-y-0.5" /></div><p className="mt-4 font-mono text-2xl font-medium tracking-[-0.04em] text-white">{metric.value}</p><p className="mt-2 text-[10px] text-zinc-500">{metric.note}</p></article>)}</div>
     </section>
+
+    {stats.pendingDeposits > 0 && (
+      <Link href="/deposits" className="mt-6 flex flex-col gap-3 rounded-[20px] border border-sky-200 bg-sky-50 px-5 py-4 transition hover:border-sky-300 hover:bg-sky-100/70 active:scale-[0.995] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3"><Wallet size={19} className="text-sky-700" /><div><h2 className="text-sm font-semibold text-sky-950">{stats.pendingDeposits} yêu cầu nạp đang chờ</h2><p className="mt-0.5 text-xs text-sky-800/75">Tổng giá trị khai báo {formatPrice(stats.pendingDepositAmount)}</p></div></div>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-900">Kiểm tra ngay <ArrowRight size={13} /></span>
+      </Link>
+    )}
+
+    {stats.inventoryAlerts?.length > 0 && (
+      <section aria-label="Cảnh báo tồn kho" className="mt-6 overflow-hidden rounded-[20px] border border-amber-200 bg-amber-50/80">
+        <div className="flex flex-col gap-3 border-b border-amber-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3"><WarningCircle size={19} className="text-amber-700" /><div><h2 className="text-sm font-semibold text-amber-950">Tồn kho cần xử lý</h2><p className="mt-0.5 text-xs text-amber-800/80">Bấm vào sản phẩm để cập nhật ngay.</p></div></div>
+          <Link href="/products" className="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 hover:underline">Xem tất cả <ArrowRight size={13} /></Link>
+        </div>
+        <div className="divide-y divide-amber-200/70">{stats.inventoryAlerts.map(item => <Link key={item.id} href={`/products?edit=${item.id}`} className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-amber-100/70 active:scale-[0.995]"><span className="truncate font-medium text-amber-950">{item.name}</span><span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.stock_status === 'out' ? 'bg-red-100 text-red-700' : 'bg-amber-200/70 text-amber-900'}`}>{item.stock_status === 'out' ? 'Hết hàng' : `Còn ${item.stock}`}</span></Link>)}</div>
+      </section>
+    )}
 
     <section className="mt-8 grid overflow-hidden rounded-[24px] border border-zinc-200 bg-white xl:grid-cols-[minmax(0,1fr)_340px]">
       <article className="min-w-0 border-b border-zinc-200 xl:border-b-0 xl:border-r"><div className="flex flex-col gap-5 px-5 pb-2 pt-6 sm:flex-row sm:items-start sm:justify-between sm:px-8 sm:pt-8"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Dòng tiền</p><h2 className="mt-2 text-xl font-semibold text-zinc-900">Nhịp doanh thu</h2><p className="mt-1 text-xs text-zinc-500">Biến động trong 7 ngày gần nhất</p></div><div className="sm:text-right"><p className="font-mono text-2xl font-medium tracking-tight text-zinc-900">{formatPrice(stats.totalDeposits)}</p><p className="mt-1 text-[11px] text-zinc-500">Tổng doanh thu đã ghi nhận</p></div></div><div className="h-[350px] px-1 pb-5 pt-7 sm:px-5">{stats.revenueChart?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={stats.revenueChart} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#287a50" stopOpacity={0.2} /><stop offset="100%" stopColor="#287a50" stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="#e4e4e7" strokeDasharray="3 5" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 10 }} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#a1a1aa', fontSize: 10 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip contentStyle={{ background: '#17231d', border: 0, borderRadius: 12, color: '#fff', fontSize: 12 }} formatter={(value) => [formatPrice(Number(value)), 'Doanh thu']} /><Area type="monotone" dataKey="total" stroke="#287a50" strokeWidth={2.5} fill="url(#revenueFill)" activeDot={{ r: 4, fill: '#287a50', stroke: '#fff', strokeWidth: 2 }} /></AreaChart></ResponsiveContainer> : <EmptyState label="Chưa có dữ liệu doanh thu để hiển thị" />}</div></article>

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import pool, { dbReady } from '@/lib/db';
 import { logAdminAction, getAdminFromCookie, getRequestInfo } from '@/lib/adminLog';
 
 
 export async function GET(request: Request) {
     try {
+        await dbReady;
         // Log action
         const adminName = await getAdminFromCookie(request);
         await logAdminAction({
@@ -22,26 +23,59 @@ export async function GET(request: Request) {
         const search = searchParams.get('search') || '';
         const offset = (page - 1) * limit;
 
-        let query = 'SELECT * FROM users';
-        let countQuery = 'SELECT COUNT(*) as total FROM users';
+        let query = `SELECT u.*, COALESCE(d.total_deposited, 0) AS total_deposited
+                     FROM users u
+                     LEFT JOIN (
+                       SELECT user_id, SUM(amount) AS total_deposited
+                       FROM deposits WHERE status = 'approved' GROUP BY user_id
+                     ) d ON d.user_id = u.id`;
+        let countQuery = 'SELECT COUNT(*) as total FROM users u';
         let params: any[] = [];
 
         if (search) {
-            const searchClause = ' WHERE username LIKE ? OR telegram_id LIKE ?';
+            const searchClause = ' WHERE u.username LIKE ? OR u.telegram_id LIKE ? OR u.customer_tag LIKE ? OR u.admin_note LIKE ?';
             query += searchClause;
             countQuery += searchClause;
-            params = [`%${search}%`, `%${search}%`];
+            params = [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`];
         }
 
-        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+        query += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
 
-        const [rows] = await pool.query(query, params);
-        const [countResult] = await pool.query<any[]>(countQuery, search ? [`%${search}%`, `%${search}%`] : []);
+        const [rows] = await pool.query<any[]>(query, params);
+        const [countResult] = await pool.query<any[]>(countQuery, search ? [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`] : []);
         const total = countResult[0].total;
 
+        const [rankRows] = await pool.query<any[]>("SELECT `value` FROM settings WHERE `key` = 'deposit_rank_promotions' LIMIT 1");
+        let ranks: { name: string; min_total: number; bonus_percentage: number }[] = [];
+        try {
+            const parsed = JSON.parse(rankRows[0]?.value || '[]');
+            if (Array.isArray(parsed)) ranks = parsed.sort((a, b) => Number(a.min_total || 0) - Number(b.min_total || 0));
+        } catch {
+            ranks = [];
+        }
+
+        const usersWithRank = rows.map(user => {
+            const deposited = Number(user.total_deposited || 0);
+            const currentRank = [...ranks].reverse().find(rank => deposited >= Number(rank.min_total || 0));
+            const nextRank = ranks.find(rank => deposited < Number(rank.min_total || 0));
+            const currentFloor = Number(currentRank?.min_total || 0);
+            const nextTarget = Number(nextRank?.min_total || 0);
+            const rankProgress = nextRank
+                ? Math.min(100, Math.max(0, ((deposited - currentFloor) / Math.max(1, nextTarget - currentFloor)) * 100))
+                : (currentRank ? 100 : 0);
+            return {
+                ...user,
+                rank_name: currentRank?.name || 'Chưa có rank',
+                rank_bonus_percentage: Number(currentRank?.bonus_percentage || 0),
+                next_rank_name: nextRank?.name || null,
+                next_rank_min: nextRank?.min_total || null,
+                rank_progress: Math.round(rankProgress)
+            };
+        });
+
         return NextResponse.json({
-            data: rows,
+            data: usersWithRank,
             pagination: {
                 page,
                 limit,
@@ -57,12 +91,26 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
     try {
+        await dbReady;
         const body = await request.json();
-        const { id, amount, type, reason } = body; // type: 'add' or 'subtract'
+        const { id, amount, type, reason, customer_tag, admin_note } = body; // type: 'add' or 'subtract'
         const { ipAddress, userAgent } = getRequestInfo(request);
 
-        if (!id || !amount || !type) {
+        if (!id) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        if (type === 'admin_metadata') {
+            await pool.query('UPDATE users SET customer_tag = ?, admin_note = ? WHERE id = ?', [String(customer_tag || '').trim() || null, String(admin_note || '').trim() || null, id]);
+            await logAdminAction({
+                action: 'UPDATE', targetType: 'USER', targetId: id,
+                details: { customer_tag: customer_tag || null, admin_note: admin_note || null }, request
+            });
+            return NextResponse.json({ success: true });
+        }
+
+        if (!amount || !['add', 'subtract'].includes(type)) {
+            return NextResponse.json({ error: 'Invalid balance update' }, { status: 400 });
         }
 
         const connection = await pool.getConnection();

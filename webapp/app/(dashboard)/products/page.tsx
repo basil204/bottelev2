@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Plus, Minus, Edit, Trash2, Database, List, X, ChevronLeft, ChevronRight, User, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ interface Product {
     price: number;
     description: string;
     stock: number;
+    low_stock_threshold: number;
     sold_count: number;
     type: 'stock' | 'order';
     priority: number;
@@ -87,6 +88,7 @@ export default function ProductsPage() {
     const [savingSoldId, setSavingSoldId] = useState<number | null>(null);
     const [savingProduct, setSavingProduct] = useState(false);
     const [productFormError, setProductFormError] = useState('');
+    const handledEditLink = useRef(false);
 
     const fetchProducts = () => {
         setLoading(true);
@@ -132,6 +134,15 @@ export default function ProductsPage() {
         fetchProducts();
         fetchCategories();
     }, []);
+
+    useEffect(() => {
+        if (handledEditLink.current || products.length === 0) return;
+        const productId = Number(new URLSearchParams(window.location.search).get('edit'));
+        if (!productId) return;
+        handledEditLink.current = true;
+        const product = products.find(item => item.id === productId);
+        if (product) openModal(product);
+    }, [products]);
 
     const handleDelete = async (id: number) => {
         const reason = window.prompt(t('products.delete_reason_prompt') || 'Nhập lý do xóa sản phẩm này (bắt buộc):');
@@ -302,7 +313,7 @@ export default function ProductsPage() {
     };
 
     const openModal = (product?: Product) => {
-        setEditingProduct(product || { type: 'stock' });
+        setEditingProduct(product || { type: 'stock', low_stock_threshold: 5 });
         setProductFormError('');
         setIsModalOpen(true);
     };
@@ -447,6 +458,13 @@ export default function ProductsPage() {
     };
 
 
+    const stockProducts = products.filter(product => product.type === 'stock');
+    const outOfStockProducts = stockProducts.filter(product => Number(product.stock) === 0);
+    const lowStockProducts = stockProducts.filter(product => {
+        const stock = Number(product.stock);
+        return stock > 0 && stock <= Number(product.low_stock_threshold ?? 5);
+    });
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -485,6 +503,27 @@ export default function ProductsPage() {
             </div>
 
             {activeTab === 'products' && (
+                <div className="space-y-4">
+                    {!loading && (outOfStockProducts.length > 0 || lowStockProducts.length > 0) && (
+                        <div role="alert" aria-live="polite" className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 sm:grid-cols-[auto_1fr] dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100">
+                            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-amber-500 motion-safe:animate-pulse" />
+                            <div>
+                                <p className="font-semibold">Cảnh báo tồn kho cần xử lý</p>
+                                <p className="mt-1 text-sm text-amber-800 dark:text-amber-200/80">
+                                    {outOfStockProducts.length > 0 && `${outOfStockProducts.length} sản phẩm đã hết hàng`}
+                                    {outOfStockProducts.length > 0 && lowStockProducts.length > 0 && ' · '}
+                                    {lowStockProducts.length > 0 && `${lowStockProducts.length} sản phẩm sắp hết hàng`}. Hãy bổ sung kho để việc bán hàng không bị gián đoạn.
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {[...outOfStockProducts, ...lowStockProducts].slice(0, 6).map(product => (
+                                        <button key={product.id} type="button" onClick={() => openModal(product)} className="rounded-full border border-amber-300 bg-white/70 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-white active:scale-[0.98] dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                                            {product.name} · {Number(product.stock) === 0 ? 'Hết hàng' : `Còn ${product.stock}`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 <Card>
                     <CardHeader>
                         <CardTitle>{t('products.list')}</CardTitle>
@@ -529,7 +568,19 @@ export default function ProductsPage() {
                                                         {product.type === 'order' ? t('products.manual') : t('products.auto')}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="font-bold">{product.stock}</TableCell>
+                                                <TableCell>
+                                                    {product.type === 'stock' && Number(product.stock) === 0 ? (
+                                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Hết hàng
+                                                        </span>
+                                                    ) : product.type === 'stock' && Number(product.stock) <= Number(product.low_stock_threshold ?? 5) ? (
+                                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Còn {product.stock}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-bold text-emerald-700 dark:text-emerald-400">{product.stock}</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell>
                                                     <div className="inline-flex items-center rounded-lg border border-zinc-200 bg-zinc-50 p-1">
                                                         <button
@@ -589,6 +640,7 @@ export default function ProductsPage() {
                         </div>
                     </CardContent>
                 </Card>
+                </div>
             )}
 
             {/* Sold Accounts Tab */}
@@ -807,6 +859,18 @@ export default function ProductsPage() {
                                 onChange={(e) => setEditingProduct(prev => ({ ...prev!, priority: Number(e.target.value) }))}
                             />
                             <p className="text-xs text-slate-500">Số lớn hơn sẽ được hiển thị trước.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="product-low-stock">Ngưỡng cảnh báo sắp hết</Label>
+                            <Input
+                                id="product-low-stock"
+                                type="number"
+                                min="0"
+                                value={editingProduct?.low_stock_threshold ?? 5}
+                                onChange={(e) => setEditingProduct(prev => ({ ...prev!, low_stock_threshold: Math.max(0, Number(e.target.value)) }))}
+                            />
+                            <p className="text-xs text-slate-500">Cảnh báo khi tồn kho bằng hoặc thấp hơn mức này.</p>
                         </div>
 
                         <div className="space-y-2 sm:col-span-2">

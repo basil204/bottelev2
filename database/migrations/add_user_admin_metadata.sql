@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL;
+ALTER TABLE users ADD COLUMN admin_note TEXT NULL;

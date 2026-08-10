@@ -803,7 +803,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     }
   }
 
-  const promotion = await getActivePromotion();
+  const promotion = await getActivePromotion(user.id);
   const promotionResult = calculatePromotedAmount(amount, promotion);
 
   const randomLetters = Array.from({ length: 4 }, () =>
@@ -946,7 +946,7 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
   const deposit = await getDeposit(depositId);
   if (!deposit || deposit.status !== 'pending') return bot.sendMessage(chatId, 'Không hợp lệ.');
 
-  const promotion = await getActivePromotion();
+  const promotion = await getActivePromotion(deposit.user_id);
   const promotionResult = calculatePromotedAmount(Number(deposit.amount), promotion);
 
   await updateDepositStatus(depositId, 'approved');

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import pool, { dbReady } from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
 export async function GET(request: Request) {
     try {
+        await dbReady;
         // Log action
         const adminName = await getAdminFromCookie(request);
         await logAdminAction({
@@ -68,8 +69,9 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
     try {
+        await dbReady;
         const body = await request.json();
-        const { name, price, description, type, code, priority, check_live, category_id } = body;
+        const { name, price, description, type, code, priority, check_live, category_id, low_stock_threshold } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         let finalCategoryId = category_id;
@@ -81,8 +83,8 @@ export async function POST(request: Request) {
         }
 
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO products (name, price, description, type, code, priority, check_live, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [name, price, description, type || 'stock', code || null, priority || 0, check_live || 0, finalCategoryId || null]
+            'INSERT INTO products (name, price, description, type, code, priority, check_live, category_id, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, price, description, type || 'stock', code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5)))]
         );
 
         // Log action
@@ -107,8 +109,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
     try {
+        await dbReady;
         const body = await request.json();
-        const { id, name, price, description, type, code, priority, check_live, category_id } = body;
+        const { id, name, price, description, type, code, priority, check_live, category_id, low_stock_threshold } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         let finalCategoryId = category_id;
@@ -120,8 +123,8 @@ export async function PUT(request: Request) {
         }
 
         await pool.query(
-            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, category_id = ? WHERE id = ?',
-            [name, price, description, type, code || null, priority || 0, check_live || 0, finalCategoryId || null, id]
+            'UPDATE products SET name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, category_id = ?, low_stock_threshold = ? WHERE id = ?',
+            [name, price, description, type, code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))), id]
         );
 
         // Log action

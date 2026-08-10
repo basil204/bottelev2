@@ -1,6 +1,5 @@
 import { createPool, type Pool } from 'mysql2/promise';
-import dotenv from 'dotenv';
-import path from 'path';
+import { runPendingMigrations } from './dbMigrations';
 
 // Load .env is handled by Next.js automatically
 
@@ -57,6 +56,40 @@ async function initAccountStorageTables() {
       const dbError = e as { code?: string };
       if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
         console.error('[DB] Error adding products.sold_adjustment:', e);
+      }
+    }
+
+    // Inventory alerts: configurable threshold per product. This migration is
+    // safe to run on every web startup; MySQL reports a duplicate-field error
+    // when the database is already up to date.
+    try {
+      await pool.query('ALTER TABLE products ADD COLUMN low_stock_threshold INT NOT NULL DEFAULT 5 AFTER stock');
+      console.log('[DB] Added low_stock_threshold to products');
+    } catch (e: unknown) {
+      const dbError = e as { code?: string };
+      if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
+        console.error('[DB] Error adding products.low_stock_threshold:', e);
+      }
+    }
+
+    // Seed settings introduced by newer web versions without overwriting the
+    // values configured by an administrator.
+    await pool.query(
+      "INSERT IGNORE INTO settings (`key`, `value`) VALUES ('deposit_rank_promotions', '[]')"
+    );
+
+    for (const migration of [
+      "ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL",
+      "ALTER TABLE users ADD COLUMN admin_note TEXT NULL"
+    ]) {
+      try {
+        await pool.query(migration);
+        console.log('[DB] Added user administration metadata column');
+      } catch (e: unknown) {
+        const dbError = e as { code?: string };
+        if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
+          console.error('[DB] Error updating user administration metadata:', e);
+        }
       }
     }
 
@@ -137,7 +170,7 @@ async function initAccountStorageTables() {
           ALTER TABLE products ADD CONSTRAINT fk_products_categories FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
         `);
         console.log('[DB] Added foreign key constraint fk_products_categories');
-      } catch (fkErr: any) {
+      } catch {
         // Skip if constraint already exists
       }
     } catch (e: any) {
@@ -147,13 +180,15 @@ async function initAccountStorageTables() {
     }
 
     console.log('[DB] Account storage tables initialized');
+    await runPendingMigrations(pool);
   } catch (error) {
     console.error('[DB] Error initializing account storage tables:', error);
   }
 }
 
-// Run on import
-initAccountStorageTables();
+// Routes that depend on newly introduced columns can await this promise on a
+// cold start. Other routes still benefit from the eager initialization.
+export const dbReady = initAccountStorageTables();
 
 export default pool;
 

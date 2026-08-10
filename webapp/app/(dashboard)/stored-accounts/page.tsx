@@ -187,7 +187,10 @@ export default function StoredAccountsPage() {
             const res = await fetch(url + params.toString());
             const data = await res.json();
             if (data.success) {
-                setAccounts(data.data || []);
+                const nextAccounts: StoredAccount[] = data.data || [];
+                setAccounts(nextAccounts);
+                const availableIds = new Set(nextAccounts.map(account => account.id));
+                setSelectedIds(previous => new Set([...previous].filter(id => availableIds.has(id))));
             }
         } catch (error) {
             console.error('Error fetching stored accounts:', error);
@@ -477,8 +480,12 @@ export default function StoredAccountsPage() {
         uploaded: accounts.filter(a => a.bot_status === 'uploaded').length,
     };
 
-    const copyAllFiltered = () => {
-        const allData = accounts.map(account => account.data).join('\n');
+    const selectedAccounts = accounts.filter(account => selectedIds.has(account.id));
+    const copyTargetCount = selectedAccounts.length > 0 ? selectedAccounts.length : accounts.length;
+
+    const copySelectedOrFiltered = () => {
+        const copySource = selectedAccounts.length > 0 ? selectedAccounts : accounts;
+        const allData = copySource.map(account => account.data).join('\n');
         navigator.clipboard.writeText(allData);
         setCopiedAll(true);
         setTimeout(() => setCopiedAll(false), 2000);
@@ -714,12 +721,14 @@ export default function StoredAccountsPage() {
                                 <div className="flex items-end">
                                     <Button
                                         variant="outline"
-                                        onClick={copyAllFiltered}
+                                        onClick={copySelectedOrFiltered}
                                         disabled={accounts.length === 0}
                                         className={copiedAll ? 'border-green-500 text-green-500' : ''}
                                     >
                                         {copiedAll ? (
-                                            <><Check className="w-4 h-4 mr-2" /> Đã copy {accounts.length} tài khoản</>
+                                            <><Check className="w-4 h-4 mr-2" /> Đã copy {copyTargetCount} tài khoản</>
+                                        ) : selectedAccounts.length > 0 ? (
+                                            <><Copy className="w-4 h-4 mr-2" /> Copy đã chọn ({selectedAccounts.length})</>
                                         ) : (
                                             <><Copy className="w-4 h-4 mr-2" /> Copy tất cả ({accounts.length})</>
                                         )}
@@ -741,6 +750,10 @@ export default function StoredAccountsPage() {
                                         <span className="text-sm text-muted-foreground font-medium">
                                             Đã chọn {selectedIds.size}
                                         </span>
+                                        <Button size="sm" className="h-7 text-xs" onClick={copySelectedOrFiltered}>
+                                            {copiedAll ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+                                            {copiedAll ? `Đã copy (${selectedAccounts.length})` : `Copy (${selectedAccounts.length})`}
+                                        </Button>
                                         <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:hover:bg-emerald-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'sold')}>Đánh dấu Đã bán</Button>
                                         <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-300 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:hover:bg-emerald-900/20" onClick={() => handleBulkUpdateStatus('sale_status', 'in_stock')}>Đánh dấu Còn hàng</Button>
                                         <Button size="sm" variant="outline" className="h-7 text-xs border-teal-300 text-teal-600 hover:bg-teal-50 dark:border-teal-700 dark:hover:bg-teal-900/20" onClick={() => handleBulkUpdateStatus('bot_status', 'uploaded')}>Đã lên Bot</Button>

@@ -26,6 +26,7 @@ export const en = {
         products: 'Products',
         categories: 'Categories',
         'stored-accounts': 'Account Storage',
+        'chatgpt-accounts': 'ChatGPT Accounts',
         orders: 'Orders',
         settings: 'Settings',
         deposits: 'Deposits',

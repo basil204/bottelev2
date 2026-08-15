@@ -1,14 +1,14 @@
 import clsx from 'clsx';
 import React from 'react';
 
-interface CardProps {
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
     className?: string;
     children: React.ReactNode;
 }
 
-export function Card({ className, children }: CardProps) {
+export function Card({ className, children, ...props }: CardProps) {
     return (
-        <div className={clsx("rounded-2xl border border-zinc-200/80 bg-white text-card-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.025),0_22px_60px_-48px_rgba(0,0,0,.9)]", className)}>
+        <div className={clsx("rounded-2xl border border-zinc-200/80 bg-white text-card-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.025),0_22px_60px_-48px_rgba(0,0,0,.9)]", className)} {...props}>
             {children}
         </div>
     );
@@ -25,7 +25,6 @@ export function CardHeader({ className, children }: CardProps) {
 export function CardDescription({ className, children }: CardProps) {
     return (
         <p className={clsx("text-sm leading-6 text-zinc-500", className)}>
-            {children}
         </p>
     );
 }

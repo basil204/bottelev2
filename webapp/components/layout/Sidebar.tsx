@@ -7,7 +7,7 @@ import clsx from 'clsx';
 import {
   Archive, Landmark as Bank, Bell, ChartNoAxesColumn as ChartBar, CheckCircle,
   Mail as Envelope, Folders, Settings as GearSix, Globe, Menu as List, Package,
-  ShieldCheck, ShoppingCart, LogOut as SignOut, LayoutDashboard as SquaresFour,
+  ShieldCheck, ShoppingCart, LogOut as SignOut, Sparkles, LayoutDashboard as SquaresFour,
   UserCog as UserGear, Users as UsersThree, Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ export function Sidebar() {
         { name: 'Gmail EDU', href: '/gmail-edu', icon: Envelope },
         { name: 'Kiểm tra Gmail', href: '/check-gmail', icon: CheckCircle },
         { name: t('sidebar.stored-accounts'), href: '/stored-accounts', icon: Archive },
+        { name: t('sidebar.chatgpt-accounts'), href: '/chatgpt-accounts', icon: Sparkles },
       ],
     },
     {

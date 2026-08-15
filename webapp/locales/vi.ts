@@ -26,6 +26,7 @@ export const vi = {
         products: 'Sản phẩm',
         categories: 'Thư mục',
         'stored-accounts': 'Kho tài khoản',
+        'chatgpt-accounts': 'Kho TK ChatGPT',
         orders: 'Đơn hàng',
         settings: 'Cài đặt',
         deposits: 'Nạp tiền',

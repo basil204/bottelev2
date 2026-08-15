@@ -21,6 +21,7 @@ export type TargetType =
     | 'PROMOTION'
     | 'ACCOUNT_TYPE'
     | 'STORED_ACCOUNT'
+    | 'CHATGPT_ACCOUNT'
     | 'GMAIL_ACCOUNT'
     | 'BROADCAST'
     | 'ADMIN_ACCOUNT'
@@ -62,7 +63,6 @@ export function getRequestInfo(request: Request): { ipAddress: string | null; us
     return { ipAddress, userAgent };
 }
 
-
 /**
  * Get admin username from JWT or legacy cookie
  */
@@ -87,4 +87,3 @@ export async function getAdminFromCookie(request: Request): Promise<string | nul
 }
 
 export default { logAdminAction, getRequestInfo, getAdminFromCookie };
-

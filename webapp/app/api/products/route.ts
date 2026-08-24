@@ -39,13 +39,29 @@ export async function PATCH(request: Request) {
     try {
         await dbReady;
         const body = await request.json();
-        const { id, is_active, sold_count } = body;
+        const { id, is_active, sold_count, reorder } = body;
+        const adminName = await getAdminFromCookie(request);
+
+        // Handle reorder batch
+        if (Array.isArray(reorder)) {
+            for (const item of reorder) {
+                if (item.id && item.priority !== undefined) {
+                    await pool.query('UPDATE products SET priority = ? WHERE id = ?', [item.priority, item.id]);
+                }
+            }
+            await logAdminAction({
+                adminName: adminName || 'System',
+                action: 'UPDATE',
+                targetType: 'PRODUCT',
+                details: { reorder_count: reorder.length },
+                request
+            });
+            return NextResponse.json({ success: true, message: 'Reordered products successfully' });
+        }
 
         if (!id) {
             return NextResponse.json({ error: 'Missing product ID' }, { status: 400 });
         }
-
-        const adminName = await getAdminFromCookie(request);
 
         // Handle Status (is_active) toggle switch
         if (is_active !== undefined) {

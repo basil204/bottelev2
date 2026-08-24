@@ -94,6 +94,79 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Drag and drop / Reordering State
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleReorderSave = async (newList: Product[]) => {
+    const maxPriority = newList.length * 10;
+    const reorderPayload = newList.map((item, idx) => ({
+      id: item.id,
+      priority: maxPriority - idx * 10
+    }));
+
+    setProducts(prev => {
+      const map = new Map(newList.map((item, idx) => [item.id, maxPriority - idx * 10]));
+      const updated = prev.map(p => ({
+        ...p,
+        priority: map.has(p.id) ? map.get(p.id)! : p.priority
+      }));
+      return [...updated].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+    });
+
+    try {
+      await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reorder: reorderPayload })
+      });
+    } catch (err) {
+      console.error('Failed to save reorder:', err);
+    }
+  };
+
+  const handleMoveProduct = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= filteredProducts.length) return;
+
+    const newList = [...filteredProducts];
+    const temp = newList[index];
+    newList[index] = newList[targetIndex];
+    newList[targetIndex] = temp;
+
+    handleReorderSave(newList);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIdx !== index) {
+      setDragOverIdx(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === dropIndex) {
+      setDraggedIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+
+    const newList = [...filteredProducts];
+    const [draggedItem] = newList.splice(draggedIdx, 1);
+    newList.splice(dropIndex, 0, draggedItem);
+
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+    handleReorderSave(newList);
+  };
+
   // 1. Edit / New Product Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'general' | 'delivery' | 'translation'>('general');
@@ -516,19 +589,47 @@ export default function ProductsPage() {
                       </td>
                     </tr>
                   ) : filteredProducts.length > 0 ? (
-                    filteredProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-zinc-50/60 transition-colors">
+                    filteredProducts.map((p, index) => (
+                      <tr
+                        key={p.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null); }}
+                        className={`hover:bg-zinc-50/60 transition-colors ${
+                          draggedIdx === index ? 'opacity-40 bg-orange-50' : ''
+                        } ${
+                          dragOverIdx === index ? 'border-b-2 border-orange-500 bg-orange-50/50' : ''
+                        }`}
+                      >
                         <td className="px-4 py-4">
                           <input type="checkbox" className="rounded" />
                         </td>
 
                         {/* Order Handle */}
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 text-center select-none">
                           <div className="flex items-center justify-center gap-1 text-zinc-400">
-                            <GripVertical className="h-4 w-4 cursor-grab" />
+                            <GripVertical className="h-4 w-4 cursor-grab active:cursor-grabbing hover:text-orange-600 transition" />
                             <div className="flex flex-col text-[10px]">
-                              <button type="button" className="hover:text-zinc-700"><ArrowUp className="h-3 w-3" /></button>
-                              <button type="button" className="hover:text-zinc-700"><ArrowDown className="h-3 w-3" /></button>
+                              <button
+                                type="button"
+                                disabled={index === 0}
+                                onClick={() => handleMoveProduct(index, 'up')}
+                                className="hover:text-orange-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5 transition"
+                                title="Di chuyển lên"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5 stroke-[2.5]" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={index === filteredProducts.length - 1}
+                                onClick={() => handleMoveProduct(index, 'down')}
+                                className="hover:text-orange-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5 transition"
+                                title="Di chuyển xuống"
+                              >
+                                <ArrowDown className="h-3.5 w-3.5 stroke-[2.5]" />
+                              </button>
                             </div>
                           </div>
                         </td>

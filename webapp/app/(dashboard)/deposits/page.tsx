@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
     Wallet, CreditCard, ShieldCheck, Clock, Download, RefreshCw,
     Search, Copy, Check, X, Tag, PlusCircle, MinusCircle, Ban, Eye,
-    Sparkles, ArrowDownCircle, ArrowUpCircle, FileText, Lock
+    Sparkles, ArrowDownCircle, ArrowUpCircle, FileText, Lock, Key
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -59,6 +59,27 @@ export default function DepositsPage() {
     const [totalUsers, setTotalUsers] = useState(0);
     const [mounted, setMounted] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    // API Key Modal State inside Wallet
+    const [userApiKeyModal, setUserApiKeyModal] = useState<{ user: UserWallet; apiKey: string } | null>(null);
+
+    const handleGenerateApiKeyForUser = async (user: UserWallet) => {
+        try {
+            const res = await fetch('/api/user-api-keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, name: `Ví API Key - ${user.name || user.username || user.id}` })
+            });
+            const data = await res.json();
+            if (res.ok && data.api_key) {
+                setUserApiKeyModal({ user, apiKey: data.api_key });
+            } else {
+                alert(data.error || 'Lỗi tạo API Key');
+            }
+        } catch (e: any) {
+            alert(e.message || 'Lỗi kết nối server');
+        }
+    };
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
@@ -560,6 +581,14 @@ export default function DepositsPage() {
                                             {/* Column 6: THAO TÁC */}
                                             <td className="px-4 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5 flex-wrap sm:flex-nowrap">
+                                                    <button
+                                                        onClick={() => handleGenerateApiKeyForUser(u)}
+                                                        className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                                                        title="Tạo/Xem API Key mua toàn bộ sản phẩm qua API"
+                                                    >
+                                                        <Key className="h-3.5 w-3.5" />
+                                                        <span>API KEY</span>
+                                                    </button>
                                                     <button
                                                         onClick={() => openCustomPriceModal(u)}
                                                         className="rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50 active:scale-95 transition shadow-2xs flex items-center gap-1"
@@ -1127,6 +1156,79 @@ export default function DepositsPage() {
                             <button
                                 onClick={() => setIsBalanceModalOpen(false)}
                                 className="rounded-xl border border-zinc-200 bg-white px-6 py-2.5 text-xs font-extrabold uppercase text-zinc-700 hover:bg-zinc-100 transition active:scale-95 shadow-2xs"
+                            >
+                                ĐÓNG
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* MODAL 3: HIỂN THỊ VÍ API KEY */}
+            {userApiKeyModal && mounted && createPortal(
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 p-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-bold border border-blue-200">
+                                    <Key className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <h2 className="font-extrabold text-sm uppercase text-zinc-900 tracking-wide">
+                                        VÍ API KEY DÀNH CHO KHÁCH HÀNG
+                                    </h2>
+                                    <p className="text-[11px] font-mono text-zinc-400">
+                                        {userApiKeyModal.user.name || 'USER'} - TG ID: {userApiKeyModal.user.telegram_id || userApiKeyModal.user.id}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setUserApiKeyModal(null)} className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 transition">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-2">
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase">USER API KEY:</div>
+                                <div className="font-mono text-xs text-emerald-400 break-all select-all font-bold">
+                                    {userApiKeyModal.apiKey}
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 space-y-1 text-blue-950">
+                                <div className="font-bold flex items-center gap-1.5 text-xs">
+                                    <Sparkles className="h-4 w-4 text-blue-600" />
+                                    <span>HƯỚNG DẪN MUA TOÀN BỘ SẢN PHẨM QUA PURE BACKEND API</span>
+                                </div>
+                                <p className="text-[11px] text-blue-800">
+                                    Người dùng có thể truyền Header <code className="bg-blue-100 px-1 rounded font-mono text-blue-900">X-API-Key: {userApiKeyModal.apiKey}</code> để mua trực tiếp bất kỳ dịch vụ nào qua CSDL cũ!
+                                </p>
+                            </div>
+
+                            <div className="font-mono text-[11px] bg-zinc-900 text-zinc-300 p-3 rounded-xl overflow-x-auto border border-zinc-800 space-y-1">
+                                <div className="text-emerald-400"># 1. Lấy danh sách sản phẩm:</div>
+                                <div>GET http://localhost:8080/api/v1/products</div>
+                                <div className="text-emerald-400 mt-2"># 2. Đặt mua sản phẩm (Stock / Order / Gmail EDU):</div>
+                                <div>POST http://localhost:8080/api/v1/buy</div>
+                                <div className="text-zinc-400">Body: &#123; "productId": 1, "quantity": 1 &#125;</div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(userApiKeyModal.apiKey);
+                                    alert('Đã sao chép API Key vào Bộ nhớ tạm!');
+                                }}
+                                className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-blue-700 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                                <Copy className="h-4 w-4" />
+                                <span>COPY API KEY</span>
+                            </button>
+                            <button
+                                onClick={() => setUserApiKeyModal(null)}
+                                className="rounded-xl bg-zinc-100 border border-zinc-200 px-4 py-2 text-xs font-extrabold text-zinc-700 hover:bg-zinc-200 transition cursor-pointer"
                             >
                                 ĐÓNG
                             </button>

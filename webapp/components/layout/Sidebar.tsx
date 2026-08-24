@@ -55,6 +55,7 @@ export function Sidebar() {
       label: 'CẤU HÌNH & TÙY BIẾN',
       items: [
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
+        { name: 'API KEY USER', href: '/user-api-keys', icon: Key },
       ],
     },
   ];

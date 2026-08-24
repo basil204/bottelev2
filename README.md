@@ -1,25 +1,56 @@
 # 🤖 Bot Bán Hàng Telegram & Web Management System
 
-Hệ thống quản lý bán hàng tự động qua Telegram Bot, tích hợp thanh toán VietQR và quản lý email EDU.
-
-## 📋 Tổng quan
-
-Dự án bao gồm 3 thành phần chính:
-
-| Thành phần | Mô tả | Port |
-|------------|-------|------|
-| **Telegram Bot** | Bot bán hàng tự động với thanh toán VietQR | - |
-| **Webapp** | Dashboard quản trị viên | 8692 |
-| **Email EDU Web** | Hệ thống tạo email Google Workspace EDU | 3000 |
+Hệ thống quản lý bán hàng tự động đa kênh qua **Telegram Bot** và **Web Admin Dashboard** hiện đại, hỗ trợ tự động giao hàng sẵn kho, xử lý dịch vụ Order nâng cấp, thanh toán VietQR / USDT (TRC20, Bybit), khuyến mại nạp tiền, giá riêng theo khách hàng và quản lý tài khoản email EDU.
 
 ---
 
-## 🚀 Cài đặt
+## 📋 Tổng Quan Kiến Trúc
+
+Dự án bao gồm 3 thành phần dịch vụ chính:
+
+| Thành phần | Mô tả | Cổng mặc định (Port) |
+|------------|-------|----------------------|
+| **Telegram Bot Engine** | Bot bán hàng tự động, xử lý giao hàng instant & dịch vụ Order | - |
+| **Webapp (Next.js Admin)** | Dashboard quản trị viên, quản lý sản phẩm, đơn hàng, người dùng, khuyến mại | **8692** |
+| **Email EDU Web Engine** | Hệ thống tạo và quản lý Email Google Workspace EDU / tMail | **3000** |
+
+---
+
+## 🔥 Tính Năng Nổi Bật
+
+### 🤖 1. Telegram Bot Bán Hàng Tự Động
+- ✅ **Phân loại sản phẩm thông minh**:
+  - **Sản phẩm sẵn kho (`stock`/`auto`)**: Phát tự động tài khoản/mã/2FA lập tức sau khi trừ số dư.
+  - **Sản phẩm Order (`order`/`manual`)**: Tự động gửi câu hỏi yêu cầu khách nhập Email/Thông tin nâng cấp, đẩy về trạng thái **Pending** để Admin xử lý 1-click.
+- ✅ **Giá riêng theo khách hàng (`custom_pricing`)**: Tự động áp dụng mức giá ưu đãi riêng cài đặt từ Web cho từng khách hàng trên Bot.
+- ✅ **Nạp tiền tự động**: Tích hợp VietQR, USDT (TRC20, Bybit Pay ID), tự động cộng tiền & tính phần trăm thưởng Khuyến mại nạp tiền + Rank VIP.
+- ✅ **Nút Mua ngay deep-link**: Tự động đính kèm nút mua hàng trực tiếp từ các tin nhắn thông báo kho ảo (`auto_restock`).
+- ✅ **Điểm danh hàng ngày (`/checkin`)**: Nhận điểm thưởng/Credit, tính chuỗi ngày (streak) & mã giới thiệu bạn bè (`referral_code`).
+- ✅ **Gửi yêu cầu Hỗ trợ / Bảo hành (`/support`)**: Khách hàng gửi yêu cầu trực tiếp từ Bot về trang quản trị Web.
+- ✅ **Xem lại lịch sử đơn hàng (`/orders`)**: Cho phép khách xem lại 10 đơn gần nhất và lấy lại TK/MK đã mua.
+
+### 🌐 2. Web Admin Dashboard (Next.js 16)
+- 📊 **Thống kê doanh thu & lợi nhuận PnL**: Theo dõi doanh thu, chi phí, lợi nhuận thực tế theo ngày/tháng.
+- 📦 **Quản lý Sản phẩm & Kho hàng**:
+  - Hỗ trợ **Kéo thả sắp xếp (Drag & Drop)** thứ tự hiển thị và nút di chuyển Lên/Xuống (`↑`/`↓`).
+  - Phân loại sản phẩm Sẵn kho & Sản phẩm Order tùy chỉnh thông điệp yêu cầu (`prompt_message`).
+  - Thêm tài khoản hàng loạt theo định dạng (User|Pass|Extra|2FA) hoặc theo dòng.
+- 🏷️ **Cấu hình Giá riêng (`Custom Pricing`)**: Cài đặt giá ưu đãi riêng theo từng khách hàng (Phạm vi tất cả đơn hoặc đơn đầu tiên).
+- 🎁 **Khuyến mãi Nạp tiền & Flash Sale**:
+  - Tạo chiến dịch khuyến mãi nạp tiền theo khung giờ.
+  - Tạo chương trình Flash Sale giảm giá số lượng lớn (`bulk_price`).
+- 🛟 **Live Chat & Hỗ trợ bảo hành**: Xử lý yêu cầu bảo hành, trao đổi trực tiếp với khách hàng trên Telegram ngay từ Web Dashboard.
+- 📢 **Thông báo hàng loạt & Auto Restock**: Hẹn giờ tự động quét kho và phát sóng thông báo về Kênh Telegram / User CSDL.
+- ⚙️ **Cài đặt hệ thống**: Cấu hình Ngân hàng VietQR, Token Bot, Tần suất quét kho, Nút bấm Menu...
+
+---
+
+## 🚀 Cài Đặt & Khởi Chạy
 
 ### Yêu cầu hệ thống
-- Node.js >= 18
+- Node.js >= 18.x
 - MySQL >= 8.0
-- npm hoặc yarn
+- NPM / Yarn
 
 ### 1. Clone repository
 ```bash
@@ -28,310 +59,79 @@ cd botteleandweb
 ```
 
 ### 2. Cài đặt dependencies
-
 ```bash
-# Bot chính
+# Cài đặt Bot Engine
 npm install
 
-# Webapp
+# Cài đặt Webapp Admin Dashboard
 cd webapp && npm install
 
-# Email EDU Web
+# Cài đặt Email EDU Web (Nếu sử dụng)
 cd ../email-edu-web && npm install
 ```
 
-### 3. Cấu hình môi trường
+### 3. Cấu hình môi trường (`.env`)
 
-Tạo file `.env` ở thư mục gốc:
+Tạo file `.env` tại thư mục gốc:
 ```env
-# Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token
+# Telegram Config
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 ADMIN_IDS=["123456789"]
-NOTIFICATION_CHAT_ID=chat_id
 
-# Database
-DB_HOST=localhost
-DB_NAME=webapi
-DB_USER=root
-DB_PASS=password
+# Database Connection
+DB_HOST=103.139.155.175
+DB_PORT=3306
+DB_USER=testv1
+DB_PASS=skeLdYCEGkFESpdZ
+DB_NAME=testv1
 
-# VietQR Payment
-VIETQR_ACCOUNT_NO=your_account_number
-VIETQR_BANK_CODE=your_bank_code
-
-# Mail API
-MAIL_API_KEY=your_api_key
+# Payment Configuration
+VIETQR_BANK_CODE=VCB
+VIETQR_ACCOUNT_NO=123456789
+VIETQR_ACCOUNT_NAME=NGUYEN VAN A
+USDT_TRC20_WALLET=T...
 ```
 
 ---
 
-## 🤖 Telegram Bot
+## 💻 Hướng Dẫn Vận Hành
 
-### Tính năng chính
-- ✅ **Đăng ký & Quản lý tài khoản** - Tự động tạo tài khoản người dùng
-- ✅ **Nạp tiền tự động** - Tích hợp VietQR, tự động xác nhận giao dịch
-- ✅ **Mua sản phẩm** - Gmail EDU, VIP packages
-- ✅ **Check-in hàng ngày** - Nhận điểm thưởng
-- ✅ **Giftcode** - Hệ thống mã quà tặng
-- ✅ **Thông báo tự động** - Gửi thông báo đến admin
-
-### Commands
-| Lệnh | Mô tả |
-|------|-------|
-| `/start` | Bắt đầu sử dụng bot |
-| `/menu` | Hiển thị menu chính |
-| `/nap` | Nạp tiền vào tài khoản |
-| `/buy` | Mua sản phẩm |
-| `/checkin` | Check-in nhận điểm |
-| `/admin` | Panel quản trị (Admin only) |
-
-### Chạy Bot
+### Chạy Telegram Bot Engine:
 ```bash
 npm run dev
 ```
 
-### Cấu trúc Bot
-```
-├── main.js                 # Entry point
-├── config.js               # Cấu hình
-├── includes/
-│   ├── controllers/        # Business logic
-│   │   ├── accountController.js
-│   │   ├── depositController.js
-│   │   ├── gmailController.js
-│   │   ├── giftcodeController.js
-│   │   └── ...
-│   ├── handle/             # Event handlers
-│   ├── services/           # Background services
-│   │   ├── autoDeposit.js  # Tự động xử lý nạp tiền
-│   │   └── gmailCleanup.js # Dọn dẹp Gmail
-│   └── database/           # Database connection
-└── modules/
-    └── commands/           # Bot commands
-```
-
----
-
-## 🌐 Webapp (Admin Dashboard)
-
-### Tính năng
-- 📊 **Dashboard** - Thống kê doanh thu, đơn hàng, người dùng
-- 👥 **Quản lý Users** - Xem, sửa, xóa người dùng
-- 📦 **Quản lý Products** - Thêm, sửa sản phẩm
-- 💰 **Quản lý Deposits** - Lịch sử nạp tiền
-- 📋 **Quản lý Orders** - Lịch sử đơn hàng
-- 📧 **Gmail EDU** - Quản lý email EDU
-- 🏦 **Bank History** - Lịch sử giao dịch ngân hàng
-- 📢 **Broadcast** - Gửi thông báo hàng loạt
-- ⚙️ **Settings** - Cấu hình hệ thống
-
-### Chạy Webapp
+### Chạy Web Admin Dashboard (Port 8692):
 ```bash
 cd webapp
 npm run dev
 ```
-
-Truy cập: http://localhost:8692
-
-### Cấu trúc Webapp
-```
-webapp/
-├── app/
-│   ├── (auth)/             # Đăng nhập
-│   ├── (dashboard)/        # Các trang dashboard
-│   │   ├── page.tsx        # Trang chủ dashboard
-│   │   ├── users/          # Quản lý người dùng
-│   │   ├── products/       # Quản lý sản phẩm
-│   │   ├── orders/         # Quản lý đơn hàng
-│   │   ├── deposits/       # Quản lý nạp tiền
-│   │   ├── gmail-edu/      # Quản lý Gmail EDU
-│   │   ├── bank-history/   # Lịch sử ngân hàng
-│   │   ├── notifications/  # Thông báo
-│   │   └── settings/       # Cài đặt
-│   └── api/                # API routes
-├── components/             # UI Components
-├── lib/                    # Utilities
-└── locales/                # Đa ngôn ngữ (vi/en)
-```
-
-### Tech Stack
-- **Framework**: Next.js 16
-- **UI**: Tailwind CSS 4, Radix UI
-- **Database**: MySQL 2
-- **Charts**: Recharts
-- **Icons**: Lucide React
+Truy cập Dashboard tại: `http://localhost:8692`
 
 ---
 
-## 📧 Email EDU Web
+## 🗄️ Cấu Trúc Thư Mục Dự Án
 
-Hệ thống tạo và quản lý email Google Workspace EDU.
-
-### Tính năng
-
-#### 👑 Admin
-- 🌐 **Quản lý Domains** - Thêm/sửa/xóa domain EDU
-- 👥 **Quản lý Users** - Cấp quota email cho users
-- 📧 **Quản lý Emails** - Xem tất cả email đã tạo
-- 🎬 **Netflix Accounts** - Quản lý tài khoản Netflix
-- 📬 **tMail Domains** - Quản lý domain email tạm thời
-- ⚙️ **Settings** - Cấu hình hệ thống
-
-#### 👤 User
-- ✏️ **Tạo Email EDU** - Tạo email với domain EDU
-- 📋 **My Emails** - Xem email đã tạo
-- 📬 **tMail** - Email tạm thời với inbox
-- 🔐 **2FA Manager** - Quản lý mã 2FA
-- 👤 **Profile** - Thông tin cá nhân
-
-### Chạy Email EDU Web
-```bash
-cd email-edu-web
-npm run dev
 ```
-
-Truy cập: http://localhost:3000
-
-### Setup Database
-```bash
-# Chạy schema
-mysql -u root -p webapi < schema.sql
-
-# Seed admin user
-npx ts-node scripts/seed-admin.ts
-```
-
-### Cấu trúc Email EDU Web
-```
-email-edu-web/
-├── app/
-│   ├── (admin)/            # Admin pages
-│   │   └── admin/
-│   │       ├── domains/    # Quản lý domains
-│   │       ├── users/      # Quản lý users
-│   │       ├── emails/     # Quản lý emails
-│   │       ├── netflix/    # Quản lý Netflix
-│   │       ├── tmail-domains/
-│   │       └── settings/
-│   ├── (auth)/             # Login
-│   ├── (user)/             # User pages
-│   │   └── dashboard/
-│   │       ├── create-email/
-│   │       ├── my-emails/
-│   │       ├── tmail/
-│   │       ├── 2fa/
-│   │       └── profile/
-│   └── api/                # API routes
-├── components/             # UI Components
-├── lib/
-│   ├── db.ts               # Database connection
-│   ├── auth.ts             # Authentication
-│   ├── google-admin.ts     # Google Admin SDK
-│   ├── tmail.ts            # tMail API
-│   └── 2fa.ts              # 2FA utilities
-├── migrations/             # SQL migrations
-├── scripts/                # Setup scripts
-└── schema.sql              # Database schema
-```
-
-### Database Schema
-```sql
--- Bảng chính
-users           # Người dùng (admin/user)
-edu_domains     # Domain EDU
-edu_emails      # Email đã tạo
-tmail_domains   # Domain email tạm
-tmail_accounts  # Tài khoản email tạm
-settings        # Cấu hình hệ thống
-```
-
-### Tech Stack
-- **Framework**: Next.js 16
-- **UI**: Tailwind CSS 4, Radix UI
-- **Auth**: bcryptjs, middleware-based
-- **Database**: MySQL 2
-- **Google API**: googleapis (Admin SDK)
-
----
-
-## 🗄️ Database
-
-Dự án sử dụng MySQL với các bảng chính:
-
-### Bot & Webapp
-- `users` - Người dùng Telegram
-- `products` - Sản phẩm
-- `orders` - Đơn hàng
-- `deposits` - Nạp tiền
-- `balance_logs` - Lịch sử số dư
-- `giftcodes` - Mã quà tặng
-- `settings` - Cấu hình
-
-### Email EDU Web
-- `users` - Người dùng web (admin/user)
-- `edu_domains` - Domain EDU
-- `edu_emails` - Email đã tạo
-- `tmail_domains` - Domain tMail
-- `tmail_accounts` - Tài khoản tMail
-
----
-
-## 🔧 Scripts
-
-```bash
-# Bot
-npm run dev                 # Chạy bot với nodemon
-
-# Webapp
-cd webapp
-npm run dev                 # Dev server (port 8692)
-npm run build               # Build production
-npm run start               # Start production
-
-# Email EDU Web
-cd email-edu-web
-npm run dev                 # Dev server (port 3000)
-npm run build               # Build production
-npm run start               # Start production
+botteleandweb/
+├── 📄 main.js                       # Bot entry point chính
+├── 📄 config.js                     # Cấu hình chung
+├── 📁 includes/                     # Logic cốt lõi Bot Telegram
+│   ├── 📁 controllers/              # Xử lý CSDL (Product, Order, CustomPricing, Checkin...)
+│   ├── 📁 handle/                   # Event handlers (handleBuy, handleDeposit, handleUser...)
+│   ├── 📁 helpers/                  # Utilities (customPricing.js, formatters...)
+│   └── 📁 database/                 # Kết nối MySQL & Migration tự động
+├── 📁 modules/                      # Lệnh Bot (/start, /menu, /checkin, /support...)
+└── 📁 webapp/                       # Web Admin Dashboard (Next.js 16)
+    ├── 📁 app/
+    │   ├── 📁 (dashboard)/          # Các trang quản trị (products, categories, orders...)
+    │   └── 📁 api/                  # API endpoints (custom-pricing, promotions, preorders...)
+    ├── 📁 components/               # UI components (Radix UI, Tailwind CSS)
+    └── 📁 lib/                      # DB Connection pool & Helpers
 ```
 
 ---
 
-## 📁 Cấu trúc dự án tổng quan
+## 📝 Bản Quyền & Giấy Phép
 
-```
-BotBanHangTele/
-├── 📄 main.js              # Bot entry point
-├── 📄 config.js            # Configuration
-├── 📄 package.json         # Bot dependencies
-├── 📁 includes/            # Bot core logic
-├── 📁 modules/             # Bot commands & events
-├── 📁 database/            # Google API credentials
-├── 📁 scripts/             # Utility scripts
-├── 📁 webapp/              # Admin dashboard (Next.js)
-└── 📁 email-edu-web/       # Email EDU system (Next.js)
-```
-
----
-
-## 🔒 Bảo mật
-
-- ✅ Mật khẩu được hash với bcrypt
-- ✅ Session-based authentication
-- ✅ Admin role protection
-- ✅ API rate limiting
-- ✅ Input validation
-
----
-
-## 📝 License
-
-Private - All rights reserved.
-
----
-
-## 👨‍💻 Tác giả
-
-**basil204**
-
-- GitHub: [@basil204](https://github.com/basil204)
+Private - All rights reserved. Developed by **basil204**.

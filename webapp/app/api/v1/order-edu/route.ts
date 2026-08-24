@@ -1,0 +1,187 @@
+import { NextResponse } from 'next/server';
+import pool from '@/lib/db';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
+
+// Sinh password ngẫu nhiên 12 ký tự
+function generatePassword() {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%&*';
+    let password = '';
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    const all = uppercase + lowercase + numbers + special;
+    for (let i = 0; i < 8; i++) {
+        password += all[Math.floor(Math.random() * all.length)];
+    }
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// Sinh username ngẫu nhiên
+function generateUsername(prefix?: string) {
+    if (prefix && prefix.trim()) {
+        const cleanPrefix = prefix.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanPrefix) return `${cleanPrefix}${Math.floor(Math.random() * 899 + 100)}`;
+    }
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    let str = '';
+    for (let i = 0; i < 7; i++) str += chars[Math.floor(Math.random() * chars.length)];
+    return `${str}${Math.floor(Math.random() * 89 + 10)}`;
+}
+
+// Handler POST đặt Gmail EDU bằng User API Key
+export async function POST(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        let apiKey = request.headers.get('x-api-key') || searchParams.get('api_key');
+
+        const authHeader = request.headers.get('authorization');
+        if (!apiKey && authHeader && authHeader.startsWith('Bearer ')) {
+            apiKey = authHeader.replace('Bearer ', '').trim();
+        }
+
+        let body: any = {};
+        try {
+            body = await request.json();
+        } catch {
+            body = {};
+        }
+
+        if (!apiKey && body.api_key) {
+            apiKey = body.api_key;
+        }
+
+        if (!apiKey) {
+            return NextResponse.json({
+                success: false,
+                error: 'Thiếu API Key. Vui lòng truyền X-API-Key qua Header hoặc api_key qua Query/Body.'
+            }, { status: 401 });
+        }
+
+        // Validate API Key
+        const [keyRows] = await pool.query<RowDataPacket[]>(`
+            SELECT k.id as key_id, k.is_active, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
+            FROM user_api_keys k
+            INNER JOIN users u ON k.user_id = u.id
+            WHERE k.api_key = ? LIMIT 1
+        `, [apiKey]);
+
+        if (!keyRows.length) {
+            return NextResponse.json({
+                success: false,
+                error: 'API Key không tồn tại trong hệ thống'
+            }, { status: 401 });
+        }
+
+        const keyInfo = keyRows[0];
+        if (!keyInfo.is_active) {
+            return NextResponse.json({
+                success: false,
+                error: 'API Key của bạn đang bị vô hiệu hóa. Vui lòng liên hệ Admin.'
+            }, { status: 403 });
+        }
+
+        // Get Gmail EDU settings
+        const [settingsRows] = await pool.query<RowDataPacket[]>(
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled')"
+        );
+
+        const settingsMap: Record<string, string> = {};
+        settingsRows.forEach(r => { settingsMap[r.key] = r.value; });
+
+        const isEnabled = settingsMap.gmail_edu_enabled !== 'false';
+        if (!isEnabled) {
+            return NextResponse.json({
+                success: false,
+                error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin'
+            }, { status: 400 });
+        }
+
+        const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+        const defaultDomain = settingsMap.gmail_edu_domain || 'suafpoly.app';
+
+        const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 10);
+        const domain = (body.domain && String(body.domain).trim()) ? String(body.domain).trim() : defaultDomain;
+        const type = body.type === 'non' ? 'non' : 'edu';
+        const customPassword = body.password ? String(body.password).trim() : null;
+
+        const totalCost = pricePerUnit * quantity;
+        const currentBalance = Number(keyInfo.balance) || 0;
+
+        if (currentBalance < totalCost) {
+            return NextResponse.json({
+                success: false,
+                error: `Số dư không đủ. Cần: ${totalCost.toLocaleString('vi-VN')} VNĐ, Số dư hiện có: ${currentBalance.toLocaleString('vi-VN')} VNĐ.`
+            }, { status: 400 });
+        }
+
+        // Process creation
+        const createdAccounts: any[] = [];
+        for (let i = 0; i < quantity; i++) {
+            const username = generateUsername(body.prefix || body.username);
+            const email = `${username}@${domain}`;
+            const password = customPassword || generatePassword();
+
+            // Insert into gmail_accounts DB table
+            await pool.query(`
+                INSERT INTO gmail_accounts (email, password, type, domain, status, created_at)
+                VALUES (?, ?, ?, ?, 'available', NOW())
+            `, [email, password, type, domain]);
+
+            createdAccounts.push({
+                email,
+                password,
+                type,
+                domain
+            });
+        }
+
+        // Deduct user balance
+        await pool.query('UPDATE users SET balance = balance - ? WHERE id = ?', [totalCost, keyInfo.user_id]);
+
+        // Add balance log
+        try {
+            await pool.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
+                keyInfo.user_id, -totalCost, `buy_gmail_edu_api_${quantity}_items`
+            ]);
+        } catch (e) {}
+
+        // Update API Key last_used_at
+        await pool.query('UPDATE user_api_keys SET last_used_at = NOW() WHERE id = ?', [keyInfo.key_id]);
+
+        // Create Order Record
+        const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
+        const [orderRes] = await pool.query<ResultSetHeader>(`
+            INSERT INTO orders (user_id, price, email, note, status)
+            VALUES (?, ?, ?, ?, 'completed')
+        `, [keyInfo.user_id, totalCost, accountsFormatted, `API Order Gmail EDU (${quantity} tài khoản)`]);
+
+        const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
+
+        try {
+            await pool.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
+        } catch (e) {}
+
+        const newBalance = currentBalance - totalCost;
+
+        return NextResponse.json({
+            success: true,
+            message: 'Đặt Gmail EDU qua API thành công!',
+            invoice_code: invoiceCode,
+            quantity,
+            total_cost: totalCost,
+            price_per_unit: pricePerUnit,
+            remaining_balance: newBalance,
+            data: createdAccounts
+        });
+    } catch (error: any) {
+        console.error('[API_ORDER_EDU_ERROR]', error);
+        return NextResponse.json({
+            success: false,
+            error: error.message || 'Lỗi xử lý hệ thống'
+        }, { status: 500 });
+    }
+}

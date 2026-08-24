@@ -181,3 +181,31 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
+export async function PATCH(request: Request) {
+    try {
+        const body = await request.json();
+        const { reorder } = body;
+        const adminName = await getAdminFromCookie(request);
+
+        if (Array.isArray(reorder)) {
+            for (const item of reorder) {
+                if (item.id && item.priority !== undefined) {
+                    await pool.query('UPDATE categories SET priority = ? WHERE id = ?', [item.priority, item.id]);
+                }
+            }
+            await logAdminAction({
+                adminName: adminName || 'System',
+                action: 'UPDATE',
+                targetType: 'CATEGORY' as any,
+                details: { reorder_count: reorder.length },
+                request
+            });
+            return NextResponse.json({ success: true, message: 'Reordered categories successfully' });
+        }
+        return NextResponse.json({ error: 'No reorder payload' }, { status: 400 });
+    } catch (error) {
+        console.error(error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, Plus, Pencil, Trash2, Search, X, Smile, Hash, Layers } from 'lucide-react';
+import { RefreshCw, Plus, Pencil, Trash2, Search, X, Smile, Hash, Layers, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Category {
@@ -26,6 +26,79 @@ export default function CategoriesPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
     const [mounted, setMounted] = useState(false);
+
+    // Drag and drop / Reordering State
+    const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+    const handleReorderSave = async (newList: Category[]) => {
+        const maxPriority = newList.length * 10;
+        const reorderPayload = newList.map((item, idx) => ({
+            id: item.id,
+            priority: maxPriority - idx * 10
+        }));
+
+        setCategories(prev => {
+            const map = new Map(newList.map((item, idx) => [item.id, maxPriority - idx * 10]));
+            const updated = prev.map(c => ({
+                ...c,
+                priority: map.has(c.id) ? map.get(c.id)! : c.priority
+            }));
+            return [...updated].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+        });
+
+        try {
+            await fetch('/api/categories', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reorder: reorderPayload })
+            });
+        } catch (err) {
+            console.error('Failed to save category reorder:', err);
+        }
+    };
+
+    const handleMoveCategory = (index: number, direction: 'up' | 'down') => {
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= filteredCategories.length) return;
+
+        const newList = [...filteredCategories];
+        const temp = newList[index];
+        newList[index] = newList[targetIndex];
+        newList[targetIndex] = temp;
+
+        handleReorderSave(newList);
+    };
+
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDraggedIdx(index);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragOverIdx !== index) {
+            setDragOverIdx(index);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault();
+        if (draggedIdx === null || draggedIdx === dropIndex) {
+            setDraggedIdx(null);
+            setDragOverIdx(null);
+            return;
+        }
+
+        const newList = [...filteredCategories];
+        const [draggedItem] = newList.splice(draggedIdx, 1);
+        newList.splice(dropIndex, 0, draggedItem);
+
+        setDraggedIdx(null);
+        setDragOverIdx(null);
+        handleReorderSave(newList);
+    };
 
     const fetchCategories = () => {
         setLoading(true);
@@ -167,6 +240,7 @@ export default function CategoriesPage() {
                     <table className="w-full text-left text-xs border-collapse">
                         <thead>
                             <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                <th className="px-3 py-3.5 font-extrabold text-center w-16">THỨ TỰ</th>
                                 <th className="px-4 py-3.5 font-extrabold">DANH MỤC</th>
                                 <th className="px-4 py-3.5 font-extrabold">EMOJI THƯỜNG</th>
                                 <th className="px-4 py-3.5 font-extrabold">EMOJI ĐỘNG (ID)</th>
@@ -177,19 +251,56 @@ export default function CategoriesPage() {
                         <tbody className="divide-y divide-zinc-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
                                         Đang tải dữ liệu...
                                     </td>
                                 </tr>
                             ) : filteredCategories.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
                                         Không tìm thấy danh mục nào.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredCategories.map((cat) => (
-                                    <tr key={cat.id} className="hover:bg-zinc-50/80 transition-colors">
+                                filteredCategories.map((cat, index) => (
+                                    <tr
+                                        key={cat.id}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, index)}
+                                        onDragOver={(e) => handleDragOver(e, index)}
+                                        onDrop={(e) => handleDrop(e, index)}
+                                        onDragEnd={() => { setDraggedIdx(null); setDragOverIdx(null); }}
+                                        className={`hover:bg-zinc-50/80 transition-colors ${
+                                            draggedIdx === index ? 'opacity-40 bg-orange-50' : ''
+                                        } ${
+                                            dragOverIdx === index ? 'border-b-2 border-orange-500 bg-orange-50/50' : ''
+                                        }`}
+                                    >
+                                        <td className="px-3 py-3.5 text-center select-none">
+                                            <div className="flex items-center justify-center gap-1 text-zinc-400">
+                                                <GripVertical className="h-4 w-4 cursor-grab active:cursor-grabbing hover:text-orange-600 transition" />
+                                                <div className="flex flex-col text-[10px]">
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === 0}
+                                                        onClick={() => handleMoveCategory(index, 'up')}
+                                                        className="hover:text-orange-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5 transition"
+                                                        title="Di chuyển lên"
+                                                    >
+                                                        <ArrowUp className="h-3.5 w-3.5 stroke-[2.5]" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={index === filteredCategories.length - 1}
+                                                        onClick={() => handleMoveCategory(index, 'down')}
+                                                        className="hover:text-orange-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5 transition"
+                                                        title="Di chuyển xuống"
+                                                    >
+                                                        <ArrowDown className="h-3.5 w-3.5 stroke-[2.5]" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td className="px-4 py-3.5">
                                             <div className="font-extrabold text-zinc-900 uppercase text-xs">
                                                 {cat.name}

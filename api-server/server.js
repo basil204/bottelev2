@@ -186,21 +186,13 @@ const authenticateApiKey = async (req, res, next) => {
       });
     }
 
-    const cleanKey = apiKey.trim();
-
-    // Strict Regex Check for Key Format: sk_edu_<32 hex chars>
-    if (!/^sk_edu_[a-f0-9]{32}$/i.test(cleanKey)) {
-      return res.status(401).json({
-        success: false,
-        error: 'Định dạng API Key không hợp lệ.'
-      });
-    }
+    const cleanKey = String(apiKey).trim();
 
     const keyRows = await query(
       `SELECT k.id as key_id, k.name as key_name, k.is_active, u.id as user_id, u.telegram_id, u.username, u.name, u.balance, u.is_banned
        FROM user_api_keys k
-       INNER JOIN users u ON k.user_id = u.id
-       WHERE k.api_key = ? LIMIT 1`,
+       INNER JOIN users u ON (k.user_id = u.id OR k.user_id = u.telegram_id)
+       WHERE LOWER(TRIM(k.api_key)) = LOWER(TRIM(?)) LIMIT 1`,
       [cleanKey]
     );
 

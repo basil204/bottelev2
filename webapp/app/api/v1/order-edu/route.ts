@@ -62,12 +62,13 @@ export async function POST(request: Request) {
         }
 
         // Validate API Key
+        const cleanApiKey = String(apiKey).trim();
         const [keyRows] = await pool.query<RowDataPacket[]>(`
             SELECT k.id as key_id, k.is_active, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
             FROM user_api_keys k
-            INNER JOIN users u ON k.user_id = u.id
-            WHERE k.api_key = ? LIMIT 1
-        `, [apiKey]);
+            INNER JOIN users u ON (k.user_id = u.id OR k.user_id = u.telegram_id)
+            WHERE LOWER(TRIM(k.api_key)) = LOWER(TRIM(?)) LIMIT 1
+        `, [cleanApiKey]);
 
         if (!keyRows.length) {
             return NextResponse.json({

@@ -783,6 +783,7 @@ export default function PromotionsPage() {
                                         className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                     >
                                         <option value="">Toàn shop</option>
+                                        <option value="-1">🎓 Gmail EDU (Dịch vụ đặc biệt)</option>
                                         {products.map(p => (
                                             <option key={p.id} value={p.id}>{p.name}</option>
                                         ))}

@@ -427,3 +427,66 @@ export const notifyAdminAboutExchange = async (bot, adminIds, exchangeInfo) => {
     console.error('[NOTIFY_ADMIN_EXCHANGE] ❌ Lỗi khi thông báo cho admin:', error);
   }
 };
+
+// Broadcast thông báo tới tất cả người dùng hệ thống
+export const broadcastToAllUsers = async (bot, messageText, imageUrl = null) => {
+  try {
+    const userRows = await query('SELECT DISTINCT telegram_id FROM users WHERE telegram_id IS NOT NULL AND telegram_id != 0');
+    if (!userRows || userRows.length === 0) {
+      return { successCount: 0, failCount: 0, removedCount: 0, totalUsers: 0 };
+    }
+
+    console.log(`[BROADCAST] Đang gửi thông báo tới ${userRows.length} người dùng...`);
+
+    let successCount = 0;
+    let failCount = 0;
+    let removedCount = 0;
+    const batchSize = 25;
+
+    for (let i = 0; i < userRows.length; i += batchSize) {
+      const batch = userRows.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(user => {
+          if (imageUrl && String(imageUrl).trim().startsWith('http')) {
+            return bot.sendPhoto(user.telegram_id, imageUrl.trim(), { caption: messageText, parse_mode: 'Markdown' })
+              .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
+              .catch(err => {
+                const blocked = isUserBlockedError(err);
+                return { ok: false, blocked, telegramId: user.telegram_id };
+              });
+          } else {
+            return bot.sendMessage(user.telegram_id, messageText, { parse_mode: 'Markdown' })
+              .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
+              .catch(err => {
+                const blocked = isUserBlockedError(err);
+                return { ok: false, blocked, telegramId: user.telegram_id };
+              });
+          }
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          if (result.value.ok) successCount++;
+          else if (result.value.blocked) {
+            await removeDeadUser(result.value.telegramId);
+            removedCount++;
+          } else {
+            failCount++;
+          }
+        } else {
+          failCount++;
+        }
+      }
+
+      if (i + batchSize < userRows.length) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    return { successCount, failCount, removedCount, totalUsers: userRows.length };
+  } catch (error) {
+    console.error('[BROADCAST_ERR]', error);
+    return { successCount: 0, failCount: 0, error: error.message };
+  }
+};

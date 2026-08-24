@@ -119,7 +119,8 @@ export async function POST(request: Request) {
             name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
-            preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit
+            preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
+            image_url
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -136,13 +137,15 @@ export async function POST(request: Request) {
                 name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
                 delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
                 telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
-                preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
+                image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name, price, description, type || 'stock', code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
-                preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100
+                preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
+                image_url || null
             ]
         );
 
@@ -174,7 +177,8 @@ export async function PUT(request: Request) {
             id, name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
-            preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit
+            preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
+            image_url
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -191,14 +195,15 @@ export async function PUT(request: Request) {
                 name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, category_id = ?, low_stock_threshold = ?,
                 delivery_type = ?, prompt_message = ?, item_structure = ?, account_prefix = ?, file_delivery_mode = ?,
                 telegram_file_id = ?, telegram_file_unique_id = ?, access_duration_enabled = ?, access_duration_days = ?,
-                preorder_enabled = ?, preorder_fee_vnd = ?, preorder_fee_usdt = ?, preorder_max_per_user = ?, preorder_total_limit = ?
+                preorder_enabled = ?, preorder_fee_vnd = ?, preorder_fee_usdt = ?, preorder_max_per_user = ?, preorder_total_limit = ?,
+                image_url = ?
             WHERE id = ?`,
             [
                 name, price, description, type, code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
-                id
+                image_url || null, id
             ]
         );
 

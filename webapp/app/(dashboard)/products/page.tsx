@@ -847,6 +847,26 @@ export default function ProductsPage() {
                   />
                 </div>
 
+                {/* URL Hình ảnh sản phẩm */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                    URL HÌNH ẢNH SẢN PHẨM (WEB & BOT TELEGRAM)
+                  </label>
+                  <input
+                    type="text"
+                    value={editingProduct?.image_url || ''}
+                    onChange={(e) => setEditingProduct(prev => ({ ...prev!, image_url: e.target.value }))}
+                    placeholder="https://domain.com/images/product.png"
+                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none"
+                  />
+                  {editingProduct?.image_url && (
+                    <div className="mt-1 flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-2">
+                      <img src={editingProduct.image_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
+                      <span className="text-[11px] text-zinc-500 truncate">{editingProduct.image_url}</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Price, Cost Price, Category Grid */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">

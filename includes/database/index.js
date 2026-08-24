@@ -314,6 +314,8 @@ export const initDb = async (config) => {
     await safeAddColumn('products', 'type', "VARCHAR(50) DEFAULT 'stock'");
     await safeAddColumn('products', 'prompt_message', 'TEXT NULL');
     await safeAddColumn('products', 'category_id', 'INT NULL');
+    await safeAddColumn('products', 'image_url', 'TEXT NULL');
+    await safeAddColumn('products', 'is_active', 'TINYINT(1) DEFAULT 1');
 
     // 3. Bảng orders
     await safeAddColumn('orders', 'invoice_code', 'VARCHAR(100) NULL');

@@ -34,6 +34,13 @@ export const buildMainKeyboard = (t, lang) => ({
 });
 
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
+  if (user?.is_banned) {
+    return bot.sendMessage(
+      chatId,
+      '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
+      { parse_mode: 'Markdown' }
+    );
+  }
   const { t } = await import('../helpers/langHelper.js');
   const lang = user.language || 'vi';
   await sendTrackedMenu(bot, chatId, t('menu_title', lang), {

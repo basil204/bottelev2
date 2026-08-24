@@ -448,10 +448,44 @@ export const countAvailableAccounts = async (type) => {
 };
 
 /**
- * Lấy giá Gmail EDU từ settings
+ * Lấy giá Gmail EDU từ settings hoặc custom_pricing riêng cho user
  */
-export const getGmailEduPrice = async () => {
-    return await getSettingNumber('gmail_edu_price', 10000);
+export const getGmailEduPrice = async (userId = null, isApiCall = false) => {
+    const defaultPrice = await getSettingNumber('gmail_edu_price', 10000);
+    if (!userId) return defaultPrice;
+
+    try {
+        const rows = await query(`
+            SELECT custom_price, scope FROM custom_pricing 
+            WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
+              AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
+              AND is_active = 1
+            ORDER BY id DESC LIMIT 1
+        `, [userId, userId]);
+
+        if (rows && rows.length > 0) {
+            const cp = rows[0];
+
+            if (cp.scope === 'CLIENT_API' && !isApiCall) {
+                return defaultPrice;
+            }
+
+            if (cp.scope === 'FIRST_ORDER') {
+                const orders = await query(`
+                    SELECT COUNT(*) as count FROM orders 
+                    WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
+                      AND (note LIKE '%Gmail EDU%' OR email LIKE '%@%') AND status = 'completed'
+                `, [userId, userId]);
+                if (orders && orders[0]?.count > 0) return defaultPrice;
+            }
+            return Number(cp.custom_price);
+        }
+    } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') {
+            console.error('[GMAIL_EDU_CUSTOM_PRICE_ERR]', e.message);
+        }
+    }
+    return defaultPrice;
 };
 
 export default {

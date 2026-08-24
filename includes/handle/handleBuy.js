@@ -5,6 +5,7 @@ import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
+import { validateAndApplyCoupon, recordCouponUsage } from '../controllers/couponController.js';
 import { query } from '../database/index.js';
 import { checkGmailLive } from '../helpers/gmailChecker.js';
 import fs from 'fs';
@@ -22,6 +23,12 @@ const manualOrderState = new Map();
 
 // Map để lưu state user đang nhập số lượng cho sản phẩm
 const waitingForProductQuantity = new Map();
+
+// Map lưu state user đang nhập Mã Giảm Giá
+export const waitingForCouponState = new Map();
+
+// Map lưu Mã Giảm Giá đã áp dụng cho user
+export const appliedCouponsMap = new Map();
 
 
 
@@ -209,10 +216,23 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     `${soldCount.toLocaleString('zh-CN')} 件商品`
   );
 
+  // Check if user has an applied coupon for this product
+  const appliedCoupon = appliedCouponsMap.get(String(userId));
+  let effectivePrice = priceVnd;
+  if (appliedCoupon && appliedCoupon.productId === product.id) {
+    effectivePrice = appliedCoupon.finalAmount;
+  }
+
   let detailText = `${titleLabel}\n\n` +
     `🎁 **${nameLabel}:** ${product.name}\n` +
-    `💰 **${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n` +
-    `📝 **${descLabel}:** ${description}\n` +
+    `💰 **${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n`;
+
+  if (appliedCoupon && appliedCoupon.productId === product.id) {
+    detailText += `🎟️ **Mã giảm giá:** \`${appliedCoupon.code}\` (-${formatCurrency(appliedCoupon.discountAmount)})\n` +
+                  `🔥 **Giá thanh toán:** ${formatCurrency(effectivePrice)}\n`;
+  }
+
+  detailText += `📝 **${descLabel}:** ${description}\n` +
     `📊 **${soldLabel}:** ${soldText}\n`;
 
   if (productType === 'stock') {
@@ -226,7 +246,7 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     const userIdStr = String(userId);
     waitingForProductQuantity.set(userIdStr, {
       productId: product.id,
-      price: priceVnd,
+      price: effectivePrice,
       stock: stock,
       type: productType
     });
@@ -246,6 +266,7 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   }
 
   const buyBtn = L(lang, '🛒 Mua ngay', '🛒 Buy Now', '🛒 立即购买');
+  const couponBtn = L(lang, '🎟️ Nhập Mã Giảm Giá', '🎟️ Enter Coupon Code', '🎟️ 输入优惠码');
   const backBtn = L(lang, '⬅️ Quay lại', '⬅️ Back', '⬅️ 返回');
 
   const inline_keyboard = [];
@@ -255,13 +276,32 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     ]);
   }
   inline_keyboard.push([
+    { text: couponBtn, callback_data: createCallbackData({ action: 'apply_coupon_prompt', productId: product.id }) }
+  ]);
+  inline_keyboard.push([
     { text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }) }
   ]);
 
-  await bot.sendMessage(chatId, detailText, {
-    parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard }
-  });
+  if (product.image_url && String(product.image_url).trim().startsWith('http')) {
+    try {
+      await bot.sendPhoto(chatId, product.image_url.trim(), {
+        caption: detailText,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {
+      console.warn('[PRODUCT_PHOTO_ERR] Fallback to message:', e.message);
+      await bot.sendMessage(chatId, detailText, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+    }
+  } else {
+    await bot.sendMessage(chatId, detailText, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard }
+    });
+  }
 
   if (productType === 'stock' && stock === 0) {
     const outOfStockMsg = L(lang,
@@ -283,7 +323,18 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   const currentUser = await getUserByTelegram(fromUser.id);
   const currentBalance = Number(currentUser.balance) || 0;
   const { getUserProductPrice } = await import('../helpers/customPricing.js');
-  const productPrice = await getUserProductPrice(fromUser.id, product.id, product.price);
+  let productPrice = await getUserProductPrice(fromUser.id, product.id, product.price);
+
+  // Check if coupon is applied
+  const userIdStr = String(fromUser.id);
+  const appliedCoupon = appliedCouponsMap.get(userIdStr);
+  if (appliedCoupon && appliedCoupon.productId === product.id) {
+    productPrice = appliedCoupon.finalAmount;
+    if (appliedCoupon.coupon && appliedCoupon.coupon.id) {
+      await recordCouponUsage(appliedCoupon.coupon.id);
+    }
+    appliedCouponsMap.delete(userIdStr);
+  }
 
   if (currentBalance < productPrice) {
     return bot.sendMessage(
@@ -578,9 +629,20 @@ export const handleProductQuantityInput = async (bot, msg, quantityStr, config) 
   const user = await getUserByTelegram(userId);
   const lang = user?.language || 'vi';
 
+  const str = quantityStr.trim();
+  // Nếu người dùng chọn nút Menu (bắt đầu bằng emoji hoặc từ khóa menu), hủy state chờ số lượng và nhường cho handler Menu
+  if (
+    str.startsWith('/') ||
+    /^(🛟|🛒|💰|💵|📆|🧰|🌐|👤|📜|❌|🔙|📁|📝|📦|🎁|📌)/.test(str) ||
+    /Hỗ trợ|Bảo hành|Support|Warranty|Mua hàng|Nạp tiền|Deposit|Điểm danh|Check-in|Tiện ích|Utilities|Tài khoản|Lịch sử/i.test(str)
+  ) {
+    waitingForProductQuantity.delete(userIdStr);
+    return false;
+  }
+
   waitingForProductQuantity.delete(userIdStr);
 
-  const quantity = parseInt(quantityStr.trim(), 10);
+  const quantity = parseInt(str, 10);
   if (isNaN(quantity) || quantity < 1) {
     await bot.sendMessage(chatId, L(lang,
       '❌ Số lượng không hợp lệ. Vui lòng nhập số nguyên dương (ví dụ: 1, 2, 5).',
@@ -1146,4 +1208,62 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     console.error('[COMPLETE_PURCHASE_AFTER_DEPOSIT] Error:', error);
     return false;
   }
+};
+
+// Xử lý khi user gửi text Mã Giảm Giá
+export const handleCouponInput = async (bot, msg, userId) => {
+  const userIdStr = String(userId);
+  const state = waitingForCouponState.get(userIdStr);
+  if (!state) return false;
+
+  const code = msg.text.trim();
+  const product = await getProduct(state.productId);
+  if (!product) {
+    waitingForCouponState.delete(userIdStr);
+    return false;
+  }
+
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+  const { getUserProductPrice } = await import('../helpers/customPricing.js');
+  const basePrice = await getUserProductPrice(userId, product.id, product.price);
+
+  const res = await validateAndApplyCoupon(code, user?.id || userId, product.id, basePrice);
+  waitingForCouponState.delete(userIdStr);
+
+  if (!res.valid) {
+    await bot.sendMessage(
+      msg.chat.id,
+      L(lang,
+        `❌ **MÃ GIẢM GIÁ KHÔNG HỢP LỆ**\n\nLý do: ${res.reason}`,
+        `❌ **INVALID COUPON CODE**\n\nReason: ${res.reason}`,
+        `❌ **优惠码无效**\n\n原因: ${res.reason}`
+      ),
+      { parse_mode: 'Markdown' }
+    );
+    return true;
+  }
+
+  // Record applied coupon
+  appliedCouponsMap.set(userIdStr, {
+    productId: product.id,
+    code: res.code,
+    coupon: res.coupon,
+    discountAmount: res.discountAmount,
+    finalAmount: res.finalAmount
+  });
+
+  await bot.sendMessage(
+    msg.chat.id,
+    L(lang,
+      `🎉 **ÁP DỤNG MÃ GIẢM GIÁ THÀNH CÔNG!**\n\n🎟️ Mã: \`${res.code}\`\n💸 Được giảm: ${formatCurrency(res.discountAmount)}\n💰 Giá mới: ${formatCurrency(res.finalAmount)}`,
+      `🎉 **COUPON APPLIED SUCCESSFULLY!**\n\n🎟️ Code: \`${res.code}\`\n💸 Discount: ${formatCurrency(res.discountAmount)}\n💰 New Price: ${formatCurrency(res.finalAmount)}`,
+      `🎉 **优惠码应用成功！**\n\n🎟️ 代码: \`${res.code}\`\n💸 优惠: ${formatCurrency(res.discountAmount)}\n💰 新价格: ${formatCurrency(res.finalAmount)}`
+    ),
+    { parse_mode: 'Markdown' }
+  );
+
+  // Hiển thị lại chi tiết sản phẩm với giá đã giảm
+  await showProductDetail(bot, msg.chat.id, product.id, userId);
+  return true;
 };

@@ -100,6 +100,16 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
 
     const lang = waitingState.lang || 'vi';
 
+    // Nếu người dùng chọn nút Menu (bắt đầu bằng emoji hoặc từ khóa menu), hủy state chờ số lượng và nhường cho handler Menu
+    if (
+        text.startsWith('/') ||
+        /^(🛟|🛒|💰|💵|📆|🧰|🌐|👤|📜|❌|🔙|📁|📝|📦|🎁|📌)/.test(text) ||
+        /Hỗ trợ|Bảo hành|Support|Warranty|Mua hàng|Nạp tiền|Deposit|Điểm danh|Check-in|Tiện ích|Utilities|Tài khoản|Lịch sử/i.test(text)
+    ) {
+        delCache(gmailEduCacheKey(telegramId));
+        return false;
+    }
+
     // Nếu đang chờ input password
     if (waitingState.waitingPassword) {
         delCache(gmailEduCacheKey(telegramId));
@@ -209,8 +219,8 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
             return bot.sendMessage(chatId, errorMsg);
         }
 
-        // Lấy giá Gmail EDU từ settings
-        const pricePerGmail = await getGmailEduPrice();
+        // Lấy giá Gmail EDU từ settings hoặc custom_pricing riêng cho user
+        const pricePerGmail = await getGmailEduPrice(telegramId);
         const totalPrice = pricePerGmail * quantity;
 
         // Lấy lại số dư mới nhất
@@ -242,7 +252,7 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                 type: 'gmail_edu',
                 quantity,
                 totalPrice,
-                pricePerGmail: await getGmailEduPrice(),
+                pricePerGmail: await getGmailEduPrice(telegramId),
                 userId: currentUser.id,
                 telegramId: telegramId,
                 chatId: chatId,
@@ -505,7 +515,7 @@ export const showGmailEduInfo = async (bot, chatId, user) => {
             return bot.sendMessage(chatId, errorMsg);
         }
 
-        const price = await getGmailEduPrice();
+        const price = await getGmailEduPrice(user.telegram_id || user.id);
         const domain = await getSettingString('gmail_edu_domain', 'suafpoly.app');
         const deleteHours = await getDeleteHours();
         const soldCount = await getGmailEduSoldCount();

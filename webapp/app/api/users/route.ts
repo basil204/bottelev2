@@ -109,6 +109,18 @@ export async function PUT(request: Request) {
             return NextResponse.json({ success: true });
         }
 
+        if (type === 'toggle_ban') {
+            const [uRows] = await pool.query<any[]>('SELECT is_banned FROM users WHERE id = ?', [id]);
+            const currentIsBanned = Boolean(uRows[0]?.is_banned);
+            const newIsBanned = !currentIsBanned;
+            await pool.query('UPDATE users SET is_banned = ? WHERE id = ?', [newIsBanned ? 1 : 0, id]);
+            await logAdminAction({
+                action: 'UPDATE', targetType: 'USER', targetId: id,
+                details: { is_banned: newIsBanned }, request
+            });
+            return NextResponse.json({ success: true, is_banned: newIsBanned });
+        }
+
         if (!amount || !['add', 'subtract'].includes(type)) {
             return NextResponse.json({ error: 'Invalid balance update' }, { status: 400 });
         }

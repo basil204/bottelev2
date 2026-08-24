@@ -274,6 +274,32 @@ export default function DepositsPage() {
         }
     };
 
+    const handleToggleBanUser = async (user: UserWallet) => {
+        const confirmMsg = user.is_banned
+            ? `Bạn có chắc muốn BỎ CHẶN người dùng #${user.id} (${user.name || user.username || 'User'})?`
+            : `Bạn có chắc muốn CHẶN THẺ / KHÓA TÀI KHOẢN người dùng #${user.id} (${user.name || user.username || 'User'})?`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+            const res = await fetch('/api/users', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: user.id, type: 'toggle_ban' })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(data.is_banned ? `❌ Đã KHÓA TÀI KHOẢN người dùng #${user.id}` : `✅ Đã BỎ KHÓA người dùng #${user.id}`);
+                setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_banned: data.is_banned ? 1 : 0 } : u));
+            } else {
+                alert('Lỗi khi cập nhật trạng thái chặn người dùng');
+            }
+        } catch (err) {
+            alert('Có lỗi xảy ra khi thực hiện thao tác.');
+        }
+    };
+
     // Balance Topup / Adjust Modal Open & Fetch
     const openBalanceModal = (user: UserWallet, tab: 'add' | 'subtract') => {
         setSelectedUser(user);
@@ -534,10 +560,17 @@ export default function DepositsPage() {
                                                     </div>
                                                 )}
                                                 <div className="mt-1">
-                                                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                        ĐANG HOẠT ĐỘNG ví
-                                                    </span>
+                                                    {Boolean(u.is_banned) ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                            ĐÃ BỊ KHÓA / BANNED
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                            ĐANG HOẠT ĐỘNG
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
 
@@ -611,11 +644,16 @@ export default function DepositsPage() {
                                                         <span>ĐIỀU CHỈNH</span>
                                                     </button>
                                                     <button
-                                                        onClick={() => alert(`Đã cập nhật chặn user #${u.id}`)}
-                                                        className="rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-zinc-600 hover:bg-red-50 hover:text-red-600 active:scale-95 transition shadow-2xs flex items-center gap-1"
+                                                        onClick={() => handleToggleBanUser(u)}
+                                                        className={`rounded-xl border px-2.5 py-1.5 text-[11px] font-bold active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer ${
+                                                            Boolean(u.is_banned)
+                                                                ? 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
+                                                                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-red-50 hover:text-red-600'
+                                                        }`}
+                                                        title={Boolean(u.is_banned) ? 'Click để Mở khóa user' : 'Click để Khóa / Chặn user'}
                                                     >
                                                         <Ban className="h-3.5 w-3.5" />
-                                                        <span>CHẶN USER</span>
+                                                        <span>{Boolean(u.is_banned) ? 'ĐÃ CHẶN' : 'CHẶN USER'}</span>
                                                     </button>
                                                     <button
                                                         onClick={() => openBalanceModal(u, 'add')}
@@ -725,6 +763,7 @@ export default function DepositsPage() {
                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                         >
                                             <option value="">Chọn sản phẩm</option>
+                                            <option value="-1">🎓 Gmail EDU (Dịch vụ đặc biệt)</option>
                                             {products.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name} - {formatCurrency(p.price)}</option>
                                             ))}

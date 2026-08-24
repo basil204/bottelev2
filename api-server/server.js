@@ -143,17 +143,23 @@ function sanitizeInput(str) {
 }
 
 // Helper: Calculate Custom Pricing
-async function getUserProductPrice(connection, userId, productId, defaultPrice) {
+async function getUserProductPrice(connection, userId, productId, defaultPrice, isApiCall = true) {
   try {
     const [rows] = await connection.query(
       `SELECT custom_price, scope FROM custom_pricing 
        WHERE (user_id = ? OR user_id = (SELECT telegram_id FROM users WHERE id = ? LIMIT 1))
-       AND product_id = ? AND is_active = 1 LIMIT 1`,
+       AND product_id = ? AND is_active = 1
+       ORDER BY id DESC LIMIT 1`,
       [userId, userId, productId]
     );
 
     if (rows && rows.length > 0) {
       const { custom_price, scope } = rows[0];
+
+      if (scope === 'CLIENT_API' && !isApiCall) {
+        return Number(defaultPrice);
+      }
+
       if (scope === 'FIRST_ORDER') {
         const [orderRows] = await connection.query(
           "SELECT id FROM orders WHERE user_id = ? AND product_id = ? AND status = 'completed' LIMIT 1",
@@ -321,7 +327,7 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
     }
 
     const products = await query(`
-      SELECT p.id, p.name, p.price, p.description, p.type, p.prompt_message, p.category_id,
+      SELECT p.id, p.name, p.price, p.description, p.type, p.prompt_message, p.category_id, p.image_url,
              c.name as category_name,
              COALESCE(st.stock, 0) as stock
       FROM products p
@@ -344,6 +350,7 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
         type: p.type || 'stock',
         stock: p.type === 'order' ? 9999 : Number(p.stock || 0),
         category_name: p.category_name || 'Khác',
+        image_url: p.image_url || null,
         prompt_message: p.prompt_message || null
       };
     }));
@@ -622,7 +629,25 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) =
       return res.status(400).json({ success: false, error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin.' });
     }
 
-    const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+    let pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+    try {
+      const [cpRows] = await connection.query(
+        `SELECT custom_price, scope FROM custom_pricing 
+         WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
+           AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
+           AND is_active = 1
+         ORDER BY id DESC LIMIT 1`,
+        [req.user.user_id, req.user.user_id]
+      );
+      if (cpRows && cpRows.length > 0) {
+        pricePerUnit = Number(cpRows[0].custom_price);
+      }
+    } catch (cpErr) {
+      if (cpErr.code !== 'ER_NO_SUCH_TABLE') {
+        console.error('[GMAIL_EDU_API_CUSTOM_PRICE_ERR]', cpErr.message);
+      }
+    }
+
     const defaultDomain = settingsMap.gmail_edu_domain || 'suafpoly.app';
 
     const rawQuantity = req.body.quantity;

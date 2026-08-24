@@ -111,6 +111,13 @@ export const registerListeners = (bot, config) => {
 
   bot.onText(/^\/start(.*)/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
+    if (user?.is_banned) {
+      return bot.sendMessage(
+        msg.chat.id,
+        '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
+        { parse_mode: 'Markdown' }
+      );
+    }
     const { t } = await import('./helpers/langHelper.js');
     const { createCallbackData } = await import('../utils/index.js');
 
@@ -240,6 +247,14 @@ export const registerListeners = (bot, config) => {
 
 
 
+  // Command /broadcast để Admin gửi thông báo hàng loạt
+  bot.onText(/^\/broadcast(?:\s+([\s\S]+))?$/i, async (msg) => {
+    const { handleBroadcastCommand } = await import('./handle/handleAdmin.js');
+    const { getAdminIds } = await import('./handle/handleNotify.js');
+    const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
+    await handleBroadcastCommand(bot, msg, adminIds);
+  });
+
   // Command /gmail để mua Gmail EDU
   bot.onText(/^\/gmail/i, async (msg) => {
     const user = await ensureUser(bot, msg);
@@ -304,6 +319,13 @@ export const registerListeners = (bot, config) => {
     if (text.startsWith('/')) return;
 
     const user = await ensureUser(bot, msg);
+    if (user?.is_banned) {
+      return bot.sendMessage(
+        msg.chat.id,
+        '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
+        { parse_mode: 'Markdown' }
+      );
+    }
 
     // Xử lý nút Huỷ (ưu tiên cao)
     if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消') {
@@ -344,6 +366,13 @@ export const registerListeners = (bot, config) => {
     // Check TRC20 hash input
     const handledTrc20Hash = await handleTrc20HashInput(bot, msg, user);
     if (handledTrc20Hash) return;
+
+    // Check Coupon Input
+    const { handleCouponInput, waitingForCouponState } = await import('./handle/handleBuy.js');
+    if (waitingForCouponState.has(String(msg.from.id))) {
+      const handledCoupon = await handleCouponInput(bot, msg, msg.from.id);
+      if (handledCoupon) return;
+    }
 
     // Kiểm tra input số lượng cho sản phẩm trước (ưu tiên cao nhất)
     const handledProduct = await handleProductQuantityInput(bot, msg, text, config);
@@ -596,6 +625,12 @@ export const registerListeners = (bot, config) => {
       }
 
       const user = await ensureUser(bot, { ...query.message, from: query.from, text: query.data });
+      if (user?.is_banned) {
+        return bot.answerCallbackQuery(query.id, {
+          text: '🚫 Tài khoản của bạn đã bị khóa! Vui lòng liên hệ Admin.',
+          show_alert: true
+        });
+      }
 
       console.log(`[CALLBACK] User ${query.from.id}: ${query.data}`);
 
@@ -624,6 +659,18 @@ export const registerListeners = (bot, config) => {
           return handleDownloadSelection(bot, query, 'download_cancel');
         case 'capcut_start':
           return startCapCutFlow(bot, chatId, query.from.id);
+        case 'apply_coupon_prompt':
+          {
+            const { waitingForCouponState } = await import('./handle/handleBuy.js');
+            waitingForCouponState.set(String(query.from.id), { productId: data.productId });
+            await bot.sendMessage(
+              chatId,
+              '🎟️ **VUI LÒNG GỬI MÃ GIẢM GIÁ (COUPON CODE) CỦA BẠN VÀO KHUNG CHAT:**\n\n*(Ví dụ: SALEOFF50)*',
+              { parse_mode: 'Markdown' }
+            );
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
         case 'select_lang':
           // Xử lý chọn ngôn ngữ lần đầu
           {

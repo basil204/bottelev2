@@ -385,10 +385,34 @@ export const handleUserCommand = async (bot, msg, args) => {
     );
   }
 
+  const actionType = args[0].toLowerCase();
+
+  // Ban command: /user ban <telegram_id>
+  if (actionType === 'ban' && args.length >= 2) {
+    const targetId = args[1];
+    await query('UPDATE users SET is_banned = 1 WHERE telegram_id = ? OR id = ?', [targetId, targetId]);
+    return bot.sendMessage(
+      msg.chat.id,
+      `🚫 **ĐÃ KHÓA TÀI KHOẢN NGƯỜI DÙNG!**\n\n🆔 User / Telegram ID: \`${targetId}\`\n⚠️ Người dùng này sẽ bị chặn mọi thao tác trên hệ thống.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  // Unban command: /user unban <telegram_id>
+  if (actionType === 'unban' && args.length >= 2) {
+    const targetId = args[1];
+    await query('UPDATE users SET is_banned = 0 WHERE telegram_id = ? OR id = ?', [targetId, targetId]);
+    return bot.sendMessage(
+      msg.chat.id,
+      `✅ **ĐÃ BỎ KHÓA TÀI KHOẢN NGƯỜI DÙNG!**\n\n🆔 User / Telegram ID: \`${targetId}\`\n🎉 Người dùng đã có thể sử dụng Bot và mua hàng bình thường.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+
   let telegramId, amount, isSubtract = false;
 
   // Parse format: /user add <telegram_id> <amount>
-  if (args[0].toLowerCase() === 'add' && args.length >= 3) {
+  if (actionType === 'add' && args.length >= 3) {
     telegramId = args[1];
     amount = Number(args[2]);
     isSubtract = false;
@@ -941,5 +965,54 @@ export const adminUpdateSetting = async (bot, msg, key) => {
     console.error('Error updating setting:', error);
     await bot.sendMessage(msg.chat.id, '❌ Lỗi khi cập nhật.');
   }
+};
+
+// Admin Broadcast Command Handler
+export const handleBroadcastCommand = async (bot, msg, adminIds = []) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!adminIds.includes(userId)) {
+    return bot.sendMessage(chatId, '❌ Bạn không có quyền sử dụng lệnh này.');
+  }
+
+  const fullText = msg.text.replace(/^\/broadcast\s*/i, '').trim();
+  if (!fullText) {
+    return bot.sendMessage(
+      chatId,
+      '📢 **HƯỚNG DẪN GỬI THÔNG BÁO TỚI TẤT CẢ NGƯỜI DÙNG**\n\n' +
+      '• Cú pháp tin nhắn văn bản:\n`/broadcast Nội dung thông báo`\n\n' +
+      '• Cú pháp kèm hình ảnh:\n`/broadcast https://domain.com/image.png | Nội dung thông báo`\n\n' +
+      'Ví dụ:\n`/broadcast 📢 Khuyến mãi nạp 20% duy nhất hôm nay!`',
+      { parse_mode: 'Markdown' }
+    );
+  }
+
+  let imageUrl = null;
+  let broadcastMsg = fullText;
+
+  if (fullText.includes('|')) {
+    const parts = fullText.split('|');
+    const possibleUrl = parts[0].trim();
+    if (possibleUrl.startsWith('http://') || possibleUrl.startsWith('https://')) {
+      imageUrl = possibleUrl;
+      broadcastMsg = parts.slice(1).join('|').trim();
+    }
+  }
+
+  await bot.sendMessage(chatId, '⏳ Đang gửi thông báo hàng loạt tới người dùng...');
+
+  const { broadcastToAllUsers } = await import('./handleNotify.js');
+  const result = await broadcastToAllUsers(bot, broadcastMsg, imageUrl);
+
+  await bot.sendMessage(
+    chatId,
+    `✅ **KẾT QUẢ GỬI THÔNG BÁO BROADCAST**\n\n` +
+    `👥 Tổng số người dùng: ${result.totalUsers || 0}\n` +
+    `✅ Gửi thành công: ${result.successCount || 0}\n` +
+    `❌ Gửi thất bại: ${result.failCount || 0}\n` +
+    `🗑️ Đã xóa (blocked/deactivated): ${result.removedCount || 0}`,
+    { parse_mode: 'Markdown' }
+  );
 };
 

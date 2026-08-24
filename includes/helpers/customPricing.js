@@ -4,7 +4,7 @@ import { query } from '../database/index.js';
  * Gets custom price for a user and product if configured in custom_pricing table.
  * Returns default price if no active custom price exists.
  */
-export const getUserProductPrice = async (userId, productId, defaultPrice) => {
+export const getUserProductPrice = async (userId, productId, defaultPrice, isApiCall = false) => {
   const numDefault = Number(defaultPrice) || 0;
   if (!userId || !productId) return numDefault;
 
@@ -21,6 +21,12 @@ export const getUserProductPrice = async (userId, productId, defaultPrice) => {
 
     if (rows && rows.length > 0) {
       const cp = rows[0];
+
+      // Nếu scope cài đặt là CLIENT_API nhưng đây không phải lượt mua qua API Key, bỏ qua giá này
+      if (cp.scope === 'CLIENT_API' && !isApiCall) {
+        return numDefault;
+      }
+
       if (cp.scope === 'FIRST_ORDER') {
         const orders = await query(`
           SELECT COUNT(*) as count FROM orders 

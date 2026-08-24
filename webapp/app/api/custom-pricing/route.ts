@@ -13,7 +13,7 @@ export async function GET(request: Request) {
         }
 
         const [rows] = await pool.query<RowDataPacket[]>(`
-            SELECT cp.*, p.name as product_name
+            SELECT cp.*, IF(cp.product_id = -1 OR cp.plan_id = 'gmail_edu', '🎓 Gmail EDU (Dịch vụ đặc biệt)', p.name) as product_name
             FROM custom_pricing cp
             LEFT JOIN products p ON cp.product_id = p.id
             WHERE cp.user_id = ? OR cp.user_id IN (SELECT id FROM users WHERE telegram_id = ?)
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         const { ipAddress, userAgent } = getRequestInfo(request);
         const adminName = await getAdminFromCookie(request);
 
-        if (!userId || !productId || !customPrice) {
+        if (!userId || !productId || customPrice === undefined || customPrice === null) {
             return NextResponse.json({ error: 'Thiếu thông tin bắt buộc' }, { status: 400 });
         }
 
@@ -42,13 +42,17 @@ export async function POST(request: Request) {
         const [userRows] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR telegram_id = ?', [userId, userId]);
         const targetUserId = userRows[0]?.id || Number(userId);
 
+        const isGmailEdu = String(productId) === '-1' || productId === 'gmail_edu' || planId === 'gmail_edu';
+        const targetProductId = isGmailEdu ? -1 : Number(productId);
+        const targetPlanId = isGmailEdu ? 'gmail_edu' : (planId || null);
+
         const [res]: any = await pool.query(`
             INSERT INTO custom_pricing (user_id, product_id, plan_id, custom_price, scope, is_active)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [
             targetUserId,
-            Number(productId),
-            planId || null,
+            targetProductId,
+            targetPlanId,
             Number(customPrice),
             scope || 'ALL_ORDERS',
             isActive ? 1 : 0

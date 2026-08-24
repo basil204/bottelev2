@@ -289,6 +289,85 @@ export const initDb = async (config) => {
       }
     }
 
+    // TỰ ĐỘNG BỔ SUNG TOÀN BỘ BẢNG VÀ CỘT SQL CÒN THIẾU
+    const safeAddColumn = async (table, column, colDef) => {
+      try {
+        const [cols] = await pool.execute(`SHOW COLUMNS FROM \`${table}\` LIKE ?`, [column]);
+        if (!cols || cols.length === 0) {
+          await pool.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${colDef}`);
+          console.log(`✅ [AUTO_MIGRATE] Đã thêm cột \`${column}\` vào bảng \`${table}\``);
+        }
+      } catch (e) {
+        // Table might not exist yet, handled by table creation
+      }
+    };
+
+    // 1. Bảng users
+    await safeAddColumn('users', 'name', 'VARCHAR(255) NULL');
+    await safeAddColumn('users', 'telegram_id', 'BIGINT NULL');
+    await safeAddColumn('users', 'balance', 'DECIMAL(15,2) DEFAULT 0');
+    await safeAddColumn('users', 'is_banned', 'TINYINT(1) DEFAULT 0');
+    await safeAddColumn('users', 'language', "VARCHAR(10) DEFAULT 'vi'");
+
+    // 2. Bảng products
+    await safeAddColumn('products', 'priority', 'INT DEFAULT 0');
+    await safeAddColumn('products', 'type', "VARCHAR(50) DEFAULT 'stock'");
+    await safeAddColumn('products', 'prompt_message', 'TEXT NULL');
+    await safeAddColumn('products', 'category_id', 'INT NULL');
+
+    // 3. Bảng orders
+    await safeAddColumn('orders', 'invoice_code', 'VARCHAR(100) NULL');
+    await safeAddColumn('orders', 'product_id', 'INT NULL');
+
+    // 4. Khởi tạo Bảng user_api_keys
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS user_api_keys (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          api_key VARCHAR(100) NOT NULL UNIQUE,
+          name VARCHAR(100) DEFAULT 'User API Key',
+          is_active TINYINT(1) DEFAULT 1,
+          last_used_at DATETIME NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await safeAddColumn('user_api_keys', 'name', "VARCHAR(100) DEFAULT 'User API Key'");
+      await safeAddColumn('user_api_keys', 'is_active', 'TINYINT(1) DEFAULT 1');
+      console.log('✅ Bảng user_api_keys sẵn sàng');
+    } catch (e) {}
+
+    // 5. Khởi tạo Bảng custom_pricing
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS custom_pricing (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          product_id INT NOT NULL,
+          plan_id VARCHAR(100) NULL,
+          custom_price DECIMAL(15,2) NOT NULL,
+          scope VARCHAR(50) DEFAULT 'ALL_ORDERS',
+          is_active TINYINT(1) DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Bảng custom_pricing sẵn sàng');
+    } catch (e) {}
+
+    // 6. Khởi tạo Bảng balance_logs
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS balance_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          amount DECIMAL(15,2) NOT NULL,
+          reason TEXT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Bảng balance_logs sẵn sàng');
+    } catch (e) {}
+
     // ChatGPT Join FAM was removed; legacy migration is disabled.
     if (false) {
     // ensure ChatGPT FAM table exists

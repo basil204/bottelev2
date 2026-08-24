@@ -8,6 +8,83 @@ import pool, { query, execute } from './db.js';
 const app = express();
 const PORT = process.env.PORT || 1568;
 
+// TỰ ĐỘNG CẬP NHẬT CẤU TRÚC VÀ BẢNG SQL CÒN THIẾU
+async function initDatabase() {
+  try {
+    const safeAddColumn = async (table, column, colDef) => {
+      try {
+        const [cols] = await pool.query(`SHOW COLUMNS FROM \`${table}\` LIKE ?`, [column]);
+        if (!cols || cols.length === 0) {
+          await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${colDef}`);
+          console.log(`✅ [API_SERVER] Đã bổ sung cột \`${column}\` vào bảng \`${table}\``);
+        }
+      } catch (e) {}
+    };
+
+    // 1. Khởi tạo Bảng user_api_keys
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_api_keys (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        api_key VARCHAR(100) NOT NULL UNIQUE,
+        name VARCHAR(100) DEFAULT 'User API Key',
+        is_active TINYINT(1) DEFAULT 1,
+        last_used_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await safeAddColumn('user_api_keys', 'name', "VARCHAR(100) DEFAULT 'User API Key'");
+    await safeAddColumn('user_api_keys', 'is_active', 'TINYINT(1) DEFAULT 1');
+
+    // 2. Bổ sung các cột cho bảng users
+    await safeAddColumn('users', 'name', 'VARCHAR(255) NULL');
+    await safeAddColumn('users', 'telegram_id', 'BIGINT NULL');
+    await safeAddColumn('users', 'balance', 'DECIMAL(15,2) DEFAULT 0');
+    await safeAddColumn('users', 'is_banned', 'TINYINT(1) DEFAULT 0');
+    await safeAddColumn('users', 'language', "VARCHAR(10) DEFAULT 'vi'");
+
+    // 3. Bổ sung các cột cho bảng products
+    await safeAddColumn('products', 'priority', 'INT DEFAULT 0');
+    await safeAddColumn('products', 'type', "VARCHAR(50) DEFAULT 'stock'");
+    await safeAddColumn('products', 'prompt_message', 'TEXT NULL');
+    await safeAddColumn('products', 'category_id', 'INT NULL');
+
+    // 4. Bổ sung các cột cho bảng orders
+    await safeAddColumn('orders', 'invoice_code', 'VARCHAR(100) NULL');
+    await safeAddColumn('orders', 'product_id', 'INT NULL');
+
+    // 5. Khởi tạo Bảng custom_pricing
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS custom_pricing (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        product_id INT NOT NULL,
+        plan_id VARCHAR(100) NULL,
+        custom_price DECIMAL(15,2) NOT NULL,
+        scope VARCHAR(50) DEFAULT 'ALL_ORDERS',
+        is_active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 6. Khởi tạo Bảng balance_logs
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS balance_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        amount DECIMAL(15,2) NOT NULL,
+        reason TEXT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('[API_SERVER] Cập nhật CSDL tự động hoàn tất.');
+  } catch (e) {
+    console.error('[API_SERVER_INIT_ERR]', e);
+  }
+}
+initDatabase();
+
 // 1. SECURITY HEADERS (Helmet)
 app.use(helmet({
   contentSecurityPolicy: false,

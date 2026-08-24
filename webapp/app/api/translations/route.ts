@@ -89,7 +89,7 @@ export async function POST(request: Request) {
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
-                targetType: 'SETTINGS',
+                targetType: 'SETTING',
                 details: { type: 'seed_from_code_messages' },
                 ipAddress,
                 userAgent,
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
-                targetType: 'SETTINGS',
+                targetType: 'SETTING',
                 details: { type: 'batch_update_translations', count: translations.length },
                 ipAddress,
                 userAgent,
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
         await logAdminAction({
             adminName: adminName || 'System',
             action: 'UPDATE',
-            targetType: 'SETTINGS',
+            targetType: 'SETTING',
             details: { type: 'single_update_translation', msg_key },
             ipAddress,
             userAgent,

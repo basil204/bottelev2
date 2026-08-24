@@ -47,6 +47,40 @@ export async function POST(request: Request) {
         const { ipAddress, userAgent } = getRequestInfo(request);
         const adminName = await getAdminFromCookie(request);
 
+        if (action === 'seed_from_code') {
+            const { messages } = await import('../../../../includes/lang/messages.js');
+            const connection = await pool.getConnection();
+            try {
+                await connection.beginTransaction();
+                for (const [lang, keyValues] of Object.entries(messages)) {
+                    for (const [key, value] of Object.entries(keyValues as Record<string, string>)) {
+                        await connection.query(
+                            'INSERT INTO translations (msg_key, lang, msg_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE msg_value = VALUES(msg_value)',
+                            [key, lang, value]
+                        );
+                    }
+                }
+                await connection.commit();
+            } catch (err) {
+                await connection.rollback();
+                throw err;
+            } finally {
+                connection.release();
+            }
+
+            await logAdminAction({
+                adminName: adminName || 'System',
+                action: 'UPDATE',
+                targetType: 'SETTINGS',
+                details: { type: 'seed_from_code_messages' },
+                ipAddress,
+                userAgent,
+                request
+            });
+
+            return NextResponse.json({ success: true, message: 'Đã nạp toàn bộ ngôn ngữ từ includes/lang/messages.js vào CSDL!' });
+        }
+
         if (action === 'batch_update' && Array.isArray(translations)) {
             const connection = await pool.getConnection();
             try {

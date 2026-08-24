@@ -74,6 +74,29 @@ export default function TranslationsPage() {
         }
     };
 
+    const handleSeedFromCode = async () => {
+        if (!window.confirm('Bạn có chắc muốn nạp / đồng bộ toàn bộ bộ từ vựng mặc định từ file includes/lang/messages.js vào CSDL?')) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/translations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'seed_from_code' })
+            });
+            const json = await res.json();
+            if (json.success) {
+                alert(json.message);
+                fetchTranslations();
+            } else {
+                alert(json.error || 'Lỗi khi nạp từ vựng');
+            }
+        } catch (e) {
+            alert('Có lỗi xảy ra khi nạp từ vựng từ code.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const filteredTranslations = translations.filter(item => {
         const query = searchQuery.toLowerCase().trim();
         if (!query) return true;
@@ -108,9 +131,19 @@ export default function TranslationsPage() {
 
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={handleSeedFromCode}
+                        disabled={saving || loading}
+                        className="rounded-xl border border-orange-200 bg-orange-50 px-3.5 py-2.5 text-xs font-extrabold text-orange-700 hover:bg-orange-100 transition active:scale-95 shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title="Nạp lại toàn bộ bộ câu từ mặc định từ file includes/lang/messages.js vào CSDL"
+                    >
+                        <Sparkles className="h-4 w-4 text-orange-600" />
+                        <span>NẠP BỘ TỪ VỰNG TỪ CODE</span>
+                    </button>
+
+                    <button
                         onClick={fetchTranslations}
                         disabled={loading}
-                        className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-extrabold text-zinc-700 hover:bg-zinc-50 transition active:scale-95 shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        className="rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-xs font-extrabold text-zinc-700 hover:bg-zinc-50 transition active:scale-95 shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                         <span>TẢI LẠI</span>

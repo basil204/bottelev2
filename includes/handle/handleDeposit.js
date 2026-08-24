@@ -181,6 +181,7 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
   }
 
   setCache(`bank_selection_${userId}`, activeBank, 15 * 60 * 1000);
+  setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
 
   // Directly ask for amount
   const promptMsg = L(lang,
@@ -202,6 +203,7 @@ export const selectBankMethod = async (bot, chatId, userId, bank) => {
   }
 
   setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
+  setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
 
   const promptMsg = L(lang,
     'Nhập số tiền cần nạp (VNĐ):',
@@ -744,9 +746,12 @@ const getMinDepositAmount = async () => {
 };
 
 export const handleDepositAmount = async (bot, msg, user, config) => {
-  // Chỉ xử lý nếu người dùng đang trong luồng nạp tiền đã chọn ngân hàng
+  // Chỉ xử lý nếu người dùng thực sự đang trong trạng thái chờ nhập số tiền nạp
+  const isWaiting = getCache(`waiting_deposit_amount_${msg.from.id}`);
+  if (!isWaiting) return false;
+
+  delCache(`waiting_deposit_amount_${msg.from.id}`);
   let selectedBank = getCache(`bank_selection_${msg.from.id}`);
-  if (!selectedBank) return false;
 
   const lang = user?.language || 'vi';
   const existing = getCache(qrKey(msg.from.id));

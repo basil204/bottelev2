@@ -48,7 +48,25 @@ export async function POST(request: Request) {
         const adminName = await getAdminFromCookie(request);
 
         if (action === 'seed_from_code') {
-            const { messages } = await import('../../../../includes/lang/messages.js');
+            let messages: Record<string, Record<string, string>> = {};
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                const { pathToFileURL } = await import('url');
+                
+                const filePath = path.resolve(process.cwd(), '../includes/lang/messages.js');
+                if (fs.existsSync(filePath)) {
+                    const mod = await import(pathToFileURL(filePath).href);
+                    messages = mod.messages || {};
+                }
+            } catch (importErr) {
+                console.error('[SEED_FROM_CODE_IMPORT_ERR]', importErr);
+            }
+
+            if (!messages || Object.keys(messages).length === 0) {
+                return NextResponse.json({ error: 'Không thể nạp file includes/lang/messages.js từ server' }, { status: 500 });
+            }
+
             const connection = await pool.getConnection();
             try {
                 await connection.beginTransaction();

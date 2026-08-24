@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # 1. Redis Cache & Write-Behind Buffer Engine
+  redis_cache:
+    image: redis:7-alpine
+    container_name: conveyor_redis_cache
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass "conveyor_redis_secret"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "conveyor_redis_secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 2. Database Shard Node 1 (Lưu trữ dữ liệu cho Scale ID Hash Even: scale_100, scale_102,...)
+  db_shard_1:
+    image: postgres:16-alpine
+    container_name: conveyor_db_shard_1
+    environment:
+      POSTGRES_DB: conveyor_db_shard1
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./src/database/schema_partitioning.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # 3. Database Shard Node 2 (Lưu trữ dữ liệu cho Scale ID Hash Odd: scale_101, scale_103,...)
+  db_shard_2:
+    image: postgres:16-alpine
+    container_name: conveyor_db_shard_2
+    environment:
+      POSTGRES_DB: conveyor_db_shard2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./src/database/schema_partitioning.sql:/docker-entrypoint-initdb.d/init.sql

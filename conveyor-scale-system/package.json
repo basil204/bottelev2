@@ -1,0 +1,31 @@
+{
+  "name": "conveyor-scale-system",
+  "version": "1.0.0",
+  "description": "System architecture for Conveyor Belt Scale: User -> Telemetry Simulator -> API Grid -> Redis Cache -> Partitioned & Sharded DB",
+  "main": "test_flow.js",
+  "scripts": {
+    "start:gateway": "node src/api_gateway/gateway.js",
+    "start:worker": "node src/worker/db_batch_worker.js",
+    "start:simulator": "node src/iot_device/belt_scale_simulator.js",
+    "start:user": "node src/client/user_client.js",
+    "test:flow": "node test_flow.js"
+  },
+  "keywords": [
+    "conveyor-scale",
+    "iot",
+    "sharding",
+    "partitioning",
+    "redis-cache",
+    "write-behind",
+    "brin-index"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "pg": "^8.12.0"
+  }
+}

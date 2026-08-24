@@ -3,6 +3,7 @@ import cors from 'cors';
 import crypto from 'crypto';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 import pool, { query, execute } from './db.js';
 
 const app = express();
@@ -48,6 +49,7 @@ async function initDatabase() {
     await safeAddColumn('products', 'type', "VARCHAR(50) DEFAULT 'stock'");
     await safeAddColumn('products', 'prompt_message', 'TEXT NULL');
     await safeAddColumn('products', 'category_id', 'INT NULL');
+    await safeAddColumn('products', 'is_active', 'TINYINT(1) DEFAULT 1');
 
     // 4. Bổ sung các cột cho bảng orders
     await safeAddColumn('orders', 'invoice_code', 'VARCHAR(100) NULL');
@@ -310,7 +312,7 @@ app.post('/api/v1/user/api-key', async (req, res) => {
 app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
   try {
     const categoryId = req.query.categoryId ? parseInt(req.query.categoryId, 10) : null;
-    let whereClause = 'WHERE p.is_active = 1';
+    let whereClause = 'WHERE (p.is_active IS NULL OR p.is_active = 1)';
     const params = [];
 
     if (categoryId && !isNaN(categoryId)) {
@@ -319,13 +321,15 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
     }
 
     const products = await query(`
-      SELECT p.id, p.name, p.price, p.description, p.type, p.prompt_message, p.category_id, c.name as category_name,
-             COUNT(CASE WHEN a.status = 'available' THEN a.id END) as stock
+      SELECT p.id, p.name, p.price, p.description, p.type, p.prompt_message, p.category_id,
+             c.name as category_name,
+             COALESCE(st.stock, 0) as stock
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN accounts a ON a.product_id = p.id
+      LEFT JOIN (
+        SELECT product_id, COUNT(*) as stock FROM accounts WHERE status = 'available' GROUP BY product_id
+      ) st ON st.product_id = p.id
       ${whereClause}
-      GROUP BY p.id
       ORDER BY p.priority DESC, p.id DESC
     `, params);
 
@@ -351,7 +355,7 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
     });
   } catch (err) {
     console.error('[PRODUCTS_API_ERR]', err);
-    res.status(500).json({ success: false, error: 'Lỗi lấy danh sách sản phẩm' });
+    res.status(500).json({ success: false, error: 'Lỗi lấy danh sách sản phẩm', details: err.message });
   }
 });
 
@@ -552,6 +556,326 @@ app.get('/api/v1/orders', authenticateApiKey, async (req, res) => {
   }
 });
 
+// Helper functions for Gmail EDU ordering
+function generatePassword() {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%&*';
+  let password = '';
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  const all = uppercase + lowercase + numbers + special;
+  for (let i = 0; i < 8; i++) {
+    password += all[Math.floor(Math.random() * all.length)];
+  }
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+function generateUsername(prefix) {
+  if (prefix && String(prefix).trim()) {
+    const cleanPrefix = String(prefix).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanPrefix) return `${cleanPrefix}${Math.floor(Math.random() * 899 + 100)}`;
+  }
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  let str = '';
+  for (let i = 0; i < 7; i++) str += chars[Math.floor(Math.random() * chars.length)];
+  return `${str}${Math.floor(Math.random() * 89 + 10)}`;
+}
+
+// G. API Order Gmail EDU Endpoint
+app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Lock User Row
+    const [userRows] = await connection.query(
+      'SELECT id, balance, is_banned FROM users WHERE id = ? FOR UPDATE',
+      [req.user.user_id]
+    );
+
+    if (!userRows || userRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, error: 'Người dùng không tồn tại.' });
+    }
+
+    const user = userRows[0];
+    if (user.is_banned) {
+      await connection.rollback();
+      return res.status(403).json({ success: false, error: 'Tài khoản người dùng đã bị khóa.' });
+    }
+
+    // 2. Fetch Settings
+    const [settingsRows] = await connection.query(
+      "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled')"
+    );
+
+    const settingsMap = {};
+    settingsRows.forEach(r => { settingsMap[r.key] = r.value; });
+
+    const isEnabled = settingsMap.gmail_edu_enabled !== 'false';
+    if (!isEnabled) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin.' });
+    }
+
+    const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+    const defaultDomain = settingsMap.gmail_edu_domain || 'suafpoly.app';
+
+    const rawQuantity = req.body.quantity;
+    const quantity = Math.min(Math.max(1, parseInt(rawQuantity, 10) || 1), 50);
+    const domain = (req.body.domain && String(req.body.domain).trim()) ? String(req.body.domain).trim() : defaultDomain;
+    const type = req.body.type === 'non' ? 'non' : 'edu';
+    const customPassword = req.body.password ? String(req.body.password).trim() : null;
+
+    const totalCost = pricePerUnit * quantity;
+    const currentBalance = Number(user.balance) || 0;
+
+    if (currentBalance < totalCost) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        error: `Số dư không đủ. Cần: ${totalCost.toLocaleString('vi-VN')} VNĐ, Số dư hiện có: ${currentBalance.toLocaleString('vi-VN')} VNĐ.`
+      });
+    }
+
+    // 3. Create Accounts
+    const createdAccounts = [];
+    for (let i = 0; i < quantity; i++) {
+      const username = generateUsername(req.body.prefix || req.body.username);
+      const email = `${username}@${domain}`;
+      const password = customPassword || generatePassword();
+
+      await connection.query(`
+        INSERT INTO gmail_accounts (email, password, type, domain, status, created_at)
+        VALUES (?, ?, ?, ?, 'available', NOW())
+      `, [email, password, type, domain]);
+
+      createdAccounts.push({ email, password, type, domain });
+    }
+
+    // 4. Deduct User Balance
+    await connection.query('UPDATE users SET balance = balance - ? WHERE id = ?', [totalCost, user.id]);
+    await connection.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
+      user.id, -totalCost, `buy_gmail_edu_api_${quantity}_items`
+    ]);
+
+    // 5. Create Order Record
+    const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
+    const [orderRes] = await connection.query(
+      "INSERT INTO orders (user_id, price, email, note, status) VALUES (?, ?, ?, ?, 'completed')",
+      [user.id, totalCost, accountsFormatted, `API Order Gmail EDU (${quantity} tài khoản)`]
+    );
+
+    const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
+    await connection.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
+
+    await connection.commit();
+
+    return res.json({
+      success: true,
+      message: 'Đặt Gmail EDU qua API thành công!',
+      invoice_code: invoiceCode,
+      quantity,
+      total_cost: totalCost,
+      price_per_unit: pricePerUnit,
+      remaining_balance: currentBalance - totalCost,
+      data: createdAccounts
+    });
+  } catch (err) {
+    await connection.rollback();
+    console.error('[ORDER_EDU_API_ERR]', err);
+    res.status(500).json({ success: false, error: 'Lỗi hệ thống khi xử lý đơn hàng Gmail EDU.' });
+  } finally {
+    connection.release();
+  }
+});
+
+// ============================================================================
+// H. SWAGGER UI & OPENAPI 3.0 TEST API ENDPOINTS
+// ============================================================================
+const swaggerSpec = {
+  openapi: '3.0.0',
+  info: {
+    title: 'BotTele & Store Standalone API Server',
+    version: '1.0.0',
+    description: 'Trang chạy thử và tài liệu API trực quan (Swagger UI Interactive Tester). Hỗ trợ test trực tiếp tất cả API qua User API Key.'
+  },
+  servers: [
+    {
+      url: `http://localhost:${PORT}`,
+      description: 'Local Standalone API Server'
+    }
+  ],
+  components: {
+    securitySchemes: {
+      ApiKeyAuth: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'Nhập User API Key của bạn (Ví dụ: sk_edu_YOUR_KEY)'
+      },
+      BearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        description: 'Nhập API Key dưới dạng Bearer Token'
+      }
+    }
+  },
+  paths: {
+    '/health': {
+      get: {
+        summary: 'Kiểm tra trạng thái máy chủ API (Health Check)',
+        tags: ['System'],
+        responses: {
+          200: { description: 'Máy chủ hoạt động bình thường' }
+        }
+      }
+    },
+    '/api/v1/user': {
+      get: {
+        summary: 'Lấy thông tin tài khoản, số dư & trạng thái khóa',
+        tags: ['User'],
+        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
+        responses: {
+          200: { description: 'Trả về thông tin tài khoản thành công' },
+          401: { description: 'API Key không hợp lệ hoặc thiếu' }
+        }
+      }
+    },
+    '/api/v1/user/api-key': {
+      post: {
+        summary: 'Tạo mới hoặc thay đổi API Key người dùng',
+        tags: ['User'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  user_id: { type: 'integer', example: 1, description: 'ID người dùng hệ thống' },
+                  action: { type: 'string', example: 'generate', description: 'generate hoặc revoke' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Tạo / Đổi API Key thành công' }
+        }
+      }
+    },
+    '/api/v1/products': {
+      get: {
+        summary: 'Lấy danh sách sản phẩm & số lượng tồn kho',
+        tags: ['Products'],
+        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categoryId',
+            in: 'query',
+            schema: { type: 'integer' },
+            description: 'Lọc theo ID danh mục sản phẩm (tùy chọn)'
+          }
+        ],
+        responses: {
+          200: { description: 'Danh sách sản phẩm thành công' }
+        }
+      }
+    },
+    '/api/v1/buy': {
+      post: {
+        summary: 'Mua hàng / Đặt dịch vụ tự động (ACID Row-Locking Security)',
+        tags: ['Purchase'],
+        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['productId', 'quantity'],
+                properties: {
+                  productId: { type: 'integer', example: 1, description: 'ID sản phẩm cần mua' },
+                  quantity: { type: 'integer', example: 1, description: 'Số lượng mua (1 đến 50)' },
+                  custom_email: { type: 'string', example: 'customer@gmail.com', description: 'Email nhận thông tin (tùy chọn)' },
+                  note: { type: 'string', example: 'Đơn hàng qua API', description: 'Ghi chú cho đơn hàng' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Giao dịch mua hàng thành công' },
+          400: { description: 'Số dư không đủ hoặc tham số sai' }
+        }
+      }
+    },
+    '/api/v1/order-edu': {
+      post: {
+        summary: 'Đặt & Tạo tài khoản Gmail EDU tự động qua API Key',
+        tags: ['Gmail EDU'],
+        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  quantity: { type: 'integer', example: 1, description: 'Số lượng tài khoản (tối đa 50)' },
+                  domain: { type: 'string', example: 'suafpoly.app', description: 'Tên miền EDU' },
+                  prefix: { type: 'string', example: 'student', description: 'Tiền tố username' },
+                  type: { type: 'string', example: 'edu', description: 'Loại edu hoặc non' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Đặt Gmail EDU thành công' },
+          400: { description: 'Số dư không đủ hoặc tính năng bị tạm khóa' }
+        }
+      }
+    },
+    '/api/v1/orders': {
+      get: {
+        summary: 'Truy vấn lịch sử các đơn hàng đã mua',
+        tags: ['Orders'],
+        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', default: 20 },
+            description: 'Số lượng đơn hàng tối đa trả về'
+          }
+        ],
+        responses: {
+          200: { description: 'Danh sách lịch sử đơn hàng' }
+        }
+      }
+    }
+  }
+};
+
+// Mount Swagger UI Endpoints
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/swagger.json', (req, res) => res.json(swaggerSpec));
+
+// 404 Fallback JSON Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `Endpoint ${req.method} ${req.originalUrl} không tồn tại trên hệ thống API.`
+  });
+});
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('[UNHANDLED_ERROR]', err);
@@ -563,5 +887,7 @@ app.listen(PORT, () => {
   console.log(`🛡️  ULTRA-SECURE Standalone API Server running on port ${PORT}`);
   console.log(`🔒 Security Layers: Helmet, Rate-Limit, ACID Transactions (FOR UPDATE)`);
   console.log(`🌐 Base URL: http://localhost:${PORT}`);
+  console.log(`📖 Swagger API Test UI: http://localhost:${PORT}/docs`);
+  console.log(`📖 Swagger Spec JSON:  http://localhost:${PORT}/swagger.json`);
   console.log(`================================================================`);
 });

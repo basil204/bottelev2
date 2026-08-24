@@ -744,6 +744,10 @@ const getMinDepositAmount = async () => {
 };
 
 export const handleDepositAmount = async (bot, msg, user, config) => {
+  // Chỉ xử lý nếu người dùng đang trong luồng nạp tiền đã chọn ngân hàng
+  let selectedBank = getCache(`bank_selection_${msg.from.id}`);
+  if (!selectedBank) return false;
+
   const lang = user?.language || 'vi';
   const existing = getCache(qrKey(msg.from.id));
   if (existing) {
@@ -752,24 +756,8 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
       'Old QR not expired yet, please wait.',
       'QR 尚未过期，请等待。'
     );
-    return bot.sendMessage(msg.chat.id, waitMsg);
-  }
-
-  // Get selected bank
-  let selectedBank = getCache(`bank_selection_${msg.from.id}`);
-  if (!selectedBank) {
-    try {
-      const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank'");
-      if (rows?.[0]?.value) {
-        selectedBank = rows[0].value;
-      }
-    } catch (e) {
-      console.error('Error fetching active_bank setting:', e);
-    }
-    if (!selectedBank) {
-      selectedBank = 'viettel';
-    }
-    setCache(`bank_selection_${msg.from.id}`, selectedBank, 15 * 60 * 1000);
+    await bot.sendMessage(msg.chat.id, waitMsg);
+    return true;
   }
 
   const amount = Number(msg.text.replace(/\D/g, ''));

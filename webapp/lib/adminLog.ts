@@ -16,6 +16,7 @@ export type TargetType =
     | 'USER'
     | 'PRODUCT'
     | 'ORDER'
+    | 'PREORDER'
     | 'DEPOSIT'
     | 'SETTING'
     | 'PROMOTION'

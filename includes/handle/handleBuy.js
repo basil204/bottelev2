@@ -113,6 +113,7 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
     ));
   }
 
+  const { getUserProductPrice } = await import('../helpers/customPricing.js');
   const inline_keyboard = await Promise.all(filteredRows.map(async (p) => {
     let icon = '✅';
     if (p.type === 'order') {
@@ -120,8 +121,9 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
     } else if (p.stock <= 0) {
       icon = '❌';
     }
+    const userPrice = await getUserProductPrice(chatId, p.id, p.price);
     const stockText = p.type === 'order' ? '' : ` (${p.stock})`;
-    const priceText = await formatMoney(p.price, lang);
+    const priceText = await formatMoney(userPrice, lang);
     return [{
       text: `${icon} ${p.name} - ${priceText}${stockText}`,
       callback_data: createCallbackData({ action: 'view_product', productId: p.id }),
@@ -181,7 +183,8 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     console.error('[PRODUCT_DETAIL] Error fetching exchange rate:', e);
   }
 
-  const priceVnd = Number(product.price) || 0;
+  const { getUserProductPrice } = await import('../helpers/customPricing.js');
+  const priceVnd = await getUserProductPrice(userId, product.id, product.price);
   const priceUsd = (priceVnd / exchangeRate).toFixed(2);
 
   let productType = product.type || 'stock';
@@ -223,23 +226,37 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     const userIdStr = String(userId);
     waitingForProductQuantity.set(userIdStr, {
       productId: product.id,
-      price: product.price,
+      price: priceVnd,
       stock: stock,
       type: productType
     });
 
-    const quantityPrompt = L(lang,
-      '\n\nVui lòng nhập số lượng bạn muốn mua (số lượng nhỏ hơn hoặc bằng tồn kho):',
-      '\n\nPlease enter quantity to buy (less than or equal to stock):',
-      '\n\n请输入购买数量（数量小于或等于库存）：'
-    );
+    const quantityPrompt = productType === 'order'
+      ? L(lang,
+          '\n\n💡 Bấm nút **🛒 Mua ngay** bên dưới hoặc nhập số lượng cần đặt mua:',
+          '\n\n💡 Click **🛒 Buy Now** below or enter quantity to order:',
+          '\n\n💡 点击下方 **🛒 立即购买** 或输入订购数量：'
+        )
+      : L(lang,
+          '\n\n💡 Bấm nút **🛒 Mua ngay** bên dưới hoặc nhập số lượng cần mua (tối đa tồn kho):',
+          '\n\n💡 Click **🛒 Buy Now** below or enter quantity to buy:',
+          '\n\n💡 点击下方 **🛒 立即购买** 或输入购买数量：'
+        );
     detailText += quantityPrompt;
   }
 
+  const buyBtn = L(lang, '🛒 Mua ngay', '🛒 Buy Now', '🛒 立即购买');
   const backBtn = L(lang, '⬅️ Quay lại', '⬅️ Back', '⬅️ 返回');
-  const inline_keyboard = [
-    [{ text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }), style: 'danger' }]
-  ];
+
+  const inline_keyboard = [];
+  if ((productType === 'stock' && stock > 0) || productType === 'order') {
+    inline_keyboard.push([
+      { text: buyBtn, callback_data: createCallbackData({ action: 'buy_product', productId: product.id }) }
+    ]);
+  }
+  inline_keyboard.push([
+    { text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }) }
+  ]);
 
   await bot.sendMessage(chatId, detailText, {
     parse_mode: 'Markdown',
@@ -265,7 +282,8 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
 
   const currentUser = await getUserByTelegram(fromUser.id);
   const currentBalance = Number(currentUser.balance) || 0;
-  const productPrice = Number(product.price) || 0;
+  const { getUserProductPrice } = await import('../helpers/customPricing.js');
+  const productPrice = await getUserProductPrice(fromUser.id, product.id, product.price);
 
   if (currentBalance < productPrice) {
     return bot.sendMessage(
@@ -296,12 +314,14 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
     const updatedUser = await getUserByTelegram(fromUser.id);
     const finalBalance = Number(updatedUser.balance);
 
+    const promptMessageText = product.prompt_message?.trim() || L(lang, 'Vui lòng nhập **email/thông tin** cần nâng cấp:', 'Please enter **email/information** required:', '请输入需要升级的 **邮箱/信息**：');
+
     await bot.sendMessage(
       msg.chat.id,
       L(lang,
-        `📝 **Sản phẩm yêu cầu thông tin**\n\n🎁 Sản phẩm: ${product.name}\n💰 Giá: ${formatCurrency(productPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\nVui lòng nhập **email** cần nâng cấp:`,
-        `📝 **Product requires information**\n\n🎁 Product: ${product.name}\n💰 Price: ${formatCurrency(productPrice)}\n💵 New balance: ${formatCurrency(finalBalance)}\n\nPlease enter **email** to upgrade:`,
-        `📝 **产品需要信息**\n\n🎁 产品: ${product.name}\n💰 价格: ${formatCurrency(productPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n请输入需要升级的 **邮箱**：`
+        `📝 **Sản phẩm yêu cầu thông tin**\n\n🎁 Sản phẩm: ${product.name}\n💰 Giá: ${formatCurrency(productPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n👉 ${promptMessageText}`,
+        `📝 **Product requires information**\n\n🎁 Product: ${product.name}\n💰 Price: ${formatCurrency(productPrice)}\n💵 New balance: ${formatCurrency(finalBalance)}\n\n👉 ${promptMessageText}`,
+        `📝 **产品需要信息**\n\n🎁 产品: ${product.name}\n💰 价格: ${formatCurrency(productPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n👉 ${promptMessageText}`
       ),
       { parse_mode: 'Markdown' }
     );
@@ -385,7 +405,7 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
   }
 };
 
-// Xử lý input email/note cho manual order
+// Xử lý input email/note/thông tin tùy chỉnh cho manual order
 export const handleManualOrderInput = async (bot, msg, userId, adminIds = []) => {
   const state = manualOrderState.get(String(userId));
   if (!state) return false;
@@ -394,18 +414,77 @@ export const handleManualOrderInput = async (bot, msg, userId, adminIds = []) =>
   const lang = user?.language || 'vi';
   const text = msg.text.trim();
 
-  if (state.step === 'email') {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(text)) {
-      await bot.sendMessage(msg.chat.id, L(lang,
-        '❌ Email không hợp lệ. Vui lòng nhập lại:',
-        '❌ Invalid email. Please enter again:',
-        '❌ 邮箱无效，请重新输入：'
-      ));
-      return true;
+  const product = await getProduct(state.productId);
+  const isCustomPrompt = Boolean(product?.prompt_message || product?.delivery_type === 'Nhập tay (Hỏi đáp, giao thủ công)');
+
+  if (state.step === 'email' || state.step === 'custom_input') {
+    if (!isCustomPrompt) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(text)) {
+        await bot.sendMessage(msg.chat.id, L(lang,
+          '❌ Email không hợp lệ. Vui lòng nhập lại:',
+          '❌ Invalid email. Please enter again:',
+          '❌ 邮箱无效，请重新输入：'
+        ));
+        return true;
+      }
     }
 
     state.email = text;
+
+    if (isCustomPrompt) {
+      // Nếu là sản phẩm nhập tay tùy chỉnh: Hoàn tất đơn luôn
+      if (!product) {
+        manualOrderState.delete(String(userId));
+        return bot.sendMessage(msg.chat.id, L(lang, '❌ Sản phẩm không tồn tại.', '❌ Product not found.', '❌ 产品不存在。'));
+      }
+
+      const orderResult = await createOrder({
+        userId: user.id,
+        productId: state.productId,
+        price: product.price * (state.quantity || 1),
+        email: text,
+        note: `Nội dung nhập từ khách: ${text}`,
+        status: 'pending'
+      });
+
+      let order = null;
+      if (orderResult && orderResult.insertId) {
+        order = await getOrderById(orderResult.insertId);
+      } else {
+        const { listOrdersByUser } = await import('../controllers/orderController.js');
+        const { rows } = await listOrdersByUser(user.id, 0, 1);
+        if (rows.length > 0) order = await getOrderById(rows[0].id);
+      }
+
+      const dbAdminIds = await getAdminIds(adminIds);
+      if (order && dbAdminIds.length > 0) {
+        await notifyAdminAboutNewManualOrder(bot, dbAdminIds, {
+          id: order.id,
+          product_name: product.name,
+          username: user.username,
+          telegram_id: user.telegram_id,
+          email: text,
+          note: `Nội dung từ khách: ${text}`,
+          price: order.price,
+          created_at: order.created_at
+        });
+      }
+
+      manualOrderState.delete(String(userId));
+
+      await bot.sendMessage(
+        msg.chat.id,
+        L(lang,
+          `✅ **Đơn hàng đã được ghi nhận!**\n\n🎁 Sản phẩm: ${product.name}\n📝 Thông tin đã gửi: \`${text}\`\n\n⏳ Đơn hàng đang chờ Admin xử lý. Bạn sẽ nhận được thông báo khi hoàn thành.`,
+          `✅ **Order received!**\n\n🎁 Product: ${product.name}\n📝 Sent info: \`${text}\`\n\n⏳ Order is waiting for admin processing. You will be notified when completed.`,
+          `✅ **订单已接收！**\n\n🎁 产品: ${product.name}\n📝 提交信息: \`${text}\`\n\n⏳ 订单等待管理员处理，完成后会通知您。`
+        ),
+        { parse_mode: 'Markdown' }
+      );
+      return true;
+    }
+
     state.step = 'note';
     manualOrderState.set(String(userId), state);
 
@@ -490,6 +569,9 @@ export const handleProductQuantityInput = async (bot, msg, quantityStr, config) 
   const userIdStr = String(userId);
   const chatId = msg.chat.id;
 
+  // Nếu người dùng đang trong luồng nhập thông tin Order (email/note), bỏ qua handler số lượng
+  if (manualOrderState.get(userIdStr)) return false;
+
   const waitingState = waitingForProductQuantity.get(userIdStr);
   if (!waitingState) return false;
 
@@ -570,7 +652,8 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       return bot.sendMessage(msg.chat.id, L(lang, 'Sản phẩm không tồn tại.', 'Product not found.', '产品不存在。'));
     }
 
-    const productPrice = Number(product.price) || 0;
+    const { getUserProductPrice } = await import('../helpers/customPricing.js');
+    const productPrice = await getUserProductPrice(msg.from.id, product.id, product.price);
     const totalPrice = productPrice * quantity;
 
     const currentUser = await getUserByTelegram(msg.from.id);
@@ -661,7 +744,7 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
       await bot.sendMessage(
         msg.chat.id,
         L(lang,
-          `📝 **Sản phẩm yêu cầu thông tin**\n\n🎁 Sản phẩm: ${product.name}\n💰 Giá: ${formatCurrency(totalPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\nVui lòng nhập **email** cần nâng cấp:`,
+          `📝 **Sản phẩm yêu cầu thông tin**\n\n🎁 Sản phẩm: ${product.name}\n💰 Giá: ${formatCurrency(totalPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n${product.prompt_message?.trim() || 'Vui lòng nhập email/thông tin cần nâng cấp:'}`,
           `📝 **Product requires information**\n\n🎁 Product: ${product.name}\n💰 Price: ${formatCurrency(totalPrice)}\n💵 New balance: ${formatCurrency(finalBalance)}\n\nPlease enter **email** to upgrade:`,
           `📝 **产品需要信息**\n\n🎁 产品: ${product.name}\n💰 价格: ${formatCurrency(totalPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n请输入需要升级的 **邮箱**：`
         ),

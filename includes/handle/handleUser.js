@@ -26,8 +26,9 @@ export const ensureUser = async (bot, msg) => {
 
 export const buildMainKeyboard = (t, lang) => ({
   keyboard: [
-    [{ text: t('deposit', lang), style: 'danger' }, { text: '🛒 Mua hàng', style: 'primary' }],
-    [{ text: '🧰 Tiện ích', style: 'primary' }, { text: t('change_language', lang), style: 'success' }]
+    [{ text: t('deposit', lang) }, { text: '🛒 Mua hàng' }],
+    [{ text: '📆 Điểm danh' }, { text: '🛟 Hỗ trợ / Bảo hành' }],
+    [{ text: '🧰 Tiện ích' }, { text: t('change_language', lang) }]
   ],
   resize_keyboard: true
 });
@@ -46,10 +47,10 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
   return sendTrackedMenu(bot, chatId, '🛒 MUA HÀNG\n\nChọn loại sản phẩm hoặc xem lại lịch sử:', {
     reply_markup: {
       keyboard: [
-        [{ text: '🛒 Mua tài khoản', style: 'primary' }],
-        [{ text: '📧 Mua Gmail EDU', style: 'primary' }],
-        [{ text: t('history', lang), style: 'danger' }],
-        [{ text: '↩️ Menu chính', style: 'success' }]
+        [{ text: '🛒 Mua tài khoản' }],
+        [{ text: '📧 Mua Gmail EDU' }],
+        [{ text: t('history', lang) }],
+        [{ text: '↩️ Menu chính' }]
       ],
       resize_keyboard: true
     }
@@ -59,9 +60,9 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
 export const sendUtilityMenu = async (bot, chatId) => sendTrackedMenu(bot, chatId, '🧰 TIỆN ÍCH\n\nChọn tiện ích cần sử dụng:', {
   reply_markup: {
     keyboard: [
-      [{ text: '🔎 Check Live', style: 'primary' }, { text: '⬇️ Download All', style: 'primary' }],
-      [{ text: '🔐 Locket', style: 'primary' }],
-      [{ text: '↩️ Menu chính', style: 'success' }]
+      [{ text: '🔎 Check Live' }, { text: '⬇️ Download All' }],
+      [{ text: '🔐 Locket' }],
+      [{ text: '↩️ Menu chính' }]
     ],
     resize_keyboard: true
   }
@@ -72,13 +73,13 @@ export const sendOrderHistory = async (bot, chatId, userId) => {
   const user = await getUserById(userId);
   const lang = user?.language || 'vi';
 
-  const rows = await listTodayOrdersByUser(userId, 10);
-  if (!rows.length) {
+  const { rows } = await listOrdersByUser(userId, 0, 10);
+  if (!rows || !rows.length) {
     const emptyMessages = {
-      en: 'There are no purchases today.',
-      zh: '今天暂无购买记录。'
+      en: 'You have no order history yet.',
+      zh: '您暂无购买记录。'
     };
-    return bot.sendMessage(chatId, emptyMessages[lang] || 'Hôm nay chưa có giao dịch mua hàng.');
+    return bot.sendMessage(chatId, emptyMessages[lang] || 'Bạn chưa có lịch sử giao dịch mua hàng nào.');
   }
 
   const orderBlocks = rows.map((order) => {

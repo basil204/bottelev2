@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, priority } = body;
+        const { name, priority, emoji, custom_emoji_id } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!name || name.trim().length === 0) {
@@ -67,8 +67,8 @@ export async function POST(request: Request) {
         }
 
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO categories (name, priority) VALUES (?, ?)',
-            [name.trim(), priority || 0]
+            'INSERT INTO categories (name, priority, emoji, custom_emoji_id) VALUES (?, ?, ?, ?)',
+            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null]
         );
 
         // Log action
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
             action: 'CREATE',
             targetType: 'CATEGORY' as any,
             targetId: result.insertId,
-            details: { name: name.trim(), priority: priority || 0 },
+            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id },
             ipAddress,
             userAgent,
             request
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, name, priority } = body;
+        const { id, name, priority, emoji, custom_emoji_id } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
@@ -106,8 +106,8 @@ export async function PUT(request: Request) {
         }
 
         await pool.query(
-            'UPDATE categories SET name = ?, priority = ? WHERE id = ?',
-            [name.trim(), priority || 0, id]
+            'UPDATE categories SET name = ?, priority = ?, emoji = ?, custom_emoji_id = ? WHERE id = ?',
+            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null, id]
         );
 
         // Log action
@@ -117,7 +117,7 @@ export async function PUT(request: Request) {
             action: 'UPDATE',
             targetType: 'CATEGORY' as any,
             targetId: id,
-            details: { name: name.trim(), priority: priority || 0 },
+            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id },
             ipAddress,
             userAgent,
             request

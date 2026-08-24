@@ -5,10 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import {
-  Archive, Landmark as Bank, Bell, ChartNoAxesColumn as ChartBar, CheckCircle,
-  Mail as Envelope, Folders, Settings as GearSix, Globe, Menu as List, Package,
-  ShieldCheck, ShoppingCart, LogOut as SignOut, Sparkles, LayoutDashboard as SquaresFour,
-  UserCog as UserGear, Users as UsersThree, Wallet,
+  BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
+  Wallet, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
+  Bell, Target, Settings, Code2, Layers, Globe, Link as LinkIcon,
+  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -28,38 +28,33 @@ export function Sidebar() {
 
   const navigation = [
     {
-      label: 'Tổng quan',
+      label: 'TỔNG QUAN & BÁO CÁO',
       items: [
-        { name: t('sidebar.dashboard'), href: '/', icon: SquaresFour },
-        { name: t('sidebar.users'), href: '/users', icon: UsersThree },
-        { name: t('sidebar.notifications'), href: '/notifications', icon: Bell },
+        { name: 'BÁO CÁO THÁNG', href: '/', icon: BarChart2 },
+        { name: 'NHẬT KÝ', href: '/admin-logs', icon: FileText },
       ],
     },
     {
-      label: 'Kinh doanh',
+      label: 'QUẢN LÝ BÁN HÀNG',
       items: [
-        { name: t('sidebar.products'), href: '/products', icon: Package },
-        { name: t('sidebar.categories'), href: '/categories', icon: Folders },
-        { name: t('sidebar.orders'), href: '/orders', icon: ShoppingCart },
-        { name: t('sidebar.deposits'), href: '/deposits', icon: Wallet },
-        { name: 'Lịch sử ngân hàng', href: '/bank-history', icon: Bank },
+        { name: 'SẢN PHẨM', href: '/products', icon: Package },
+        { name: 'DANH MỤC SẢN PHẨM', href: '/categories', icon: Folders },
+        { name: 'ĐƠN HÀNG', href: '/orders', icon: ShoppingCart },
+        { name: 'ĐẶT TRƯỚC', href: '/preorders', icon: Clock },
+        { name: 'VÍ TIỀN', href: '/deposits', icon: Wallet },
+        { name: 'ĐIỂM DANH', href: '/users', icon: CheckSquare },
+        { name: 'FLASH SALE', href: '/promotions', icon: Zap },
+        { name: 'MÃ GIẢM GIÁ', href: '/promotions', icon: Ticket },
+        { name: 'HỖ TRỢ / BẢO HÀNH', href: '/notifications', icon: HelpCircle },
+        { name: 'TRÒ CHUYỆN / CHAT', href: '/notifications', icon: MessageSquare },
+        { name: 'THÔNG BÁO', href: '/notifications', icon: Bell },
+        { name: 'CHIẾN DỊCH RE-TARGETING', href: '/notifications', icon: Target },
       ],
     },
     {
-      label: 'Dịch vụ',
+      label: 'CẤU HÌNH & TÙY BIẾN',
       items: [
-        { name: 'Gmail EDU', href: '/gmail-edu', icon: Envelope },
-        { name: 'Kiểm tra Gmail', href: '/check-gmail', icon: CheckCircle },
-        { name: t('sidebar.stored-accounts'), href: '/stored-accounts', icon: Archive },
-        { name: t('sidebar.chatgpt-accounts'), href: '/chatgpt-accounts', icon: Sparkles },
-      ],
-    },
-    {
-      label: 'Quản trị',
-      items: [
-        { name: 'Thống kê Admin', href: '/admin-stats', icon: ChartBar },
-        { name: 'Quản lý Admin', href: '/admin-accounts', icon: UserGear, superAdminOnly: true },
-        { name: t('sidebar.settings'), href: '/settings', icon: GearSix },
+        { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
       ],
     },
   ];
@@ -76,48 +71,112 @@ export function Sidebar() {
 
   return (
     <>
+      {/* Mobile Menu Toggle Button */}
       <div className="fixed left-4 top-4 z-50 md:hidden">
-        <Button variant="outline" size="icon" onClick={() => setIsOpen((open) => !open)} aria-label="Mở điều hướng" className="border-zinc-200 bg-white/90 text-zinc-800 backdrop-blur-xl hover:bg-zinc-200/70">
-          <List size={18} />
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-label="Mở điều hướng"
+          className="border-zinc-200 bg-white/90 text-zinc-800 backdrop-blur-xl hover:bg-zinc-200/70"
+        >
+          {isOpen ? <X size={18} /> : <Menu size={18} />}
         </Button>
       </div>
 
-      <aside className={clsx('fixed inset-y-0 left-0 z-40 w-[17rem] border-r border-zinc-200/80 bg-white/95 backdrop-blur-xl transition-transform duration-300 ease-out md:translate-x-0', isOpen ? 'translate-x-0' : '-translate-x-full')}>
+      {/* Sidebar Navigation */}
+      <aside
+        className={clsx(
+          'fixed inset-y-0 left-0 z-40 w-[17.5rem] border-r border-zinc-200/80 bg-white shadow-sm transition-transform duration-300 ease-out md:translate-x-0',
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
         <div className="flex h-full flex-col">
+          {/* Header Brand */}
           <div className="flex h-[4.5rem] items-center gap-3 border-b border-zinc-200/80 px-5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-[#07100b] shadow-[inset_0_1px_0_rgba(255,255,255,.3)]"><ShieldCheck size={19} /></div>
-            <div><p className="text-[15px] font-bold tracking-tight text-zinc-900">Bot Tele</p><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-600">Operations console</p></div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-md shadow-orange-500/20">
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <span className="font-extrabold text-base text-zinc-900 tracking-tight">BOT</span>
+                <span className="font-extrabold text-base text-orange-600 tracking-tight">BÁN HÀNG</span>
+              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">Quản trị ứng dụng</p>
+            </div>
           </div>
 
-          <div className="custom-scrollbar flex-1 overflow-y-auto px-3 py-4">
-            <nav className="space-y-5">
+          {/* Nav List */}
+          <div className="custom-scrollbar flex-1 overflow-y-auto px-3 py-5">
+            <nav className="space-y-6">
               {navigation.map((section) => (
-                <div key={section.label}>
-                  <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-700">{section.label}</p>
-                  <div className="space-y-0.5">
-                    {section.items.filter((item) => !item.superAdminOnly || adminRole === 'super_admin').map((item) => {
-                      const active = pathname === item.href;
-                      return (
-                        <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className={clsx('group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 active:scale-[0.99]', active ? 'bg-emerald-400/[0.10] text-emerald-700 shadow-[inset_0_0_0_1px_rgba(52,211,153,.07)]' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800')}>
-                          <item.icon size={17} className={clsx('shrink-0 transition-transform group-hover:translate-x-0.5', active ? 'text-emerald-700' : 'text-zinc-600 group-hover:text-zinc-400')} />
-                          <span className="truncate">{item.name}</span>
-                        </Link>
-                      );
-                    })}
+                <div key={section.label} className="space-y-2">
+                  <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-amber-900/60">
+                    {section.label}
+                  </p>
+                  <div className="space-y-1">
+                    {section.items.map((item) => {
+                        const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                        return (
+                          <Link
+                            key={item.name}
+                            href={item.href}
+                            onClick={() => setIsOpen(false)}
+                            className={clsx(
+                              'group relative flex items-center gap-3 rounded-r-xl px-3 py-2.5 text-xs font-extrabold transition-all duration-200 active:scale-[0.99]',
+                              active
+                                ? 'border-l-4 border-zinc-900 bg-zinc-100 text-zinc-900 shadow-2xs font-black'
+                                : 'text-zinc-600 hover:bg-zinc-100/70 hover:text-zinc-900'
+                            )}
+                          >
+                            <item.icon
+                              size={16}
+                              className={clsx(
+                                'shrink-0 transition-transform group-hover:scale-110',
+                                active ? 'text-zinc-900 font-bold' : 'text-zinc-400 group-hover:text-zinc-700'
+                              )}
+                            />
+                            <span className="truncate uppercase tracking-tight">{item.name}</span>
+                          </Link>
+                        );
+                      })}
                   </div>
                 </div>
               ))}
             </nav>
           </div>
 
-          <div className="space-y-1 border-t border-zinc-200/80 bg-black/10 p-3">
-            <Button variant="ghost" className="w-full justify-start gap-3 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800" onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}><Globe size={17} className="text-emerald-700" />{language === 'vi' ? 'Tiếng Việt' : 'English'}</Button>
-            <Button variant="ghost" className="w-full justify-start gap-3 text-red-400 hover:bg-red-400/[0.08] hover:text-red-300" onClick={handleLogout} disabled={loggingOut}><SignOut size={17} />{loggingOut ? 'Đang đăng xuất...' : t('sidebar.logout')}</Button>
+          {/* Footer Actions */}
+          <div className="space-y-1 border-t border-zinc-200/80 bg-zinc-50/60 p-3">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+              onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
+            >
+              <Globe size={16} className="text-orange-600" />
+              {language === 'vi' ? 'Tiếng Việt (VN)' : 'English (EN)'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700"
+              onClick={handleLogout}
+              disabled={loggingOut}
+            >
+              <LogOut size={16} />
+              {loggingOut ? 'Đang đăng xuất...' : t('sidebar.logout') || 'Đăng xuất'}
+            </Button>
           </div>
         </div>
       </aside>
 
-      {isOpen && <button className="fixed inset-0 z-30 bg-zinc-950/35 backdrop-blur-sm md:hidden" onClick={() => setIsOpen(false)} aria-label="Đóng điều hướng" />}
+      {/* Overlay Backdrop for Mobile */}
+      {isOpen && (
+        <button
+          className="fixed inset-0 z-30 bg-zinc-950/40 backdrop-blur-sm md:hidden"
+          onClick={() => setIsOpen(false)}
+          aria-label="Đóng điều hướng"
+        />
+      )}
     </>
   );
 }

@@ -1,142 +1,533 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  RefreshCw as ArrowClockwise, ArrowRight, ChartNoAxesCombined as ChartLineUp,
-  CheckCircle, Cpu, Database, Mail as EnvelopeSimple, Server as HardDrives,
-  Package, Receipt, ShoppingCart, TrendingUp as TrendUp, Users, Wallet,
-  CircleAlert as WarningCircle,
+  RefreshCw, Download, DollarSign, Coins, TrendingUp, Percent,
+  RotateCcw, UserCheck, Calendar, Filter, Users, ArrowUpRight,
+  TrendingDown, Package, Sparkles
 } from 'lucide-react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend
+} from 'recharts';
 import { useCurrency } from '@/hooks/useCurrency';
 
-interface ProductRevenue { product_id: number; product_name: string; order_count: number; total_revenue: number }
-interface InventoryAlert { id: number; name: string; stock: number; low_stock_threshold: number; stock_status: 'low' | 'out' }
-interface DashboardStats {
-  totalUsers: number; totalRevenue: number; totalDeposits: number; todayDeposits: number;
-  monthDeposits: number; totalOrders: number; revenueChart: { date: string; total: number }[];
-  productRevenue: ProductRevenue[];
-  inventoryAlerts: InventoryAlert[];
-  pendingDeposits: number; pendingDepositAmount: number;
-}
-interface SystemInfo { usagePercent: number; usedGB: string; totalGB: string; freeGB: string; botUsername?: string }
-interface GmailSale { id: number; email: string; sold_at: string; buyer_username: string; buyer_telegram_id: string; price: number }
-interface GmailSummary { totalSold: number; totalRevenue: number; pricePerAccount: number }
-type Period = 'all' | 'today' | 'week' | 'month';
-
-const periodOptions: { value: Period; label: string }[] = [
-  { value: 'today', label: 'Hôm nay' }, { value: 'week', label: '7 ngày' },
-  { value: 'month', label: 'Tháng này' }, { value: 'all', label: 'Tất cả' },
-];
-
-function DashboardSkeleton() {
-  return <div className="space-y-8" aria-label="Đang tải dữ liệu"><div className="h-72 animate-pulse rounded-[28px] bg-zinc-200/70" /><div className="grid gap-6 xl:grid-cols-[1fr_340px]"><div className="h-[440px] animate-pulse rounded-3xl bg-zinc-100" /><div className="h-[440px] animate-pulse rounded-3xl bg-zinc-100" /></div></div>;
+interface PnLData {
+  netRevenue: number;
+  cogs: number;
+  grossProfit: number;
+  marginPercent: number;
+  refunds: number;
+  refundOrdersCount: number;
+  realProfitAfterRefunds: number;
+  totalBuyingCustomers: number;
+  repeatCustomers: number;
+  repeatRate: number;
+  aov: number;
+  avgOrdersPerCustomer: number;
+  frequencyDistribution: {
+    freq1: { count: number; percent: number };
+    freq2to3: { count: number; percent: number };
+    freq4to5: { count: number; percent: number };
+    freq6plus: { count: number; percent: number };
+  };
 }
 
-function EmptyState({ label }: { label: string }) {
-  return <div className="flex min-h-36 flex-col items-center justify-center gap-3 border border-dashed border-zinc-200 bg-zinc-50 px-6 text-center"><ChartLineUp size={19} className="text-zinc-400" /><p className="text-xs text-zinc-500">{label}</p></div>;
+interface ChartEntry {
+  date: string;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
 }
 
-export default function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [system, setSystem] = useState<SystemInfo | null>(null);
-  const [gmailSales, setGmailSales] = useState<GmailSale[]>([]);
-  const [gmailSummary, setGmailSummary] = useState<GmailSummary | null>(null);
-  const [products, setProducts] = useState<ProductRevenue[]>([]);
-  const [period, setPeriod] = useState<Period>('month');
+interface ProductProfitability {
+  product_id: number;
+  product_name: string;
+  category_name: string;
+  sold_count: number;
+  revenue: number;
+  cogs: number;
+  gross_profit: number;
+  margin_percent: number;
+}
+
+type Period = 'today' | '7days' | '30days' | 'this_month' | 'last_month' | 'custom';
+
+export default function PnLAnalyticsDashboard() {
+  const [period, setPeriod] = useState<Period>('7days');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [pnl, setPnl] = useState<PnLData | null>(null);
+  const [chartData, setChartData] = useState<ChartEntry[]>([]);
+  const [products, setProducts] = useState<ProductProfitability[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sectionLoading, setSectionLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState('');
   const { formatPrice } = useCurrency();
 
-  const loadDashboard = useCallback(async (silent = false) => {
-    if (silent) setRefreshing(true); else setLoading(true);
-    setError(null);
+  const fetchStats = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const [statsResponse, systemResponse] = await Promise.all([fetch('/api/stats', { cache: 'no-store' }), fetch('/api/system-info', { cache: 'no-store' })]);
-      if (!statsResponse.ok) throw new Error('Không thể tải dữ liệu tổng quan');
-      const statsData: DashboardStats = await statsResponse.json();
-      setStats(statsData); setProducts(statsData.productRevenue || []);
-      if (systemResponse.ok) setSystem(await systemResponse.json());
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Đã xảy ra lỗi không xác định');
-    } finally { setLoading(false); setRefreshing(false); }
-  }, []);
+      let url = `/api/stats?period=${period}`;
+      if (period === 'custom' && fromDate && toDate) {
+        url += `&fromDate=${fromDate}&toDate=${toDate}`;
+      }
+      const response = await fetch(url, { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.pnl) setPnl(data.pnl);
+        if (data.chartData) setChartData(data.chartData);
+        if (data.productProfitability) setProducts(data.productProfitability);
+      }
+    } catch (e) {
+      console.error('Error fetching P&L stats:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLastUpdatedTime(new Date().toLocaleTimeString('vi-VN'));
+    }
+  }, [period, fromDate, toDate]);
 
-  const loadFilteredData = useCallback(async (selectedPeriod: Period) => {
-    setSectionLoading(true);
-    try {
-      const [productResponse, gmailResponse] = await Promise.all([fetch(`/api/product-revenue?filter=${selectedPeriod}`, { cache: 'no-store' }), fetch(`/api/gmail-edu-revenue?filter=${selectedPeriod}`, { cache: 'no-store' })]);
-      if (productResponse.ok) { const data = await productResponse.json(); setProducts(data.productRevenue || []); }
-      if (gmailResponse.ok) { const data = await gmailResponse.json(); setGmailSales(data.data || []); setGmailSummary(data.summary || null); }
-    } finally { setSectionLoading(false); }
-  }, []);
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
-  useEffect(() => { loadFilteredData(period); }, [loadFilteredData, period]);
+  const handleExportCSV = () => {
+    if (!pnl) return;
+    const csvRows = [
+      ['Chỉ số P&L Analytics', 'Giá trị'],
+      ['Doanh thu thuần', pnl.netRevenue],
+      ['Giá vốn (COGS)', pnl.cogs],
+      ['Lợi nhuận gộp', pnl.grossProfit],
+      ['Biên độ margin (%)', pnl.marginPercent.toFixed(2)],
+      ['Tiền hoàn lại', pnl.refunds],
+      ['Lợi nhuận thực sau hoàn tiền', pnl.realProfitAfterRefunds],
+      ['Tổng khách mua', pnl.totalBuyingCustomers],
+      ['Khách quay lại', pnl.repeatCustomers],
+      ['Tỉ lệ khách quay lại (%)', pnl.repeatRate.toFixed(2)],
+      ['Giá trị TB đơn (AOV)', pnl.aov],
+      ['Số đơn TB / khách', pnl.avgOrdersPerCustomer.toFixed(2)],
+    ];
 
-  const todayLabel = useMemo(() => new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date()), []);
-  const maxProductRevenue = Math.max(...products.map((item) => Number(item.total_revenue)), 1);
-  const botUsername = system?.botUsername || 'autobasilbot';
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + csvRows.map(e => e.join(',')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `bao_cao_pnl_${period}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
-  if (loading) return <DashboardSkeleton />;
-  if (error || !stats) return <div className="flex min-h-[55dvh] items-center justify-center"><div className="max-w-md border border-red-200 bg-red-50 p-8 text-center"><WarningCircle size={30} className="mx-auto text-red-500" /><h1 className="mt-4 text-lg font-semibold text-zinc-900">Không thể mở Dashboard</h1><p className="mt-2 text-sm text-zinc-500">{error}</p><button onClick={() => loadDashboard()} className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-emerald-800 px-4 text-sm font-semibold text-white active:scale-[0.98]"><ArrowClockwise size={16} /> Thử lại</button></div></div>;
-
-  const metrics = [
-    { label: 'Tiền nạp hôm nay', value: formatPrice(stats.todayDeposits), note: 'Giao dịch nạp đã duyệt trong ngày', icon: Wallet },
-    { label: 'Tiền nạp tháng này', value: formatPrice(stats.monthDeposits), note: 'Tổng tiền nạp đã duyệt trong tháng', icon: TrendUp },
-    { label: 'Đơn hàng', value: stats.totalOrders.toLocaleString('vi-VN'), note: 'Toàn bộ thời gian', icon: ShoppingCart },
-    { label: 'Người dùng', value: stats.totalUsers.toLocaleString('vi-VN'), note: 'Tài khoản đã đăng ký', icon: Users },
+  const periodTabs: { key: Period; label: string }[] = [
+    { key: 'today', label: 'HÔM NAY' },
+    { key: '7days', label: '7 NGÀY QUA' },
+    { key: '30days', label: '30 NGÀY QUA' },
+    { key: 'this_month', label: 'THÁNG NÀY' },
+    { key: 'last_month', label: 'THÁNG TRƯỚC' },
   ];
 
-  return <div className="pb-8">
-    <section aria-labelledby="dashboard-title">
-      <div className="flex flex-col gap-5 border-b border-zinc-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+  return (
+    <div className="space-y-6 pb-12 text-zinc-900">
+      {/* 1. Header Section */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800"><span className="h-2 w-2 rounded-full bg-emerald-600" /> Trung tâm vận hành</div>
-          <h1 id="dashboard-title" className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-zinc-950">Tổng quan kinh doanh</h1>
-          <p className="mt-2 text-sm capitalize text-zinc-500">{todayLabel} · Dữ liệu mới nhất từ hệ thống</p>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-orange-500 fill-orange-500" />
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-950 uppercase">
+              BÁO CÁO TÀI CHÍNH & LỢI NHUẬN (P&L ANALYTICS)
+            </h1>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500 font-medium">
+            Quản lý giá vốn COGS, doanh thu thuần, tỉ suất lợi nhuận gộp, hoàn tiền và tỉ lệ khách hàng quay lại
+          </p>
         </div>
-        <div className="flex flex-col gap-2 sm:items-end">
-          <div className="flex items-center gap-2 text-xs text-zinc-500"><span className="relative flex h-2 w-2"><span className="absolute h-full w-full animate-ping rounded-full bg-emerald-500/35" /><span className="relative h-2 w-2 rounded-full bg-emerald-600" /></span> Bot và dịch vụ đang hoạt động</div>
-          <div className="flex flex-wrap gap-2"><a href={`https://t.me/${botUsername}`} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-lg border border-zinc-200 bg-white px-4 text-xs font-semibold text-zinc-700 transition hover:border-emerald-700/30 hover:text-emerald-800 active:scale-[0.98]">@{botUsername}</a><button onClick={() => loadDashboard(true)} disabled={refreshing} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-800 px-4 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 active:scale-[0.98]"><ArrowClockwise size={15} className={refreshing ? 'animate-spin' : ''} /> Cập nhật dữ liệu</button></div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-95"
+          >
+            <Download className="h-4 w-4" />
+            <span>XUẤT EXCEL / CSV</span>
+          </button>
+          <button
+            onClick={() => fetchStats(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 text-zinc-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>LÀM MỚI</span>
+          </button>
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric, index) => <article key={metric.label} className="group rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_12px_30px_-24px_rgba(24,24,27,.35)] transition hover:-translate-y-0.5 hover:border-emerald-800/25"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-zinc-500">{metric.label}</p><p className="mt-3 font-mono text-2xl font-semibold tracking-[-0.04em] text-zinc-950">{metric.value}</p></div><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${index === 0 ? 'bg-emerald-800 text-white' : 'bg-emerald-50 text-emerald-800'}`}><metric.icon size={17} /></span></div><p className="mt-4 border-t border-zinc-100 pt-3 text-[11px] text-zinc-500">{metric.note}</p></article>)}
-      </div>
-    </section>
-
-    {stats.pendingDeposits > 0 && (
-      <Link href="/deposits" className="mt-6 flex flex-col gap-3 rounded-[20px] border border-sky-200 bg-sky-50 px-5 py-4 transition hover:border-sky-300 hover:bg-sky-100/70 active:scale-[0.995] sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3"><Wallet size={19} className="text-sky-700" /><div><h2 className="text-sm font-semibold text-sky-950">{stats.pendingDeposits} yêu cầu nạp đang chờ</h2><p className="mt-0.5 text-xs text-sky-800/75">Tổng giá trị khai báo {formatPrice(stats.pendingDepositAmount)}</p></div></div>
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-900">Kiểm tra ngay <ArrowRight size={13} /></span>
-      </Link>
-    )}
-
-    {stats.inventoryAlerts?.length > 0 && (
-      <section aria-label="Cảnh báo tồn kho" className="mt-6 overflow-hidden rounded-[20px] border border-amber-200 bg-amber-50/80">
-        <div className="flex flex-col gap-3 border-b border-amber-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3"><WarningCircle size={19} className="text-amber-700" /><div><h2 className="text-sm font-semibold text-amber-950">Tồn kho cần xử lý</h2><p className="mt-0.5 text-xs text-amber-800/80">Bấm vào sản phẩm để cập nhật ngay.</p></div></div>
-          <Link href="/products" className="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 hover:underline">Xem tất cả <ArrowRight size={13} /></Link>
+      {/* 2. Filter Toolbar */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        {/* Preset Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {periodTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setPeriod(tab.key);
+                setFromDate('');
+                setToDate('');
+              }}
+              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all active:scale-95 ${
+                period === tab.key
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-500/20'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200/70'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="divide-y divide-amber-200/70">{stats.inventoryAlerts.map(item => <Link key={item.id} href={`/products?edit=${item.id}`} className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-amber-100/70 active:scale-[0.995]"><span className="truncate font-medium text-amber-950">{item.name}</span><span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${item.stock_status === 'out' ? 'bg-red-100 text-red-700' : 'bg-amber-200/70 text-amber-900'}`}>{item.stock_status === 'out' ? 'Hết hàng' : `Còn ${item.stock}`}</span></Link>)}</div>
-      </section>
-    )}
 
-    <section className="mt-8 grid overflow-hidden rounded-[24px] border border-zinc-200 bg-white xl:grid-cols-[minmax(0,1fr)_340px]">
-      <article className="min-w-0 border-b border-zinc-200 xl:border-b-0 xl:border-r"><div className="flex flex-col gap-5 px-5 pb-2 pt-6 sm:flex-row sm:items-start sm:justify-between sm:px-8 sm:pt-8"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Doanh thu bán hàng</p><h2 className="mt-2 text-xl font-semibold text-zinc-900">Biến động 7 ngày</h2><p className="mt-1 text-xs text-zinc-500">Chỉ tính đơn hàng đã hoàn thành</p></div><div className="sm:text-right"><p className="font-mono text-2xl font-medium tracking-tight text-zinc-900">{formatPrice(stats.totalRevenue)}</p><p className="mt-1 text-[11px] text-zinc-500">Tổng doanh thu bán hàng</p></div></div><div className="h-[350px] px-1 pb-5 pt-7 sm:px-5">{stats.revenueChart?.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={stats.revenueChart} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#287a50" stopOpacity={0.2} /><stop offset="100%" stopColor="#287a50" stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="#e4e4e7" strokeDasharray="3 5" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 10 }} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#a1a1aa', fontSize: 10 }} tickFormatter={(value) => `${Math.round(value / 1000)}k`} /><Tooltip contentStyle={{ background: '#17231d', border: 0, borderRadius: 12, color: '#fff', fontSize: 12 }} formatter={(value) => [formatPrice(Number(value)), 'Doanh thu']} /><Area type="monotone" dataKey="total" stroke="#287a50" strokeWidth={2.5} fill="url(#revenueFill)" activeDot={{ r: 4, fill: '#287a50', stroke: '#fff', strokeWidth: 2 }} /></AreaChart></ResponsiveContainer> : <EmptyState label="Chưa có dữ liệu doanh thu để hiển thị" />}</div></article>
-      <aside className="bg-[#f7f8f5] p-5 sm:p-8"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Hạ tầng</p><h2 className="mt-2 text-xl font-semibold text-zinc-900">Sức khỏe hệ thống</h2></div><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700/10 bg-emerald-700/[0.06] px-2.5 py-1 text-[10px] font-semibold text-emerald-800"><CheckCircle size={12} /> Ổn định</span></div><div className="mt-8 divide-y divide-zinc-200">{[{ icon: HardDrives, label: 'Bot service', value: 'Đang hoạt động' }, { icon: Database, label: 'Database', value: 'Đã kết nối' }, { icon: Cpu, label: 'API server', value: 'Phản hồi tốt' }].map((item) => <div key={item.label} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex items-center gap-3"><item.icon size={17} className="text-zinc-500" /><span className="text-xs font-medium text-zinc-700">{item.label}</span></div><span className="flex items-center gap-2 text-[11px] text-zinc-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />{item.value}</span></div>)}</div><div className="mt-6 border-t border-zinc-900 pt-5"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wider text-zinc-500">Bộ nhớ RAM</p><p className="mt-2 font-mono text-lg font-medium text-zinc-900">{system ? `${system.usedGB} / ${system.totalGB} GB` : 'Đang đọc...'}</p></div><p className="font-mono text-2xl font-medium text-zinc-900">{system?.usagePercent || 0}%</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-200"><div className="h-full origin-left rounded-full bg-[#287a50] transition-transform duration-700" style={{ transform: `scaleX(${(system?.usagePercent || 0) / 100})` }} /></div><p className="mt-2 text-[10px] text-zinc-500">Còn trống {system?.freeGB || '—'} GB</p></div><Link href="/settings" className="mt-7 flex items-center justify-between border-b border-zinc-300 pb-2 text-xs font-semibold text-zinc-700 transition hover:border-emerald-700 hover:text-emerald-700">Mở cấu hình hệ thống <ArrowRight size={14} /></Link></aside>
-    </section>
-
-    <section className="mt-10"><div className="flex flex-col gap-5 border-b border-zinc-300 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Thương mại</p><h2 className="mt-2 text-2xl font-semibold text-zinc-900">Hiệu suất bán hàng</h2><p className="mt-1 text-xs text-zinc-500">Sản phẩm và tài khoản được giao gần đây</p></div><div className="flex w-full overflow-x-auto sm:w-auto">{periodOptions.map((option) => <button key={option.value} onClick={() => setPeriod(option.value)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition active:scale-[0.98] ${period === option.value ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-zinc-500 hover:text-zinc-900'}`}>{option.label}</button>)}</div></div>
-      <div className={`mt-6 grid gap-8 transition-opacity xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,.75fr)] ${sectionLoading ? 'opacity-45' : 'opacity-100'}`}>
-        <article><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Package size={17} className="text-emerald-700" /><h3 className="text-sm font-semibold text-zinc-900">Doanh thu theo sản phẩm</h3></div><span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">Top {Math.min(products.length, 6)}</span></div><div className="mt-4 border-y border-zinc-200">{products.length ? products.slice(0, 6).map((product, index) => <div key={product.product_id || index} className="group grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-200 py-4 last:border-b-0 sm:grid-cols-[42px_minmax(0,1fr)_100px_130px]"><span className="font-mono text-xs text-zinc-400">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-800">{product.product_name}</p><div className="mt-2 h-1 max-w-md overflow-hidden rounded-full bg-zinc-100"><div className="h-full origin-left rounded-full bg-emerald-700/70 transition-transform duration-700" style={{ transform: `scaleX(${Number(product.total_revenue) / maxProductRevenue})` }} /></div></div><p className="hidden text-right text-xs text-zinc-500 sm:block">{product.order_count} đơn hàng</p><p className="font-mono text-xs font-medium text-zinc-800 sm:text-right">{formatPrice(Number(product.total_revenue))}</p></div>) : <div className="py-6"><EmptyState label="Chưa có sản phẩm phát sinh doanh thu" /></div>}</div></article>
-        <article className="border-l-0 border-zinc-200 xl:border-l xl:pl-8"><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-2"><EnvelopeSimple size={17} className="text-emerald-700" /><div><h3 className="text-sm font-semibold text-zinc-900">Gmail EDU gần đây</h3><p className="mt-1 text-[10px] text-zinc-500">{gmailSummary?.totalSold || 0} tài khoản đã bán</p></div></div><div className="text-right"><p className="font-mono text-sm font-medium text-zinc-900">{formatPrice(gmailSummary?.totalRevenue || 0)}</p><p className="mt-1 text-[9px] uppercase tracking-wider text-zinc-400">Doanh thu</p></div></div><div className="mt-4 divide-y divide-zinc-200 border-y border-zinc-200">{gmailSales.length ? gmailSales.slice(0, 6).map((sale) => <div key={sale.id} className="group flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><Receipt size={15} className="shrink-0 text-zinc-400 group-hover:text-emerald-700" /><div className="min-w-0"><p className="truncate text-xs font-medium text-zinc-700">{sale.email}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{sale.buyer_username || 'Khách Telegram'} · {sale.sold_at ? new Date(sale.sold_at).toLocaleDateString('vi-VN') : '—'}</p></div></div><span className="shrink-0 font-mono text-[11px] font-medium text-zinc-700">{formatPrice(Number(sale.price))}</span></div>) : <div className="py-6"><EmptyState label="Chưa có giao dịch Gmail EDU trong kỳ này" /></div>}</div></article>
+        {/* Custom Date Range Picker */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5">
+            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="bg-transparent text-xs font-medium text-zinc-700 outline-none"
+            />
+          </div>
+          <span className="text-zinc-400 font-medium">đến</span>
+          <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5">
+            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="bg-transparent text-xs font-medium text-zinc-700 outline-none"
+            />
+          </div>
+          <button
+            onClick={() => {
+              if (fromDate && toDate) setPeriod('custom');
+            }}
+            className="flex items-center gap-1 rounded-xl border border-zinc-300 bg-zinc-100 px-3 py-1.5 font-bold text-zinc-800 transition-all hover:bg-zinc-200 active:scale-95"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            <span>LỌC</span>
+          </button>
+        </div>
       </div>
-    </section>
-  </div>;
+
+      {/* 3. Top 6 Metric Cards Grid */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {/* Card 1: Doanh thu thuần */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">DOANH THU THUẦN</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+              <DollarSign className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-zinc-950">
+            {formatPrice(pnl?.netRevenue || 0)}
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            Góp: {formatPrice(pnl?.netRevenue || 0)}
+          </p>
+        </div>
+
+        {/* Card 2: Giá vốn (COGS) */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">GIÁ VỐN (COGS)</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Coins className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-amber-600">
+            {formatPrice(pnl?.cogs || 0)}
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            Giá vốn hàng đã bán ra
+          </p>
+        </div>
+
+        {/* Card 3: Lợi nhuận gộp */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">LỢI NHUẬN GỘP</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-emerald-600">
+            {formatPrice(pnl?.grossProfit || 0)}
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            Doanh thu - Giá vốn
+          </p>
+        </div>
+
+        {/* Card 4: Biên độ Margin */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">BIÊN ĐỘ MARGIN</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-50 text-purple-600">
+              <Percent className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-purple-600">
+            {(pnl?.marginPercent || 0).toFixed(1)}%
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            Tỉ suất sinh lời gộp
+          </p>
+        </div>
+
+        {/* Card 5: Tiền hoàn lại */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">TIỀN HOÀN LẠI</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50 text-rose-500">
+              <TrendingDown className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-rose-500">
+            {formatPrice(pnl?.refunds || 0)}
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            {pnl?.refundOrdersCount || 0} đơn hoàn (0.0%)
+          </p>
+        </div>
+
+        {/* Card 6: Khách quay lại */}
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">KHÁCH QUAY LẠI</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+              <UserCheck className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-3 text-lg font-extrabold text-teal-600">
+            {(pnl?.repeatRate || 0).toFixed(1)}%
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-zinc-400">
+            {pnl?.repeatCustomers || 0}/{pnl?.totalBuyingCustomers || 0} khách hàng
+          </p>
+        </div>
+      </div>
+
+      {/* 4. Middle Section: Chart + Customer Retention Behavior */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left Column: Daily Trend Chart (8 Cols) */}
+        <div className="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-sm lg:col-span-8 flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-orange-500" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900">
+                  DIỄN BIẾN DOANH THU, GIÁ VỐN & LỢI NHUẬN THEO NGÀY
+                </h3>
+              </div>
+              <span className="text-[11px] font-medium text-zinc-400">
+                Cập nhật: {lastUpdatedTime || '--:--:--'}
+              </span>
+            </div>
+
+            {/* Legend Pills */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                <span>Doanh thu thuần</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <span>Giá vốn (COGS)</span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span>Lợi nhuận gộp</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Recharts Area Chart */}
+          <div className="h-[280px] w-full">
+            {chartData && chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(val) => `${val / 1000}k`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '12px' }}
+                    formatter={(value: any) => [formatPrice(Number(value)), '']}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
+                  <Area type="monotone" dataKey="grossProfit" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorProfit)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-xs text-zinc-400 font-medium">
+                Chưa có dữ liệu biểu đồ cho khoảng thời gian này
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Customer Behavior & Frequency (4 Cols) */}
+        <div className="rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-sm lg:col-span-4 flex flex-col justify-between space-y-5">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-teal-600" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900">
+                  HÀNH VI & TỈ LỆ KHÁCH QUAY LẠI
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-zinc-400">
+                {pnl?.totalBuyingCustomers || 0} khách mua
+              </span>
+            </div>
+
+            {/* Split Metrics */}
+            <div className="grid grid-cols-2 gap-3 rounded-2xl bg-zinc-50 p-3 border border-zinc-100">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">GIÁ TRỊ TB ĐƠN (AOV)</span>
+                <p className="mt-1 text-sm font-extrabold text-zinc-900">
+                  {formatPrice(pnl?.aov || 0)}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">SỐ ĐƠN TB / KHÁCH</span>
+                <p className="mt-1 text-sm font-extrabold text-zinc-900">
+                  {(pnl?.avgOrdersPerCustomer || 0).toFixed(1)} đơn/khách
+                </p>
+              </div>
+            </div>
+
+            {/* Buying Frequency List */}
+            <div className="mt-5 space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                PHÂN BỐ TẦN SUẤT MUA HÀNG:
+              </span>
+
+              <div className="space-y-2 text-xs">
+                {/* Khách mới */}
+                <div className="flex items-center justify-between font-medium">
+                  <span className="text-zinc-600">Khách mới (Mua 1 lần)</span>
+                  <span className="font-bold text-zinc-900">
+                    {pnl?.frequencyDistribution?.freq1?.count || 0} khách ({(pnl?.frequencyDistribution?.freq1?.percent || 0).toFixed(0)}%)
+                  </span>
+                </div>
+                {/* Quay lại 2-3 đơn */}
+                <div className="flex items-center justify-between font-medium">
+                  <span className="text-zinc-600">Quay lại (2 - 3 đơn)</span>
+                  <span className="font-bold text-zinc-900">
+                    {pnl?.frequencyDistribution?.freq2to3?.count || 0} khách ({(pnl?.frequencyDistribution?.freq2to3?.percent || 0).toFixed(0)}%)
+                  </span>
+                </div>
+                {/* Thường xuyên 4-5 đơn */}
+                <div className="flex items-center justify-between font-medium">
+                  <span className="text-zinc-600">Thường xuyên (4 - 5 đơn)</span>
+                  <span className="font-bold text-zinc-900">
+                    {pnl?.frequencyDistribution?.freq4to5?.count || 0} khách ({(pnl?.frequencyDistribution?.freq4to5?.percent || 0).toFixed(0)}%)
+                  </span>
+                </div>
+                {/* Khách VIP 6+ đơn */}
+                <div className="flex items-center justify-between font-medium">
+                  <span className="text-zinc-600">Khách VIP (6+ đơn)</span>
+                  <span className="font-bold text-zinc-900">
+                    {pnl?.frequencyDistribution?.freq6plus?.count || 0} khách ({(pnl?.frequencyDistribution?.freq6plus?.percent || 0).toFixed(0)}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Highlight Box */}
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs font-bold text-emerald-950 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 block">LỢI NHUẬN THỰC SAU HOÀN TIỀN</span>
+              <span className="text-lg font-extrabold text-emerald-700 block mt-0.5">
+                {formatPrice(pnl?.realProfitAfterRefunds || 0)}
+              </span>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+              <ArrowUpRight className="h-5 w-5" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Bottom Table: Top Product Profitability Matrix */}
+      <div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm">
+        {/* Table Header Title */}
+        <div className="flex items-center justify-between border-b border-zinc-100 p-5">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-orange-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900">
+              MA TRẬN SINH LỜI SẢN PHẨM (TOP PRODUCT PROFITABILITY)
+            </h3>
+          </div>
+          <span className="text-xs font-medium text-zinc-400">
+            Sắp xếp theo Lợi nhuận gộp cao nhất
+          </span>
+        </div>
+
+        {/* Table Content */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs font-medium text-zinc-700">
+            <thead className="border-b border-zinc-100 bg-zinc-50/80 text-[11px] uppercase tracking-wider text-zinc-400">
+              <tr>
+                <th className="px-5 py-3.5">SẢN PHẨM</th>
+                <th className="px-5 py-3.5">DANH MỤC</th>
+                <th className="px-5 py-3.5 text-center">ĐÃ BÁN</th>
+                <th className="px-5 py-3.5 text-right">DOANH THU</th>
+                <th className="px-5 py-3.5 text-right">TỔNG GIÁ VỐN</th>
+                <th className="px-5 py-3.5 text-right">LỢI NHUẬN GỘP</th>
+                <th className="px-5 py-3.5 text-right">BIÊN ĐỘ MARGIN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {products && products.length > 0 ? (
+                products.map((prod) => (
+                  <tr key={prod.product_id} className="hover:bg-zinc-50/60 transition-colors">
+                    <td className="px-5 py-4 font-bold text-zinc-900">{prod.product_name}</td>
+                    <td className="px-5 py-4 text-zinc-500">{prod.category_name}</td>
+                    <td className="px-5 py-4 text-center font-bold text-zinc-800">{prod.sold_count}</td>
+                    <td className="px-5 py-4 text-right font-bold text-zinc-900">{formatPrice(prod.revenue)}</td>
+                    <td className="px-5 py-4 text-right font-medium text-amber-600">{formatPrice(prod.cogs)}</td>
+                    <td className="px-5 py-4 text-right font-bold text-emerald-600">{formatPrice(prod.gross_profit)}</td>
+                    <td className="px-5 py-4 text-right">
+                      <span className="inline-block rounded-full bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-700">
+                        {prod.margin_percent.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    CHƯA PHÁT SINH DOANH THU CHO SẢN PHẨM NÀO TRONG KỲ
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }

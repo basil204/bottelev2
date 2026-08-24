@@ -101,21 +101,7 @@ const colorizeReplyMarkup = (options) => {
 
 const installButtonColors = (bot) => {
   if (bot[BUTTON_COLOR_PATCHED]) return;
-  const optionIndexes = {
-    sendMessage: 2,
-    sendPhoto: 2,
-    sendDocument: 2,
-    editMessageText: 1,
-    editMessageCaption: 1
-  };
-  for (const [method, optionIndex] of Object.entries(optionIndexes)) {
-    if (typeof bot[method] !== 'function') continue;
-    const original = bot[method].bind(bot);
-    bot[method] = (...args) => {
-      colorizeReplyMarkup(args[optionIndex]);
-      return original(...args);
-    };
-  }
+  // Disabled auto button colors per user preference
   bot[BUTTON_COLOR_PATCHED] = true;
 };
 
@@ -371,6 +357,26 @@ export const registerListeners = (bot, config) => {
     const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
     if (handledManual) return; // Đã xử lý manual order input
 
+    // Check Support Request State Input
+    const supportState = getCache(`waiting_support_request_${msg.from.id}`);
+    if (supportState) {
+      delCache(`waiting_support_request_${msg.from.id}`);
+      try {
+        await query(
+          'INSERT INTO support_requests (user_id, telegram_id, request_type, status, customer_message, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+          [user.id, msg.from.id, 'SUPPORT', 'processing', text]
+        );
+        return bot.sendMessage(
+          msg.chat.id,
+          `✅ **Gửi yêu cầu hỗ trợ thành công!**\n\nQuản trị viên đã nhận được tin nhắn và sẽ hỗ trợ/bảo hành cho bạn sớm nhất có thể.`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (e) {
+        console.error('[SUPPORT] Error saving support request:', e);
+        return bot.sendMessage(msg.chat.id, '❌ Có lỗi khi gửi yêu cầu. Vui lòng thử lại sau.');
+      }
+    }
+
     if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
     if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
     if (text === '🛒 Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
@@ -383,6 +389,22 @@ export const registerListeners = (bot, config) => {
     if (text === '↩️ Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
     if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
     if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+
+    // Xử lý nút Điểm danh
+    if (text === '📆 Điểm danh' || text === '/checkin') {
+      const checkinModule = await import('../modules/commands/checkin.js');
+      return checkinModule.default.handler(bot, msg);
+    }
+
+    // Xử lý nút Hỗ trợ / Bảo hành
+    if (text === '🛟 Hỗ trợ / Bảo hành' || text === '/support') {
+      setCache(`waiting_support_request_${msg.from.id}`, true, 10 * 60 * 1000);
+      return bot.sendMessage(
+        msg.chat.id,
+        `🛟 **HỖ TRỢ / BẢO HÀNH**\n\nVui lòng nhập chi tiết nội dung cần hỗ trợ hoặc thông tin đơn hàng gặp lỗi (kèm mã đơn hàng nếu có).\n\n*Gõ ❌ Hủy nếu muốn hủy bỏ.*`,
+        { parse_mode: 'Markdown' }
+      );
+    }
 
     // Xử lý nút đổi ngôn ngữ
     if (text === '🌐 Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
@@ -455,16 +477,20 @@ export const registerListeners = (bot, config) => {
           }
 
           // Approve logic
-          // Update amount first (since we inserted 0)
-          const { query } = await import('./database/index.js'); // quick fix to update amount
-          await query('UPDATE deposits SET amount = ? WHERE id = ?', [amount, deposit.id]);
+          const { query } = await import('./database/index.js');
+          const { getActivePromotion, calculatePromotedAmount } = await import('./controllers/depositPromotionController.js');
+          
+          const promo = await getActivePromotion(deposit.user_id);
+          const { bonusAmount, finalAmount } = calculatePromotedAmount(amount, promo);
+
+          await query('UPDATE deposits SET amount = ? WHERE id = ?', [finalAmount, deposit.id]);
 
           await updateDepositStatus(deposit.id, 'approved');
-          await updateBalance(deposit.user_id, amount);
+          await updateBalance(deposit.user_id, finalAmount);
           await addBalanceLog({
             userId: deposit.user_id,
-            amount: amount,
-            reason: 'deposit_usdt',
+            amount: finalAmount,
+            reason: bonusAmount > 0 ? `deposit_promotion_bonus_${promo?.bonus_percentage || 0}%` : 'deposit_usdt',
             adminId: msg.from.id
           });
 
@@ -473,11 +499,12 @@ export const registerListeners = (bot, config) => {
           const u = await getUserById(deposit.user_id);
           const newBalance = Number(u.balance);
 
-          await bot.sendMessage(msg.chat.id, `✅ Đã duyệt nạp #${deposit.id}.\n💰 Số tiền: ${formatCurrency(amount)}\n💵 Số dư mới người dùng: ${formatCurrency(newBalance)}`);
+          let bonusNote = bonusAmount > 0 ? ` (bao gồm +${formatCurrency(bonusAmount)} khuyến mại)` : '';
+          await bot.sendMessage(msg.chat.id, `✅ Đã duyệt nạp #${deposit.id}.\n💰 Số tiền nạp: ${formatCurrency(amount)}${bonusNote}\n💵 Tổng cộng vào ví: ${formatCurrency(finalAmount)}\n💵 Số dư mới người dùng: ${formatCurrency(newBalance)}`);
 
           // Notify user
           if (u) {
-            await bot.sendMessage(u.telegram_id, `✅ Nạp tiền thành công!\n\n💰 Số tiền: ${formatCurrency(amount)}\n💵 Số dư hiện tại: ${formatCurrency(newBalance)}\n📝 Mã giao dịch: #${deposit.id}`);
+            await bot.sendMessage(u.telegram_id, `✅ Nạp tiền thành công!\n\n💰 Số tiền nhận: ${formatCurrency(finalAmount)}${bonusNote}\n💵 Số dư hiện tại: ${formatCurrency(newBalance)}\n📝 Mã giao dịch: #${deposit.id}`);
           }
           return;
         } else {

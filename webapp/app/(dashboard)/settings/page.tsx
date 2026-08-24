@@ -1,30 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save, Banknote, CreditCard, Trash2, Power, Download, DatabaseBackup, ShieldCheck } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import { formatDate } from '@/lib/utils';
-import { useCurrency } from '@/hooks/useCurrency';
-import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-} from '@/components/ui/tabs'; // Added Tabs components
+    Save, Settings as SettingsIcon, Banknote, CreditCard, Trash2, Power, Download,
+    DatabaseBackup, ShieldCheck, RefreshCw, Key, User, Globe, Bot, Bell,
+    Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock
+} from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
-interface Settings {
+interface SystemSettings {
     mb_auto_deposit: boolean;
     viettel_token: string;
     viettel_account: string;
@@ -52,28 +36,32 @@ interface Settings {
     shop_name: string;
     usdt_trc20_wallet: string;
     telegram_group_link: string;
-    // Gmail EDU settings
+    // Gmail EDU
     gmail_edu_enabled: boolean;
     gmail_edu_price: number;
     gmail_edu_domain: string;
     gmail_edu_delete_hours: number;
     // Admin IDs
     admin_ids: number[];
-    // Admin login accounts
-    admin_username: string;
-    admin_password: string;
-    admin_username2: string;
-    admin_password2: string;
+    // Admin Accounts
+    admin_fullname?: string;
+    admin_username?: string;
+    admin_password?: string;
+    admin_fullname2?: string;
+    admin_username2?: string;
+    admin_password2?: string;
     gmail_checker_api_keys: string[];
     deposit_rank_promotions: { name: string; min_total: number; bonus_percentage: number }[];
+    // Auto workflows
+    auto_approve_orders?: boolean;
+    auto_warranty_replace?: boolean;
+    auto_notify_deposit?: boolean;
+    auto_block_spam_ip?: boolean;
 }
-
-import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function SettingsPage() {
     const { t } = useLanguage();
-    const { formatPrice } = useCurrency();
-    const [settings, setSettings] = useState<Settings>({
+    const [settings, setSettings] = useState<SystemSettings>({
         mb_auto_deposit: true,
         viettel_token: '',
         viettel_account: '',
@@ -94,56 +82,44 @@ export default function SettingsPage() {
         vietqr_bank_code: 'VCB',
         vietqr_account_no: '',
         vietqr_account_name: '',
-        active_bank: 'viettel',
+        active_bank: 'vcb',
         min_deposit: 50000,
         exchange_rate: 26000,
         telegram_bot_token: '',
-        shop_name: 'SHOP',
+        shop_name: 'DUCVIETSTORE',
         usdt_trc20_wallet: '',
         telegram_group_link: '',
-        // Gmail EDU defaults
         gmail_edu_enabled: true,
         gmail_edu_price: 10000,
         gmail_edu_domain: 'suafpoly.app',
         gmail_edu_delete_hours: 1,
-        // Admin IDs
         admin_ids: [],
-        // Admin login accounts
-        admin_username: '',
+        admin_username: 'admin',
         admin_password: '',
-        admin_username2: '',
+        admin_username2: 'admin2',
         admin_password2: '',
         gmail_checker_api_keys: [],
         deposit_rank_promotions: [],
+        auto_approve_orders: true,
+        auto_warranty_replace: true,
+        auto_notify_deposit: true,
+        auto_block_spam_ip: true
     });
 
-    const [newAdminId, setNewAdminId] = useState('');
-    const [configuringBank, setConfiguringBank] = useState<'viettel' | 'vcb' | 'tpb' | 'mb' | 'acb' | 'tcb' | 'vp' | 'timo'>('viettel');
-
+    const [activeTab, setActiveTab] = useState<'general' | 'workflows' | 'deposit' | 'gmail' | 'admin' | 'backup'>('general');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [exportingSql, setExportingSql] = useState(false);
-
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-    // Admin role state - to check if current admin is super_admin
+    const [showToken, setShowToken] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [newAdminId, setNewAdminId] = useState('');
+    const [newApiKey, setNewApiKey] = useState('');
+    const [configuringBank, setConfiguringBank] = useState<string>('vcb');
     const [adminRole, setAdminRole] = useState<string>('admin');
 
-    // Promotion states
-    const [promotions, setPromotions] = useState<any[]>([]);
-    const [promoLoading, setPromoLoading] = useState(false);
-    const [newPromo, setNewPromo] = useState({
-        start_time: '',
-        end_time: '',
-        bonus_percentage: 10,
-        min_amount: 0
-    });
-
     useEffect(() => {
-        let mounted = true;
-        setLoading(true);
-
-        // Read admin role from cookie
+        fetchSettings();
+        // Check admin role from cookie
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {
             const [name, value] = cookie.trim().split('=');
@@ -152,973 +128,684 @@ export default function SettingsPage() {
                 break;
             }
         }
-
-        const fetchData = async () => {
-            try {
-                const res = await fetch('/api/settings');
-                if (!res.ok) throw new Error('Failed to fetch settings');
-                const data = await res.json();
-                if (mounted) {
-                    setSettings(data);
-                }
-            } catch (err) {
-                console.error("Error loading settings:", err);
-                // Optional: show error to user
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        };
-
-        fetchData();
-        loadPromotions();
-
-        return () => { mounted = false; };
     }, []);
 
-    const loadPromotions = async () => {
-        setPromoLoading(true);
+    const fetchSettings = async () => {
+        setLoading(true);
         try {
-            const res = await fetch('/api/promotions');
-            if (!res.ok) throw new Error('Failed to fetch promotions');
-            const data = await res.json();
-            if (Array.isArray(data)) {
-                setPromotions(data);
-            } else {
-                setPromotions([]);
-            }
-        } catch (error) {
-            console.error("Error loading promotions:", error);
-            setPromotions([]);
-        } finally {
-            setPromoLoading(false);
-        }
-    };
-
-    const handleCreatePromotion = async () => {
-        if (!newPromo.start_time || !newPromo.end_time) {
-            console.error("Please select start and end time");
-            return;
-        }
-
-        try {
-            const res = await fetch('/api/promotions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newPromo)
-            });
-
+            const res = await fetch('/api/settings');
             if (res.ok) {
-                console.log("Promotion created successfully");
-                loadPromotions();
-                // Reset form slightly but keep useful defaults
-                setNewPromo(prev => ({ ...prev, start_time: '', end_time: '' }));
-            } else {
-                const err = await res.json();
-                console.error("Failed to create promotion:", err.error || "Unknown error");
+                const data = await res.json();
+                setSettings(prev => ({ ...prev, ...data }));
             }
         } catch (e) {
-            console.error("Network error:", e);
-        }
-    };
-
-    const handleDeletePromotion = async (id: number) => {
-        if (!confirm('Are you sure?')) return;
-
-        try {
-            const res = await fetch(`/api/promotions?id=${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                console.log("Promotion deleted successfully");
-                loadPromotions();
-            } else {
-                console.error("Failed to delete promotion");
-            }
-        } catch (e) {
-            console.error("Failed to delete promotion:", e);
-        }
-    };
-
-    const handleRestart = async () => {
-        if (!confirm('Bạn có chắc chắn muốn khởi động lại Bot không?')) return;
-        setSaving(true);
-        try {
-            const res = await fetch('/api/restart', { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: 'Đã gửi lệnh khởi động lại Bot.' });
-            } else {
-                setMessage({ type: 'error', text: data.error || 'Lỗi khi khởi động lại Bot.' });
-            }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Lỗi kết nối server.' });
+            console.error('Fetch settings error:', e);
         } finally {
-            setSaving(false);
+            setLoading(false);
         }
     };
 
-    const handleToggle = (key: keyof Settings) => {
-        setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+    const handleToggle = (key: keyof SystemSettings) => {
+        setSettings(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const handleChange = (key: keyof Settings, value: string) => {
-        setSettings((prev) => ({ ...prev, [key]: value }));
+    const handleChange = (key: keyof SystemSettings, val: any) => {
+        setSettings(prev => ({ ...prev, [key]: val }));
     };
 
     const handleSave = async () => {
         setSaving(true);
-        setMessage(null);
         try {
             const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings),
+                body: JSON.stringify(settings)
             });
 
             if (res.ok) {
-                setMessage({ type: 'success', text: t('settings.success') });
+                alert('Đã lưu cấu hình hệ thống thành công!');
             } else {
-                setMessage({ type: 'error', text: t('settings.error') });
+                alert('Lỗi lưu cấu hình hệ thống!');
             }
-        } catch (error) {
-            setMessage({ type: 'error', text: 'Server connection error.' });
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ!');
         } finally {
             setSaving(false);
         }
     };
 
-    const addDepositRank = () => {
-        setSettings(prev => ({
-            ...prev,
-            deposit_rank_promotions: [...(prev.deposit_rank_promotions || []), { name: 'Rank mới', min_total: 0, bonus_percentage: 0 }]
-        }));
-    };
-
-    const updateDepositRank = (index: number, field: 'name' | 'min_total' | 'bonus_percentage', value: string) => {
-        setSettings(prev => ({
-            ...prev,
-            deposit_rank_promotions: prev.deposit_rank_promotions.map((rank, rankIndex) => rankIndex === index
-                ? { ...rank, [field]: field === 'name' ? value : Math.max(0, Number(value)) }
-                : rank)
-        }));
-    };
-
-    const removeDepositRank = (index: number) => {
-        setSettings(prev => ({ ...prev, deposit_rank_promotions: prev.deposit_rank_promotions.filter((_, rankIndex) => rankIndex !== index) }));
+    const handleRestartBot = async () => {
+        if (!confirm('Xác nhận khởi động lại tiến trình Bot Telegram?')) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/restart', { method: 'POST' });
+            if (res.ok) {
+                alert('Đã gửi lệnh khởi động lại tiến trình Bot!');
+            } else {
+                alert('Khởi động lại thất bại!');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ!');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleExportSql = async () => {
         setExportingSql(true);
-        setMessage(null);
         try {
-            const response = await fetch('/api/database/export', {
-                method: 'GET',
-                credentials: 'same-origin',
-                cache: 'no-store'
-            });
-            if (!response.ok) {
-                const data = await response.json().catch(() => null);
-                throw new Error(data?.error || 'Không thể xuất dữ liệu SQL.');
+            const res = await fetch('/api/database/export');
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `database_backup_${Date.now()}.sql`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert('Không thể tải file sao lưu CSDL SQL!');
             }
-
-            const blob = await response.blob();
-            const disposition = response.headers.get('content-disposition') || '';
-            const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `database_${Date.now()}.sql`;
-            const downloadUrl = URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = downloadUrl;
-            anchor.download = filename;
-            document.body.appendChild(anchor);
-            anchor.click();
-            anchor.remove();
-            URL.revokeObjectURL(downloadUrl);
-            setMessage({ type: 'success', text: `Đã xuất bản sao ${filename}.` });
-        } catch (error) {
-            setMessage({
-                type: 'error',
-                text: error instanceof Error ? error.message : 'Không thể xuất dữ liệu SQL.'
-            });
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ!');
         } finally {
             setExportingSql(false);
         }
     };
 
-
-    if (loading) return (
-        <div className="flex h-[50vh] items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-    );
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(val) + ' đ';
+    };
 
     return (
-        <div className="space-y-6 max-w-3xl mx-auto">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight">{t('settings.title')}</h2>
-                <p className="text-muted-foreground">{t('settings.subtitle')}</p>
+        <div className="space-y-6 max-w-7xl mx-auto p-2 sm:p-4">
+            {/* Top Title & Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600 font-bold border border-orange-200 shadow-2xs">
+                        <SettingsIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
+                            CÀI ĐẶT HỆ THỐNG
+                        </h1>
+                        <p className="text-xs text-zinc-500 font-medium">
+                            Cấu hình các quy trình tự động, tích hợp nạp tiền và hành vi hệ thống
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleRestartBot}
+                        className="rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 px-4 py-2.5 text-xs font-extrabold uppercase transition active:scale-95 shadow-2xs flex items-center gap-1.5"
+                    >
+                        <Power className="h-4 w-4 text-orange-600" />
+                        <span>RESTART BOT</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-6 py-2.5 text-xs font-extrabold uppercase transition active:scale-95 shadow-xs flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <Save className="h-4 w-4" />
+                        <span>{saving ? 'ĐANG LƯU...' : '💾 LƯU CẤU HÌNH'}</span>
+                    </button>
+                </div>
             </div>
 
-            <Card>
-                <Tabs defaultValue="general" className="w-full">
-                    <CardHeader className="pb-3">
-                        <TabsList className={`flex flex-wrap gap-1 h-auto p-1 sm:grid ${adminRole === 'super_admin' ? 'sm:grid-cols-6' : 'sm:grid-cols-5'}`}>
-                            <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.general')}</TabsTrigger>
-                            <TabsTrigger value="gmail" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.gmail')}</TabsTrigger>
-                            <TabsTrigger value="admin" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.admin')}</TabsTrigger>
-                            <TabsTrigger value="usdt" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.usdt')}</TabsTrigger>
-                            <TabsTrigger value="promotions" className="text-xs sm:text-sm px-2 sm:px-3">{t('settings.promotions')}</TabsTrigger>
-                            {adminRole === 'super_admin' && (
-                                <TabsTrigger value="backup" className="text-xs sm:text-sm px-2 sm:px-3">Sao lưu SQL</TabsTrigger>
-                            )}
-                        </TabsList>
-                    </CardHeader>
+            {/* 4 Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TRẠNG THÁI BOT</span>
+                    <div className="text-sm font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>ĐANG HOẠT ĐỘNG</span>
+                    </div>
+                </div>
 
-                    <CardContent>
-                        <TabsContent value="general" className="space-y-4">
-                            <div className="mb-6">
-                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                    <Banknote className="w-5 h-5 text-green-400" />
-                                    {t('settings.deposit_config')}
-                                </h3>
-                                <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800 mb-4">
-                                    <div>
-                                        <div className="font-medium text-white">{t('settings.auto_deposit')}</div>
-                                        <div className="text-sm text-zinc-500">{t('settings.auto_deposit_desc')}</div>
-                                    </div>
-                                    <Switch
-                                        checked={settings.mb_auto_deposit}
-                                        onCheckedChange={() => handleToggle('mb_auto_deposit')}
-                                    />
-                                </div>
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TỔNG CÀI ĐẶT</span>
+                    <div className="text-xl font-black text-zinc-900 mt-1">32 Tham số</div>
+                </div>
 
-                                {/* Bank Active & Selector config - Show when auto deposit is enabled */}
-                                {settings.mb_auto_deposit && (
-                                    <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800 mb-4 space-y-4">
-                                        <div>
-                                            <Label className="text-white font-medium">Ngân hàng hoạt động chính (Chỉ được phép bật 1 ngân hàng)</Label>
-                                            <select
-                                                value={settings.active_bank}
-                                                onChange={(e) => handleChange('active_bank', e.target.value)}
-                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            >
-                                                <option value="viettel">ViettelPay (Sieuthicode)</option>
-                                                <option value="vcb">Vietcombank & VietQR (Sieuthicode)</option>
-                                                <option value="tpb">TPBank & VietQR (Sieuthicode)</option>
-                                                <option value="mb">MBBank & VietQR (Sieuthicode)</option>
-                                                <option value="acb">ACB & VietQR (Sieuthicode)</option>
-                                                <option value="tcb">Techcombank & VietQR (Sieuthicode)</option>
-                                                <option value="vp">VPBank & VietQR (Sieuthicode)</option>
-                                                <option value="timo">Timo & VietQR (Sieuthicode)</option>
-                                            </select>
-                                            <p className="text-xs text-zinc-500 mt-1">Hệ thống Bot Telegram chỉ kích hoạt nhận tiền duy nhất ngân hàng được chọn tại đây.</p>
-                                        </div>
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">NẠP TỰ ĐỘNG</span>
+                    <div className="text-sm font-black text-emerald-600 mt-1">
+                        {settings.mb_auto_deposit ? '🟢 ĐÃ BẬT' : '🔴 ĐÃ TẮT'}
+                    </div>
+                </div>
 
-                                        <div>
-                                            <Label className="text-white font-medium">Chọn ngân hàng để cấu hình thông tin</Label>
-                                            <select
-                                                value={configuringBank}
-                                                onChange={(e) => setConfiguringBank(e.target.value as any)}
-                                                className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            >
-                                                <option value="viettel">ViettelPay</option>
-                                                <option value="vcb">Vietcombank & VietQR</option>
-                                                <option value="tpb">TPBank & VietQR</option>
-                                                <option value="mb">MBBank & VietQR</option>
-                                                <option value="acb">ACB & VietQR</option>
-                                                <option value="tcb">Techcombank & VietQR</option>
-                                                <option value="vp">VPBank & VietQR</option>
-                                                <option value="timo">Timo & VietQR</option>
-                                            </select>
-                                            <p className="text-xs text-zinc-500 mt-1">Cài đặt thông tin tài khoản cho ngân hàng được chọn để lưu trữ trước khi bật.</p>
-                                        </div>
-                                    </div>
-                                )}
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TỶ GIÁ QUY ĐỔI</span>
+                    <div className="text-sm font-black text-orange-600 mt-1 font-mono">
+                        {formatCurrency(settings.exchange_rate)} / USDT
+                    </div>
+                </div>
+            </div>
 
-                                {/* Viettel Config - Show when auto deposit is enabled and Viettel is selected for configuration */}
-                                {settings.mb_auto_deposit && configuringBank === 'viettel' && (
-                                    <div className="p-4 bg-red-900/20 rounded-lg border border-red-800">
-                                        <div className="font-medium text-red-400 mb-2 flex items-center gap-2">
-                                            📱 {t('settings.viettel_config')}
-                                        </div>
-                                        <div className="text-sm text-zinc-500 mb-4">
-                                            {t('settings.viettel_desc')}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Token Viettel (Sieuthicode)</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.viettel_token}
-                                                    onChange={(e) => handleChange('viettel_token', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="Token Viettel từ Sieuthicode..."
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Số tài khoản Viettel Money (STK)</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.viettel_account}
-                                                    onChange={(e) => handleChange('viettel_account', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="Số điện thoại Viettel Money..."
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+            {/* Navigation Sub-Tabs */}
+            <div className="flex items-center gap-2 border-b border-zinc-200 pb-3 flex-wrap">
+                <button
+                    onClick={() => setActiveTab('general')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'general' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <SettingsIcon className="h-4 w-4" />
+                    <span>CẤU HÌNH CHUNG & BOT</span>
+                </button>
 
-                                {/* Non-Viettel Configs - Dynamically rendered for other banks */}
-                                {settings.mb_auto_deposit && configuringBank !== 'viettel' && (
-                                    (() => {
-                                        const bankDetails: Record<string, { name: string; color: string; tokenKey: keyof Settings; accountKey: keyof Settings }> = {
-                                            vcb: { name: 'Vietcombank', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'vcb_token', accountKey: 'vcb_account' },
-                                            tpb: { name: 'TPBank', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'tpb_token', accountKey: 'tpb_account' },
-                                            mb: { name: 'MBBank', color: 'bg-cyan-900/20 border-cyan-800 text-cyan-400', tokenKey: 'mb_token', accountKey: 'mb_account' },
-                                            acb: { name: 'ACB', color: 'bg-emerald-900/20 border-emerald-800 text-emerald-700', tokenKey: 'acb_token', accountKey: 'acb_account' },
-                                            tcb: { name: 'Techcombank', color: 'bg-red-900/20 border-red-800 text-red-400', tokenKey: 'tcb_token', accountKey: 'tcb_account' },
-                                            vp: { name: 'VPBank', color: 'bg-green-900/20 border-green-800 text-green-400', tokenKey: 'vp_token', accountKey: 'vp_account' },
-                                            timo: { name: 'Timo', color: 'bg-orange-900/20 border-orange-800 text-orange-400', tokenKey: 'timo_token', accountKey: 'timo_account' }
-                                        };
-                                        const detail = bankDetails[configuringBank];
-                                        if (!detail) return null;
-                                        return (
-                                            <div className={`p-4 rounded-lg border ${detail.color.split(' ')[0]} ${detail.color.split(' ')[1]}`}>
-                                                <div className={`font-medium mb-2 flex items-center gap-2 ${detail.color.split(' ')[2]}`}>
-                                                    🏦 Cấu hình {detail.name} & VietQR (Sieuthicode)
-                                                </div>
-                                                <div className="text-sm text-zinc-500 mb-4">
-                                                    Cấu hình token {detail.name} từ Sieuthicode và thông tin số tài khoản {detail.name} để nhận chuyển khoản.
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Token {detail.name} (Sieuthicode)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings[detail.tokenKey] as string}
-                                                            onChange={(e) => handleChange(detail.tokenKey, e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                            placeholder={`Token ${detail.name} từ Sieuthicode...`}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Số tài khoản ngân hàng (STK)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings[detail.accountKey] as string}
-                                                            onChange={(e) => handleChange(detail.accountKey, e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                            placeholder={`Số tài khoản ${detail.name} nhận tiền...`}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Tên chủ tài khoản (Không dấu - Dùng chung)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={settings.vietqr_account_name}
-                                                            onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                            placeholder="Ví dụ: NGUYEN VAN A..."
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()
-                                )}
+                <button
+                    onClick={() => setActiveTab('workflows')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'workflows' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <Zap className="h-4 w-4" />
+                    <span>🤖 QUY TRÌNH TỰ ĐỘNG</span>
+                </button>
 
-                                {/* Deposit Configuration */}
-                                <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-800 mt-4">
-                                    <div className="font-medium text-white mb-2">💰 {t('settings.deposit_settings')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.deposit_settings_desc')}</div>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.min_deposit')}</label>
-                                            <input
-                                                type="number"
-                                                value={settings.min_deposit}
-                                                onChange={(e) => handleChange('min_deposit', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                placeholder="50000"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-700 mb-1">💵 {t('settings.exchange_rate')}</label>
-                                            <input
-                                                type="number"
-                                                value={settings.exchange_rate}
-                                                onChange={(e) => handleChange('exchange_rate', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                placeholder="26000"
-                                            />
-                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.exchange_rate_hint')}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </TabsContent>
+                <button
+                    onClick={() => setActiveTab('deposit')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'deposit' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <Banknote className="h-4 w-4" />
+                    <span>💳 NẠP TỰ ĐỘNG & NGÂN HÀNG</span>
+                </button>
 
-                        <TabsContent value="gmail" className="space-y-6">
-                            <div className="mb-6">
-                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                    📧 {t('settings.gmail_edu_config')}
-                                </h3>
+                <button
+                    onClick={() => setActiveTab('gmail')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'gmail' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <Globe className="h-4 w-4" />
+                    <span>📧 GMAIL EDU & CHECKER</span>
+                </button>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg border border-slate-800">
-                                        <div>
-                                            <div className="font-medium text-white">{t('settings.gmail_edu_enable')}</div>
-                                            <div className="text-sm text-zinc-500">{t('settings.gmail_edu_enable_desc')}</div>
-                                        </div>
-                                        <Switch
-                                            checked={settings.gmail_edu_enabled}
-                                            onCheckedChange={() => handleToggle('gmail_edu_enabled')}
-                                        />
-                                    </div>
+                <button
+                    onClick={() => setActiveTab('admin')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'admin' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <User className="h-4 w-4" />
+                    <span>👑 QUẢN TRỊ VIÊN</span>
+                </button>
 
-                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_price')}</label>
-                                            <input
-                                                type="number"
-                                                value={settings.gmail_edu_price}
-                                                onChange={(e) => handleChange('gmail_edu_price', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                placeholder="10000"
-                                            />
-                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_price_hint')}</div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_domain')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.gmail_edu_domain}
-                                                onChange={(e) => handleChange('gmail_edu_domain', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                placeholder="suafpoly.app"
-                                            />
-                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_domain_hint')}</div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.gmail_edu_delete_hours')}</label>
-                                            <input
-                                                type="number"
-                                                value={settings.gmail_edu_delete_hours}
-                                                onChange={(e) => handleChange('gmail_edu_delete_hours', e.target.value)}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                placeholder="1"
-                                            />
-                                            <div className="text-xs text-zinc-500 mt-1">{t('settings.gmail_edu_delete_hours_hint')}</div>
-                                        </div>
-                                    </div>
+                {adminRole === 'super_admin' && (
+                    <button
+                        onClick={() => setActiveTab('backup')}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'backup' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                    >
+                        <DatabaseBackup className="h-4 w-4" />
+                        <span>💾 SAO LƯU SQL</span>
+                    </button>
+                )}
+            </div>
 
-                                    <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                        <div>
-                                            <div className="font-medium text-white mb-2">🔑 Gmail Checker API Keys</div>
-                                            <div className="text-sm text-zinc-500 mb-4">Các API key dùng để check live Gmail. Hệ thống sẽ chọn ngẫu nhiên.</div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Input
-                                                id="new_gmail_key"
-                                                className="flex-1"
-                                                placeholder="Nhập API Key (VD: 9fb537359bf5afee9...)"
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        const val = (e.currentTarget as HTMLInputElement).value.trim();
-                                                        if (val && !settings.gmail_checker_api_keys.includes(val)) {
-                                                            setSettings(prev => ({
-                                                                ...prev,
-                                                                gmail_checker_api_keys: [...prev.gmail_checker_api_keys, val]
-                                                            }));
-                                                            (e.currentTarget as HTMLInputElement).value = '';
-                                                        }
-                                                    }
-                                                }}
-                                            />
-                                            <Button
-                                                type="button"
-                                                onClick={() => {
-                                                    const input = document.getElementById('new_gmail_key') as HTMLInputElement;
-                                                    const val = input?.value.trim();
-                                                    if (val && !settings.gmail_checker_api_keys.includes(val)) {
-                                                        setSettings(prev => ({
-                                                            ...prev,
-                                                            gmail_checker_api_keys: [...prev.gmail_checker_api_keys, val]
-                                                        }));
-                                                        input.value = '';
-                                                    }
-                                                }}
-                                            >
-                                                Thêm
-                                            </Button>
-                                        </div>
-                                        {settings.gmail_checker_api_keys.length > 0 && (
-                                            <div className="space-y-2 mt-2">
-                                                {settings.gmail_checker_api_keys.map((key, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-900 border border-slate-700 rounded-md">
-                                                        <span className="font-mono text-xs truncate max-w-[80%]">{key}</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setSettings(prev => ({
-                                                                ...prev,
-                                                                gmail_checker_api_keys: prev.gmail_checker_api_keys.filter(k => k !== key)
-                                                            }))}
-                                                            className="text-red-500 hover:text-red-400 p-1"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="text-xs text-zinc-500">Key lỗi sẽ tự động bị xóa trong quá trình check.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </TabsContent>
+            {/* TAB 1: CẤU HÌNH CHUNG & BOT */}
+            {activeTab === 'general' && (
+                <div className="space-y-5">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="border-b border-zinc-100 pb-3">
+                            <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                <Bot className="h-4 w-4 text-orange-600" />
+                                <span>THÔNG TIN SHOP & BOT TELEGRAM</span>
+                            </h2>
+                        </div>
 
-                        <TabsContent value="admin" className="space-y-6">
-                            {/* Admin Login Accounts - Only visible to Super Admin */}
-                            {adminRole === 'super_admin' && (
-                                <>
-                                    <div className="grid gap-4 p-4 bg-emerald-900/20 rounded-lg border border-emerald-800">
-                                        <div>
-                                            <div className="font-medium text-emerald-700 mb-2">👤 Tài khoản Admin 1 (Super Admin)</div>
-                                            <div className="text-sm text-zinc-500 mb-4">Tài khoản đăng nhập chính - có toàn quyền quản trị</div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Username</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.admin_username}
-                                                    onChange={(e) => handleChange('admin_username', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="admin"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Password</label>
-                                                <input
-                                                    type="password"
-                                                    value={settings.admin_password}
-                                                    onChange={(e) => handleChange('admin_password', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="••••••••"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-4 p-4 bg-green-900/20 rounded-lg border border-green-800">
-                                        <div>
-                                            <div className="font-medium text-green-400 mb-2">👤 Tài khoản Admin 2 (Admin thường)</div>
-                                            <div className="text-sm text-zinc-500 mb-4">Tài khoản đăng nhập phụ - không có quyền quản lý tài khoản admin</div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Username</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.admin_username2}
-                                                    onChange={(e) => handleChange('admin_username2', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="admin2"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-zinc-700 mb-1">Password</label>
-                                                <input
-                                                    type="password"
-                                                    value={settings.admin_password2}
-                                                    onChange={(e) => handleChange('admin_password2', e.target.value)}
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                                    placeholder="••••••••"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Message for regular admin */}
-                            {adminRole !== 'super_admin' && (
-                                <div className="p-4 bg-yellow-900/20 rounded-lg border border-yellow-800">
-                                    <div className="font-medium text-yellow-400 mb-2">⚠️ Quyền hạn giới hạn</div>
-                                    <div className="text-sm text-zinc-500">Bạn đang đăng nhập với tài khoản Admin thường. Chỉ Super Admin mới có quyền quản lý tài khoản đăng nhập admin.</div>
-                                </div>
-                            )}
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">🔐 {t('settings.change_password')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.change_password_desc')}</div>
-                                </div>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.current_password')}</label>
-                                        <input
-                                            type="password"
-                                            id="currentPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            placeholder={t('settings.current_password_placeholder')}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.new_password')}</label>
-                                        <input
-                                            type="password"
-                                            id="newPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            placeholder={t('settings.new_password_placeholder')}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.confirm_password')}</label>
-                                        <input
-                                            type="password"
-                                            id="confirmPassword"
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                            placeholder={t('settings.confirm_password_placeholder')}
-                                        />
-                                    </div>
-                                    <Button
-                                        onClick={async () => {
-                                            const currentPassword = (document.getElementById('currentPassword') as HTMLInputElement)?.value;
-                                            const newPassword = (document.getElementById('newPassword') as HTMLInputElement)?.value;
-                                            const confirmPassword = (document.getElementById('confirmPassword') as HTMLInputElement)?.value;
-
-                                            if (!currentPassword || !newPassword || !confirmPassword) {
-                                                setMessage({ type: 'error', text: t('settings.fill_all_fields') });
-                                                return;
-                                            }
-                                            if (newPassword !== confirmPassword) {
-                                                setMessage({ type: 'error', text: t('settings.password_not_match') });
-                                                return;
-                                            }
-                                            if (newPassword.length < 6) {
-                                                setMessage({ type: 'error', text: t('settings.password_min_length') });
-                                                return;
-                                            }
-
-                                            try {
-                                                const res = await fetch('/api/admin/change-password', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ currentPassword, newPassword })
-                                                });
-                                                const data = await res.json();
-                                                if (res.ok) {
-                                                    setMessage({ type: 'success', text: t('settings.password_success') });
-                                                    (document.getElementById('currentPassword') as HTMLInputElement).value = '';
-                                                    (document.getElementById('newPassword') as HTMLInputElement).value = '';
-                                                    (document.getElementById('confirmPassword') as HTMLInputElement).value = '';
-                                                } else {
-                                                    setMessage({ type: 'error', text: data.error || t('settings.password_error') });
-                                                }
-                                            } catch (e) {
-                                                setMessage({ type: 'error', text: t('settings.server_error') });
-                                            }
-                                        }}
-                                        className="w-full"
-                                    >
-                                        {t('settings.change_password_btn')}
-                                    </Button>
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN SHOP (BRAND NAME) *</label>
+                                <input
+                                    type="text"
+                                    value={settings.shop_name}
+                                    onChange={(e) => handleChange('shop_name', e.target.value)}
+                                    placeholder="DUCVIETSTORE"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-extrabold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
                             </div>
 
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">{t('settings.telegram_bot_token')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.telegram_bot_token_desc')}</div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Bot Token</label>
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TELEGRAM BOT TOKEN *</label>
+                                <div className="relative">
                                     <input
-                                        type="password"
+                                        type={showToken ? 'text' : 'password'}
                                         value={settings.telegram_bot_token}
                                         onChange={(e) => handleChange('telegram_bot_token', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
-                                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..."
+                                        placeholder="123456789:ABCdefGHIjklMNO..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white pl-3 pr-10 py-3 font-mono text-zinc-900 outline-none focus:border-orange-500 transition text-xs"
                                     />
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">🏠 {t('settings.shop_name')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.shop_name_desc')}</div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Shop Name</label>
-                                    <input
-                                        type="text"
-                                        value={settings.shop_name}
-                                        onChange={(e) => handleChange('shop_name', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        placeholder="DUCVIETSTORE"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">👥 {t('settings.support_group')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.support_group_desc')}</div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Telegram Group Link</label>
-                                    <input
-                                        type="text"
-                                        value={settings.telegram_group_link}
-                                        onChange={(e) => handleChange('telegram_group_link', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        placeholder="https://t.me/+xxxxxx"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Admin Telegram IDs */}
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
-                                <div>
-                                    <div className="font-medium text-white mb-2">👤 Admin Telegram IDs</div>
-                                    <div className="text-sm text-zinc-500 mb-4">Telegram ID của các admin có quyền quản trị bot (hỗ trợ nhiều ID)</div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newAdminId}
-                                        onChange={(e) => setNewAdminId(e.target.value.replace(/\D/g, ''))}
-                                        className="flex-1 bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        placeholder="Nhập Telegram ID (VD: 123456789)"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && newAdminId) {
-                                                e.preventDefault();
-                                                const id = Number(newAdminId);
-                                                if (id && !settings.admin_ids.includes(id)) {
-                                                    setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, id] }));
-                                                    setNewAdminId('');
-                                                }
-                                            }
-                                        }}
-                                    />
-                                    <Button
+                                    <button
                                         type="button"
-                                        onClick={() => {
-                                            const id = Number(newAdminId);
-                                            if (id && !settings.admin_ids.includes(id)) {
-                                                setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, id] }));
-                                                setNewAdminId('');
-                                            }
-                                        }}
-                                        disabled={!newAdminId}
+                                        onClick={() => setShowToken(!showToken)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700"
                                     >
-                                        Thêm
-                                    </Button>
+                                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
                                 </div>
-                                {settings.admin_ids.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {settings.admin_ids.map((id) => (
-                                            <span
-                                                key={id}
-                                                className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500/20 border border-emerald-500 rounded-full text-sm text-emerald-700"
-                                            >
-                                                {id}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
-                                                    className="ml-1 hover:text-red-400"
-                                                >
-                                                    ×
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="text-xs text-zinc-500">Nhấn Enter hoặc bấm Thêm để thêm ID. Bấm × để xóa.</div>
                             </div>
-                        </TabsContent>
 
-                        <TabsContent value="usdt" className="space-y-6">
-                            <div className="grid gap-4 p-4 bg-slate-800/30 rounded-lg border border-slate-800">
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">LINK GROUP / CHANNEL HỖ TRỢ TELEGRAM</label>
+                                <input
+                                    type="text"
+                                    value={settings.telegram_group_link}
+                                    onChange={(e) => handleChange('telegram_group_link', e.target.value)}
+                                    placeholder="https://t.me/ducvietstore_support"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-medium text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 2: QUY TRÌNH TỰ ĐỘNG (AUTOMATED WORKFLOWS) */}
+            {activeTab === 'workflows' && (
+                <div className="space-y-5">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="border-b border-zinc-100 pb-3">
+                            <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                <Zap className="h-4 w-4 text-orange-600" />
+                                <span>CẤU HÌNH CÁC QUY TRÌNH TỰ ĐỘNG & HÀNH VI HỆ THỐNG</span>
+                            </h2>
+                            <p className="text-[11px] text-zinc-400">Điều chỉnh cách thức hệ thống tự động xử lý đơn hàng, nạp tiền và tương tác với khách</p>
+                        </div>
+
+                        <div className="space-y-3 divide-y divide-zinc-100 text-xs">
+                            {/* Workflow 1 */}
+                            <div className="pt-3 flex items-center justify-between">
                                 <div>
-                                    <div className="font-medium text-white mb-2">💎 {t('settings.usdt_wallet')}</div>
-                                    <div className="text-sm text-zinc-500 mb-4">{t('settings.usdt_wallet_desc')}</div>
+                                    <div className="font-extrabold text-zinc-900 text-xs">Tự động duyệt đơn hàng sau khi nạp tiền</div>
+                                    <div className="text-[11px] text-zinc-500">Hệ thống tự động trừ ví và giao item tài khoản ngay khi khách bấm mua hàng</div>
                                 </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.auto_approve_orders ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, auto_approve_orders: !prev.auto_approve_orders }))}
+                                    className="h-5 w-5 rounded accent-orange-600 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Workflow 2 */}
+                            <div className="pt-3 flex items-center justify-between">
                                 <div>
-                                    <label className="block text-sm font-medium text-zinc-700 mb-1">{t('settings.usdt_wallet_address')}</label>
+                                    <div className="font-extrabold text-zinc-900 text-xs">Tự động cấp bù tài khoản bảo hành đổi mới</div>
+                                    <div className="text-[11px] text-zinc-500">Khi admin xác nhận bảo hành, bot sẽ tự động gửi tài khoản thay thế tới Telegram khách hàng</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.auto_warranty_replace ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, auto_warranty_replace: !prev.auto_warranty_replace }))}
+                                    className="h-5 w-5 rounded accent-orange-600 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Workflow 3 */}
+                            <div className="pt-3 flex items-center justify-between">
+                                <div>
+                                    <div className="font-extrabold text-zinc-900 text-xs">Tự động thông báo nạp tiền thành công qua Telegram</div>
+                                    <div className="text-[11px] text-zinc-500">Gửi thông báo cộng số dư tức thì cho khách hàng khi giao dịch ngân hàng khớp mã nạp</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.auto_notify_deposit ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, auto_notify_deposit: !prev.auto_notify_deposit }))}
+                                    className="h-5 w-5 rounded accent-orange-600 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Workflow 4 */}
+                            <div className="pt-3 flex items-center justify-between">
+                                <div>
+                                    <div className="font-extrabold text-zinc-900 text-xs">Tự động chặn IP nghi vấn tấn công hoặc spam</div>
+                                    <div className="text-[11px] text-zinc-500">Hệ thống chủ động chặn tạm thời các IP spam request quá 100 lần/phút</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.auto_block_spam_ip ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, auto_block_spam_ip: !prev.auto_block_spam_ip }))}
+                                    className="h-5 w-5 rounded accent-orange-600 cursor-pointer"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 3: NẠP TỰ ĐỘNG & NGÂN HÀNG */}
+            {activeTab === 'deposit' && (
+                <div className="space-y-5">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                            <div>
+                                <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                    <Banknote className="h-4 w-4 text-orange-600" />
+                                    <span>CẤU HÌNH CỔNG NẠP TIỀN TỰ ĐỘNG & BANK GATEWAY</span>
+                                </h2>
+                                <p className="text-[11px] text-zinc-400">Thiết lập kết nối Sieuthicode và ngân hàng nhận tiền</p>
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer font-extrabold text-xs text-zinc-800">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.mb_auto_deposit}
+                                    onChange={() => handleToggle('mb_auto_deposit')}
+                                    className="h-4 w-4 rounded accent-orange-600"
+                                />
+                                <span>BẬT NẠP TỰ ĐỘNG</span>
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NGÂN HÀNG HOẠT ĐỘNG CHÍNH (ACTIVE BANK)</label>
+                                <select
+                                    value={settings.active_bank}
+                                    onChange={(e) => handleChange('active_bank', e.target.value)}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                >
+                                    <option value="vcb">Vietcombank & VietQR (Sieuthicode)</option>
+                                    <option value="mb">MBBank & VietQR (Sieuthicode)</option>
+                                    <option value="viettel">ViettelPay (Sieuthicode)</option>
+                                    <option value="tpb">TPBank & VietQR (Sieuthicode)</option>
+                                    <option value="acb">ACB & VietQR (Sieuthicode)</option>
+                                    <option value="tcb">Techcombank & VietQR (Sieuthicode)</option>
+                                    <option value="vp">VPBank & VietQR (Sieuthicode)</option>
+                                    <option value="timo">Timo & VietQR (Sieuthicode)</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">CHỌN NGÂN HÀNG ĐỂ CẤU HÌNH THÔNG TIN</label>
+                                <select
+                                    value={configuringBank}
+                                    onChange={(e) => setConfiguringBank(e.target.value)}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                >
+                                    <option value="vcb">Vietcombank & VietQR</option>
+                                    <option value="mb">MBBank & VietQR</option>
+                                    <option value="viettel">ViettelPay</option>
+                                    <option value="tpb">TPBank & VietQR</option>
+                                    <option value="acb">ACB & VietQR</option>
+                                    <option value="tcb">Techcombank & VietQR</option>
+                                    <option value="vp">VPBank & VietQR</option>
+                                    <option value="timo">Timo & VietQR</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Bank specific token and STK fields */}
+                        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3 text-xs">
+                            <span className="font-extrabold uppercase text-orange-600 text-xs block">
+                                🏦 THÔNG TIN CẤU HÌNH {configuringBank.toUpperCase()} (SIEUTHICODE)
+                            </span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TOKEN SIEUTHICODE</label>
                                     <input
                                         type="text"
-                                        value={settings.usdt_trc20_wallet}
-                                        onChange={(e) => handleChange('usdt_trc20_wallet', e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
-                                        placeholder="TJErNxge2EkC2PAkXy9hBag4x5kWPJNKRJ"
+                                        value={(settings as any)[`${configuringBank}_token`] || ''}
+                                        onChange={(e) => handleChange(`${configuringBank}_token` as any, e.target.value)}
+                                        placeholder="Dán API Token từ Sieuthicode..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TÀI KHOẢN NHẬN TIỀN (STK)</label>
+                                    <input
+                                        type="text"
+                                        value={(settings as any)[`${configuringBank}_account`] || ''}
+                                        onChange={(e) => handleChange(`${configuringBank}_account` as any, e.target.value)}
+                                        placeholder="Nhập số tài khoản ngân hàng..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
                                     />
                                 </div>
                             </div>
-                        </TabsContent>
-
-                        <TabsContent value="promotions">
-                            <div className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Khuyến mại theo rank tổng nạp</CardTitle>
-                                    <CardDescription>Rank cao nhất user đạt được sẽ áp dụng cho lần nạp tiếp theo và được ưu tiên hơn khuyến mại chung.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid gap-3">
-                                        {(settings.deposit_rank_promotions || []).map((rank, index) => (
-                                            <div key={index} className="grid gap-3 rounded-xl border border-zinc-200 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-                                                <div className="space-y-2"><Label>Tên rank</Label><Input value={rank.name} onChange={e => updateDepositRank(index, 'name', e.target.value)} placeholder="Ví dụ: Vàng" /></div>
-                                                <div className="space-y-2"><Label>Tổng nạp tối thiểu</Label><Input type="number" min="0" value={rank.min_total} onChange={e => updateDepositRank(index, 'min_total', e.target.value)} /></div>
-                                                <div className="space-y-2"><Label>Thưởng mỗi lần nạp (%)</Label><Input type="number" min="0" max="100" value={rank.bonus_percentage} onChange={e => updateDepositRank(index, 'bonus_percentage', e.target.value)} /></div>
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeDepositRank(index)} aria-label={`Xóa ${rank.name}`}><Trash2 className="h-4 w-4 text-red-600" /></Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {(settings.deposit_rank_promotions || []).length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Chưa có rank tổng nạp.</p>}
-                                    <Button type="button" variant="outline" onClick={addDepositRank}>Thêm rank</Button>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>{t('settings.promotions')}</CardTitle>
-                                    <CardDescription>{t('settings.promotions_desc')}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="grid gap-4 p-4 border rounded-lg bg-secondary/20">
-                                        <h3 className="font-semibold">{t('settings.create_promotion')}</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>{t('settings.start_time')}</Label>
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={newPromo.start_time}
-                                                    onChange={(e) => setNewPromo({ ...newPromo, start_time: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>{t('settings.end_time')}</Label>
-                                                <Input
-                                                    type="datetime-local"
-                                                    value={newPromo.end_time}
-                                                    onChange={(e) => setNewPromo({ ...newPromo, end_time: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>{t('settings.bonus_percentage')}</Label>
-                                                <Input
-                                                    type="number"
-                                                    value={newPromo.bonus_percentage}
-                                                    onChange={(e) => setNewPromo({ ...newPromo, bonus_percentage: Number(e.target.value) })}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>{t('settings.min_deposit_promo')}</Label>
-                                                <Input
-                                                    type="number"
-                                                    value={newPromo.min_amount}
-                                                    onChange={(e) => setNewPromo({ ...newPromo, min_amount: Number(e.target.value) })}
-                                                />
-                                            </div>
-                                        </div>
-                                        <Button onClick={handleCreatePromotion} disabled={promoLoading}>
-                                            {t('settings.create_promotion_btn')}
-                                        </Button>
-                                    </div>
-
-                                    <div className="border rounded-md">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>{t('settings.promo_start')}</TableHead>
-                                                    <TableHead>{t('settings.promo_end')}</TableHead>
-                                                    <TableHead>{t('settings.promo_bonus')}</TableHead>
-                                                    <TableHead>{t('settings.min_deposit_promo')}</TableHead>
-                                                    <TableHead>{t('settings.promo_status')}</TableHead>
-                                                    <TableHead>{t('settings.promo_actions')}</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {promotions.map((p) => (
-                                                    <TableRow key={p.id}>
-                                                        <TableCell>{new Date(p.start_time).toLocaleString()}</TableCell>
-                                                        <TableCell>{new Date(p.end_time).toLocaleString()}</TableCell>
-                                                        <TableCell className="font-bold text-green-500">+{p.bonus_percentage}%</TableCell>
-                                                        <TableCell>{formatPrice(p.min_amount)}</TableCell>
-                                                        <TableCell>{p.status}</TableCell>
-                                                        <TableCell>
-                                                            <Button variant="ghost" size="sm" onClick={() => handleDeletePromotion(p.id)}>
-                                                                <Trash2 className="w-4 h-4 text-destructive" />
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                {promotions.length === 0 && (
-                                                    <TableRow>
-                                                        <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                                                            {t('settings.no_promotions')}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                )}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            </div>
-                        </TabsContent>
-
-                        {adminRole === 'super_admin' && (
-                            <TabsContent value="backup" className="space-y-6">
-                                <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-slate-800 dark:bg-slate-900/40">
-                                    <div className="grid gap-8 p-6 md:grid-cols-[1fr_auto] md:items-center">
-                                        <div className="max-w-xl">
-                                            <div className="flex items-center gap-3">
-                                                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-700/15 bg-emerald-700/[0.07] text-emerald-700 dark:text-emerald-400">
-                                                    <DatabaseBackup className="h-5 w-5" />
-                                                </span>
-                                                <div>
-                                                    <h3 className="font-semibold tracking-tight text-zinc-900 dark:text-white">Xuất toàn bộ database</h3>
-                                                    <p className="mt-1 text-sm text-zinc-500">Tạo file SQL gồm cấu trúc bảng và toàn bộ dữ liệu hiện tại.</p>
-                                                </div>
-                                            </div>
-                                            <div className="mt-5 flex items-start gap-2 border-t border-zinc-200 pt-4 text-xs leading-5 text-zinc-500 dark:border-slate-800">
-                                                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                                                File sao lưu có thể chứa token, tài khoản và thông tin giao dịch. Chỉ Super Admin được phép tải xuống.
-                                            </div>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            onClick={handleExportSql}
-                                            disabled={exportingSql}
-                                            className="min-w-44 active:scale-[0.98]"
-                                        >
-                                            <Download className="mr-2 h-4 w-4" />
-                                            {exportingSql ? 'Đang tạo file...' : 'Tải file SQL'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </TabsContent>
-                        )}
-
-                        {
-                            message && (
-                                <div className={`p-4 rounded-lg text-sm border ${message.type === 'success'
-                                    ? 'bg-green-100 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400'
-                                    : 'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'
-                                    }`}>
-                                    {message.text}
-                                </div>
-                            )
-                        }
-
-                        <div className="flex justify-end pt-4">
-                            <Button onClick={handleSave} disabled={saving}>
-                                <Save className="w-4 h-4 mr-2" />
-                                {saving ? t('settings.saving') : t('settings.save_settings')}
-                            </Button>
                         </div>
-                    </CardContent>
-                </Tabs>
-            </Card>
-        </div >
+
+                        {/* Deposit Limits & Rate */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TIỀN NẠP TỐI THIỂU (VND)</label>
+                                <input
+                                    type="number"
+                                    value={settings.min_deposit}
+                                    onChange={(e) => handleChange('min_deposit', Number(e.target.value))}
+                                    placeholder="50000"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-bold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TỶ GIÁ QUY ĐỔI USDT (VND)</label>
+                                <input
+                                    type="number"
+                                    value={settings.exchange_rate}
+                                    onChange={(e) => handleChange('exchange_rate', Number(e.target.value))}
+                                    placeholder="26000"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-bold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ĐỊA CHỈ VÍ USDT TRC20</label>
+                                <input
+                                    type="text"
+                                    value={settings.usdt_trc20_wallet}
+                                    onChange={(e) => handleChange('usdt_trc20_wallet', e.target.value)}
+                                    placeholder="TJErNxge2EkC2PAkXy9hBag4x5kWPJNKRJ"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 4: GMAIL EDU & CHECKER */}
+            {activeTab === 'gmail' && (
+                <div className="space-y-5">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs text-xs">
+                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                            <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                <Globe className="h-4 w-4 text-orange-600" />
+                                <span>DỊCH VỤ GMAIL EDU & CHECKER API KEYS</span>
+                            </h2>
+                            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-zinc-800">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.gmail_edu_enabled}
+                                    onChange={() => handleToggle('gmail_edu_enabled')}
+                                    className="h-4 w-4 rounded accent-orange-600"
+                                />
+                                <span>BẬT GMAIL EDU</span>
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ĐƠN GIÁ TẠO GMAIL EDU (VND)</label>
+                                <input
+                                    type="number"
+                                    value={settings.gmail_edu_price}
+                                    onChange={(e) => handleChange('gmail_edu_price', Number(e.target.value))}
+                                    placeholder="10000"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-bold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN MIỀN GMAIL EDU</label>
+                                <input
+                                    type="text"
+                                    value={settings.gmail_edu_domain}
+                                    onChange={(e) => handleChange('gmail_edu_domain', e.target.value)}
+                                    placeholder="suafpoly.app"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">THỜI GIAN XÓA (GIỜ)</label>
+                                <input
+                                    type="number"
+                                    value={settings.gmail_edu_delete_hours}
+                                    onChange={(e) => handleChange('gmail_edu_delete_hours', Number(e.target.value))}
+                                    placeholder="1"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                        </div>
+
+                        {/* API Keys Manager */}
+                        <div className="space-y-3 pt-3 border-t border-zinc-100">
+                            <label className="font-extrabold uppercase text-zinc-700 text-[11px] block">GMAIL CHECKER API KEYS</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={newApiKey}
+                                    onChange={(e) => setNewApiKey(e.target.value.trim())}
+                                    placeholder="Nhập API key check live Gmail..."
+                                    className="flex-1 rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (newApiKey && !settings.gmail_checker_api_keys.includes(newApiKey)) {
+                                            setSettings(prev => ({ ...prev, gmail_checker_api_keys: [...prev.gmail_checker_api_keys, newApiKey] }));
+                                            setNewApiKey('');
+                                        }
+                                    }}
+                                    className="rounded-xl bg-orange-600 text-white font-extrabold text-xs uppercase px-4 py-2 hover:bg-orange-700"
+                                >
+                                    THÊM KEY
+                                </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {settings.gmail_checker_api_keys.map((k, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 font-mono text-[11px] text-zinc-800">
+                                        <span>{k}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettings(prev => ({ ...prev, gmail_checker_api_keys: prev.gmail_checker_api_keys.filter(item => item !== k) }))}
+                                            className="text-red-500 font-bold hover:text-red-700 ml-1"
+                                        >
+                                            ✕
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB 5: QUẢN TRỊ VIÊN */}
+            {activeTab === 'admin' && (
+                <div className="space-y-5 text-xs">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="border-b border-zinc-100 pb-3">
+                            <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                <User className="h-4 w-4 text-orange-600" />
+                                <span>DANH SÁCH TELEGRAM ID QUẢN TRỊ VIÊN (ADMIN BOT)</span>
+                            </h2>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newAdminId}
+                                onChange={(e) => setNewAdminId(e.target.value.replace(/\D/g, ''))}
+                                placeholder="Nhập Telegram ID admin (VD: 123456789)..."
+                                className="flex-1 rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const num = Number(newAdminId);
+                                    if (num && !settings.admin_ids.includes(num)) {
+                                        setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, num] }));
+                                        setNewAdminId('');
+                                    }
+                                }}
+                                className="rounded-xl bg-orange-600 text-white font-extrabold text-xs uppercase px-5 py-2 hover:bg-orange-700"
+                            >
+                                THÊM ID
+                            </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {settings.admin_ids.map(id => (
+                                <span key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1 font-mono text-xs font-bold text-orange-700">
+                                    <span>ID: {id}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
+                                        className="text-orange-700 font-bold hover:text-red-700 ml-1"
+                                    >
+                                        ✕
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Admin Accounts (Super Admin Only) */}
+                    {adminRole === 'super_admin' && (
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                            <div className="border-b border-zinc-100 pb-3">
+                                <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                                    <Lock className="h-4 w-4 text-orange-600" />
+                                    <span>TÀI KHOẢN ĐĂNG NHẬP DASHBOARD ADMIN</span>
+                                </h2>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ADMIN 1 USERNAME (SUPER ADMIN)</label>
+                                    <input
+                                        type="text"
+                                        value={settings.admin_username || 'admin'}
+                                        onChange={(e) => handleChange('admin_username', e.target.value)}
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-bold text-zinc-900 outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ADMIN 1 PASSWORD</label>
+                                    <input
+                                        type="password"
+                                        value={settings.admin_password || ''}
+                                        onChange={(e) => handleChange('admin_password', e.target.value)}
+                                        placeholder="••••••••"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 outline-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* TAB 6: SAO LƯU SQL */}
+            {activeTab === 'backup' && adminRole === 'super_admin' && (
+                <div className="space-y-5 text-xs max-w-2xl mx-auto">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center space-y-4 shadow-2xs">
+                        <DatabaseBackup className="h-10 w-10 text-orange-600 mx-auto" />
+                        <h3 className="font-extrabold text-sm text-zinc-900">XUẤT BẢN SAO LƯU DATABASE MYSQL (.SQL)</h3>
+                        <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                            Tạo file SQL chứa toàn bộ cấu trúc bảng và toàn bộ dữ liệu đơn hàng, người dùng, giao dịch của hệ thống.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleExportSql}
+                            disabled={exportingSql}
+                            className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs uppercase px-6 py-3 shadow-xs disabled:opacity-50 flex items-center justify-center gap-2 mx-auto"
+                        >
+                            <Download className="h-4 w-4" />
+                            <span>{exportingSql ? 'ĐANG TẠO FILE SQL...' : 'TẢI FILE SQL DATABASE'}</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

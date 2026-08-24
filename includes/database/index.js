@@ -81,14 +81,140 @@ export const initDb = async (config) => {
       // ignore if already exists
     }
 
-    // Orders store delivered username|password lines here. TEXT prevents
-    // multi-account purchases from being truncated and keeps history usable.
     try {
       await pool.execute('ALTER TABLE orders MODIFY COLUMN email TEXT NULL');
     } catch (e) {
       if (!e.message.includes("doesn't exist")) {
         console.error('Migration error for orders.email:', e.message);
       }
+    }
+
+    // Ensure status column supports extended statuses (cancelled, reserved, expired, pending, completed)
+    try {
+      await pool.execute('ALTER TABLE orders MODIFY COLUMN status VARCHAR(50) DEFAULT "completed"');
+    } catch (e) {
+      if (!e.message.includes("doesn't exist")) {
+        console.error('Migration error for orders.status:', e.message);
+      }
+    }
+
+    // Ensure preorders table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS preorders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          invoice_code VARCHAR(100) NULL,
+          user_id INT NULL,
+          telegram_id BIGINT NULL,
+          username VARCHAR(100) NULL,
+          user_fullname VARCHAR(100) NULL,
+          product_id INT NOT NULL,
+          quantity INT DEFAULT 1,
+          deposit_fee DECIMAL(15, 2) DEFAULT 0,
+          total_price DECIMAL(15, 2) DEFAULT 0,
+          payment_method VARCHAR(100) DEFAULT 'Admin Tạo Thủ Công',
+          status VARCHAR(50) DEFAULT 'pending',
+          fifo_position INT DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Ensured preorders table exists');
+    } catch (e) {
+      console.error('Migration error for preorders:', e.message);
+    }
+
+    // Ensure checkin tables exist
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS checkin_rewards (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          streak_days INT DEFAULT 1,
+          sort_order INT DEFAULT 0,
+          reward_type VARCHAR(50) DEFAULT 'Ví',
+          reward_amount DECIMAL(15, 2) DEFAULT 0,
+          reward_message TEXT NULL,
+          is_active TINYINT(1) DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS checkin_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          telegram_id BIGINT NULL,
+          username VARCHAR(100) NULL,
+          checkin_date DATE NULL,
+          streak INT DEFAULT 1,
+          total_checkins INT DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS checkin_claims (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          telegram_id BIGINT NULL,
+          reward_id INT NULL,
+          reward_name VARCHAR(100) NULL,
+          reward_amount DECIMAL(15, 2) DEFAULT 0,
+          streak INT DEFAULT 1,
+          status VARCHAR(50) DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Ensured checkin tables exist');
+    } catch (e) {
+      console.error('Migration error for checkin tables:', e.message);
+    }
+
+    // Ensure flash_sales table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS flash_sales (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          sale_type VARCHAR(50) DEFAULT 'PRICE_SALE',
+          sale_price DECIMAL(15, 2) DEFAULT 0,
+          bulk_min_qty INT DEFAULT 0,
+          bulk_price DECIMAL(15, 2) DEFAULT 0,
+          start_time DATETIME NOT NULL,
+          end_time DATETIME NOT NULL,
+          notify_telegram TINYINT(1) DEFAULT 1,
+          status VARCHAR(50) DEFAULT 'active',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Ensured flash_sales table exists');
+    } catch (e) {
+      console.error('Migration error for flash_sales:', e.message);
+    }
+
+    // Ensure coupons table exists
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS coupons (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          code VARCHAR(50) NOT NULL UNIQUE,
+          discount_type VARCHAR(50) DEFAULT 'FIXED',
+          discount_value DECIMAL(15, 2) DEFAULT 0,
+          min_order_value DECIMAL(15, 2) DEFAULT 0,
+          max_discount DECIMAL(15, 2) NULL,
+          max_uses INT NULL,
+          used_count INT DEFAULT 0,
+          product_id INT NULL,
+          start_time DATETIME NULL,
+          end_time DATETIME NULL,
+          is_active TINYINT(1) DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Ensured coupons table exists');
+    } catch (e) {
+      console.error('Migration error for coupons:', e.message);
     }
 
     // ensure delete_at column exists for gmail_accounts table

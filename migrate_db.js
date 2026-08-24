@@ -2,44 +2,27 @@ import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const runMigration = async () => {
-    console.log('🔄 Starting migration...');
+// Cấu hình thông tin kết nối từ .env
+const dbConfig = {
+    host: process.env.DB_HOST || '103.139.155.175',
+    user: process.env.DB_USER || 'testv1',
+    password: process.env.DB_PASS || process.env.DB_PASSWORD || 'skeLdYCEGkFESpdZ',
+    database: process.env.DB_NAME || 'testv1',
+    port: Number(process.env.DB_PORT) || 3306
+};
 
-    // Lấy config từ biến môi trường
-    const config = {
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'bot_ban_hang',
-        port: process.env.DB_PORT || 3306,
-    };
-
+async function testConnection() {
     try {
-        const connection = await mysql.createConnection(config);
-        console.log('✅ Connected to database.');
+        const connection = await mysql.createConnection(dbConfig);
+        console.log('Kết nối thành công đến cơ sở dữ liệu MySQL!');
 
-        // Check if column exists
-        const [columns] = await connection.query(`
-            SELECT COLUMN_NAME 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'chatgpt_fams' AND COLUMN_NAME = 'cookie'
-        `, [config.database]);
-
-        if (columns.length > 0) {
-            console.log('⚠️ Column "cookie" already exists.');
-        } else {
-            console.log('➕ Adding column "cookie" to chatgpt_fams...');
-            await connection.query(`
-                ALTER TABLE chatgpt_fams 
-                ADD COLUMN cookie TEXT NULL AFTER authorization
-            `);
-            console.log('✅ Migration completed successfully!');
-        }
+        const [rows] = await connection.execute('SELECT 1 + 1 AS solution');
+        console.log('Kết quả kiểm tra truy vấn:', rows[0].solution);
 
         await connection.end();
     } catch (error) {
-        console.error('❌ Migration failed:', error.message);
+        console.error('Kết nối thất bại! Lỗi:', error.message);
     }
-};
+}
 
-runMigration();
+testConnection();

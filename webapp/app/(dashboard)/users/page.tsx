@@ -1,453 +1,517 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatDate } from '@/lib/utils';
-import { useCurrency } from '@/hooks/useCurrency';
-import { Search, UserCog, Package, ShoppingCart, RefreshCw } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog } from '@/components/ui/dialog';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
-
-interface User {
-    id: number;
-    username: string;
-    telegram_id: number;
-    balance: number;
-    total_deposited: number;
-    rank_name: string;
-    rank_bonus_percentage: number;
-    next_rank_name: string | null;
-    next_rank_min: number | null;
-    rank_progress: number;
-    customer_tag: string | null;
-    admin_note: string | null;
-    created_at: string;
-}
-
-interface Order {
-    id: number;
-    invoice_code: string;
-    product_id: number;
-    price: number;
-    email: string | null;
-    note: string | null;
-    status: string;
-    created_at: string;
-    completed_at: string | null;
-    product_name: string;
-}
-
-interface ProductSummary {
-    productId: number;
-    productName: string;
-    count: number;
-    totalSpent: number;
-    lastPurchase: string;
-}
-
+    CheckSquare, RefreshCw, Send, Plus, Trash2, Calendar, Award,
+    Clock, Gift, User, CheckCircle2, Sparkles
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
-export default function UsersPage() {
+interface RewardItem {
+    id: number;
+    name: string;
+    streak_days: number;
+    sort_order: number;
+    reward_type: string;
+    reward_amount: number;
+    reward_message?: string | null;
+    is_active: number | boolean;
+    created_at: string;
+}
+
+interface ClaimItem {
+    id: number;
+    user_id?: number;
+    telegram_id?: number;
+    user_name?: string;
+    username?: string;
+    reward_name?: string;
+    reward_amount: number;
+    streak: number;
+    status: string;
+    created_at: string;
+}
+
+interface LogItem {
+    id: number;
+    user_id?: number;
+    telegram_id?: number;
+    user_name?: string;
+    username?: string;
+    checkin_date?: string;
+    streak: number;
+    total_checkins: number;
+    created_at: string;
+}
+
+export default function CheckinPage() {
     const { t } = useLanguage();
-    const { formatPrice } = useCurrency();
-    const [users, setUsers] = useState<User[]>([]);
-    // ... (state)
+    const [rewards, setRewards] = useState<RewardItem[]>([]);
+    const [claims, setClaims] = useState<ClaimItem[]>([]);
+    const [logs, setLogs] = useState<LogItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [amount, setAmount] = useState('');
-    const [reason, setReason] = useState('');
-    const [actionType, setActionType] = useState<'add' | 'subtract'>('add');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [customerTag, setCustomerTag] = useState('');
-    const [adminNote, setAdminNote] = useState('');
-    const [savingMetadata, setSavingMetadata] = useState(false);
 
-    // Purchase history state
-    const [activeTab, setActiveTab] = useState<'balance' | 'orders'>('balance');
-    const [userOrders, setUserOrders] = useState<Order[]>([]);
-    const [productSummary, setProductSummary] = useState<ProductSummary[]>([]);
-    const [loadingOrders, setLoadingOrders] = useState(false);
+    const [stats, setStats] = useState({
+        status: 'Bật',
+        timezone: 'UTC+7',
+        rewardCount: 0,
+        activeCount: 0,
+        pendingClaimsCount: 0
+    });
 
-    const fetchUsers = () => {
+    // Form state
+    const [name, setName] = useState('');
+    const [streakDays, setStreakDays] = useState(1);
+    const [sortOrder, setSortOrder] = useState(0);
+    const [rewardType, setRewardType] = useState('Ví');
+    const [rewardAmount, setRewardAmount] = useState(0);
+    const [rewardMessage, setRewardMessage] = useState('');
+    const [isActive, setIsActive] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [sendingClaims, setSendingClaims] = useState(false);
+
+    useEffect(() => {
+        fetchCheckinData();
+    }, []);
+
+    const fetchCheckinData = () => {
         setLoading(true);
-        fetch(`/api/users?page=${page}&limit=10&search=${searchQuery}`)
+        fetch('/api/checkin')
             .then((res) => res.json())
             .then((data) => {
-                setUsers(Array.isArray(data.data) ? data.data : []);
-                setTotalPages(data.pagination?.totalPages || 1);
+                setRewards(Array.isArray(data.rewards) ? data.rewards : []);
+                setClaims(Array.isArray(data.claims) ? data.claims : []);
+                setLogs(Array.isArray(data.logs) ? data.logs : []);
+                if (data.stats) setStats(data.stats);
                 setLoading(false);
             })
-            .catch(err => {
+            .catch((err) => {
                 console.error(err);
-                setUsers([]);
-                setTotalPages(1);
                 setLoading(false);
             });
     };
 
-    const fetchUserOrders = async (userId: number) => {
-        setLoadingOrders(true);
+    const handleCreateReward = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim()) {
+            alert('Vui lòng nhập tên mốc thưởng!');
+            return;
+        }
+
+        setSubmitting(true);
         try {
-            const res = await fetch(`/api/users/${userId}/orders`);
-            const data = await res.json();
-            setUserOrders(data.orders || []);
-            setProductSummary(data.summary || []);
-        } catch (err) {
-            console.error(err);
-            setUserOrders([]);
-            setProductSummary([]);
-        } finally {
-            setLoadingOrders(false);
-        }
-    };
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchUsers();
-        }, 500);
-
-        return () => clearTimeout(timer);
-    }, [page, searchQuery]);
-
-    // Fetch orders when user is selected
-    useEffect(() => {
-        if (selectedUser) {
-            fetchUserOrders(selectedUser.id);
-            setActiveTab('balance');
-            setCustomerTag(selectedUser.customer_tag || '');
-            setAdminNote(selectedUser.admin_note || '');
-        } else {
-            setUserOrders([]);
-            setProductSummary([]);
-        }
-    }, [selectedUser]);
-
-    // Handle search input change directly
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value);
-        setPage(1); // Reset to page 1 on search
-    };
-
-    const handleBalanceUpdate = async () => {
-        if (!selectedUser || !amount) return;
-
-        const res = await fetch('/api/users', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: selectedUser.id,
-                amount: Number(amount),
-                type: actionType,
-                reason
-            }),
-        });
-
-        if (res.ok) {
-            alert(t('users.success'));
-            setSelectedUser(null);
-            setAmount('');
-            setReason('');
-            fetchUsers();
-        } else {
-            alert(t('users.error'));
-        }
-    };
-
-    const handleMetadataUpdate = async () => {
-        if (!selectedUser) return;
-        setSavingMetadata(true);
-        try {
-            const res = await fetch('/api/users', {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: selectedUser.id, type: 'admin_metadata', customer_tag: customerTag, admin_note: adminNote })
+            const res = await fetch('/api/checkin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_reward',
+                    name: name.trim(),
+                    streakDays,
+                    sortOrder,
+                    rewardType,
+                    rewardAmount,
+                    rewardMessage: rewardMessage.trim(),
+                    isActive
+                })
             });
-            if (!res.ok) throw new Error('Không thể lưu thông tin quản trị');
-            setUsers(current => current.map(user => user.id === selectedUser.id ? { ...user, customer_tag: customerTag || null, admin_note: adminNote || null } : user));
-            setSelectedUser(current => current ? { ...current, customer_tag: customerTag || null, admin_note: adminNote || null } : current);
-            alert('Đã lưu nhãn và ghi chú nội bộ.');
-        } catch (error) {
-            alert(error instanceof Error ? error.message : 'Không thể lưu thông tin quản trị');
+
+            if (res.ok) {
+                alert('Tạo mốc thưởng thành công!');
+                setName('');
+                setRewardMessage('');
+                fetchCheckinData();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Lỗi tạo mốc thưởng');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối server');
         } finally {
-            setSavingMetadata(false);
+            setSubmitting(false);
         }
+    };
+
+    const handleDeleteReward = async (rewardId: number) => {
+        if (!window.confirm('Xác nhận xóa mốc thưởng này?')) return;
+        const res = await fetch('/api/checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete_reward', rewardId })
+        });
+        if (res.ok) fetchCheckinData();
+    };
+
+    const handleSendAllClaims = async () => {
+        if (claims.length === 0) {
+            alert('Không có phần thưởng claim nào đang chờ gửi!');
+            return;
+        }
+
+        if (!window.confirm(`Xác nhận gửi tất cả ${claims.length} phần thưởng claim chờ?`)) return;
+
+        setSendingClaims(true);
+        try {
+            const res = await fetch('/api/checkin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'send_claims' })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                alert(data.message || 'Đã phát thưởng thành công!');
+                fetchCheckinData();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Lỗi gửi claim');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối server');
+        } finally {
+            setSendingClaims(false);
+        }
+    };
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(val) + ' đ';
+    };
+
+    const formatDateStr = (dateStr?: string) => {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${year}-${month}-${day}`;
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">{t('users.title')}</h2>
-                    <p className="text-muted-foreground">{t('users.subtitle')}</p>
+        <div className="space-y-6 max-w-7xl mx-auto p-2 sm:p-4">
+            {/* Page Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600 font-bold border border-orange-200 shadow-2xs">
+                        <CheckSquare className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
+                            📋 ĐIỂM DANH
+                        </h1>
+                        <p className="text-xs text-zinc-500 font-medium">Cấu hình điểm danh nhận quà hàng ngày</p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Input
-                        type="text"
-                        placeholder="Tìm username, Telegram ID, nhãn hoặc ghi chú..."
-                        className="w-64"
-                        value={searchQuery}
-                        onChange={handleSearchChange}
-                    />
-                    <Button variant="secondary" onClick={() => fetchUsers()}>
-                        <Search className="w-4 h-4" />
-                    </Button>
+
+                <button
+                    onClick={fetchCheckinData}
+                    title="Tải lại"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 active:scale-95 transition shadow-2xs"
+                >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
+
+            {/* 5 Summary Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TRẠNG THÁI</span>
+                    <div className="text-base font-black text-emerald-600 mt-1">{stats.status}</div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TIMEZONE</span>
+                    <div className="text-base font-black text-zinc-900 mt-1">{stats.timezone}</div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">MỐC THƯỞNG</span>
+                    <div className="text-xl font-black text-zinc-900 mt-1">{rewards.length}</div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">ACTIVE</span>
+                    <div className="text-xl font-black text-zinc-900 mt-1">{rewards.filter(r => r.is_active).length}</div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">CLAIM CHỜ</span>
+                    <div className="text-xl font-black text-zinc-900 mt-1">{claims.length}</div>
                 </div>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>{t('users.directory')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>{t('users.id')}</TableHead>
-                                    <TableHead>{t('users.username')}</TableHead>
-                                    <TableHead>{t('users.telegram_id')}</TableHead>
-                                    <TableHead>{t('users.balance')}</TableHead>
-                                    <TableHead>Tổng nạp</TableHead>
-                                    <TableHead>Rank nạp tiền</TableHead>
-                                    <TableHead>{t('users.joined_date')}</TableHead>
-                                    <TableHead className="text-right">{t('common.actions')}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center">{t('common.loading')}</TableCell>
-                                    </TableRow>
+            {/* Top 2 Columns: TẠO MỐC THƯỞNG & CẤU HÌNH MỐC THƯỞNG */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {/* Left Card: 🎁 TẠO MỐC THƯỞNG */}
+                <div className="lg:col-span-4 rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                    <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
+                        <Gift className="h-4 w-4 text-orange-600" />
+                        <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider">
+                            TẠO MỐC THƯỞNG
+                        </h2>
+                    </div>
+
+                    <form onSubmit={handleCreateReward} className="space-y-3.5 text-xs">
+                        <div className="space-y-1">
+                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">
+                                TÊN MỐC <span className="text-orange-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="VD: Mốc 7 ngày"
+                                className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">STREAK NGÀY</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={streakDays}
+                                    onChange={(e) => setStreakDays(Number(e.target.value))}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SORT</label>
+                                <input
+                                    type="number"
+                                    value={sortOrder}
+                                    onChange={(e) => setSortOrder(Number(e.target.value))}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">LOẠI</label>
+                                <select
+                                    value={rewardType}
+                                    onChange={(e) => setRewardType(e.target.value)}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                >
+                                    <option value="Ví">Ví</option>
+                                    <option value="Giftcode">Giftcode</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TIỀN VÍ</label>
+                                <input
+                                    type="number"
+                                    value={rewardAmount}
+                                    onChange={(e) => setRewardAmount(Number(e.target.value))}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TIN NHẮN THƯỞNG</label>
+                            <input
+                                type="text"
+                                value={rewardMessage}
+                                onChange={(e) => setRewardMessage(e.target.value)}
+                                placeholder="VD: CODE-7 hoặc lời nhắn gửi khách"
+                                className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-medium text-zinc-900 outline-none focus:border-orange-500 transition"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                            <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={(e) => setIsActive(e.target.checked)}
+                                className="rounded accent-orange-600 h-4 w-4"
+                            />
+                            <span className="font-bold text-zinc-800">Active</span>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="w-full rounded-xl bg-orange-600 hover:bg-orange-700 text-white py-3 font-extrabold uppercase transition active:scale-95 shadow-xs disabled:opacity-50"
+                        >
+                            {submitting ? 'ĐANG LƯU...' : 'LƯU MỐC THƯỞNG'}
+                        </button>
+                    </form>
+                </div>
+
+                {/* Right Card: 🏆 CẤU HÌNH MỐC THƯỞNG */}
+                <div className="lg:col-span-8 rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                    <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
+                        <Award className="h-4 w-4 text-orange-600" />
+                        <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider">
+                            CẤU HÌNH MỐC THƯỞNG
+                        </h2>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                    <th className="px-3 py-2.5 font-extrabold">MỐC</th>
+                                    <th className="px-3 py-2.5 font-extrabold">LOẠI</th>
+                                    <th className="px-3 py-2.5 font-extrabold text-right">VÍ</th>
+                                    <th className="px-3 py-2.5 font-extrabold">TIN NHẮN</th>
+                                    <th className="px-3 py-2.5 font-extrabold text-center">TRẠNG THÁI</th>
+                                    <th className="px-3 py-2.5 font-extrabold text-right">THAO TÁC</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {rewards.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                            CHƯA CÓ MỐC THƯỞNG
+                                        </td>
+                                    </tr>
                                 ) : (
-                                    users.map((user) => (
-                                        <TableRow key={user.id}>
-                                            <TableCell>#{user.id}</TableCell>
-                                            <TableCell className="font-medium"><div>{user.username || 'N/A'}</div>{user.customer_tag && <span className="mt-1 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-300">{user.customer_tag}</span>}</TableCell>
-                                            <TableCell className="text-muted-foreground">{user.telegram_id}</TableCell>
-                                            <TableCell className="font-bold text-green-600 dark:text-green-400">
-                                                {formatPrice(user.balance)}
-                                            </TableCell>
-                                            <TableCell className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
-                                                {formatPrice(Number(user.total_deposited || 0))}
-                                            </TableCell>
-                                            <TableCell className="min-w-44">
-                                                <div className="flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-zinc-800 dark:text-zinc-200">{user.rank_name}</span>{user.rank_bonus_percentage > 0 && <span className="text-emerald-700">+{user.rank_bonus_percentage}%</span>}</div>
-                                                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full origin-left rounded-full bg-emerald-700 transition-transform" style={{ transform: `scaleX(${Number(user.rank_progress || 0) / 100})` }} /></div>
-                                                <p className="mt-1 text-[10px] text-muted-foreground">{user.next_rank_name ? `Còn ${formatPrice(Math.max(0, Number(user.next_rank_min) - Number(user.total_deposited)))} đến ${user.next_rank_name}` : 'Đã đạt rank cao nhất'}</p>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => setSelectedUser(user)}
+                                    rewards.map(item => (
+                                        <tr key={item.id} className="hover:bg-zinc-50/80">
+                                            <td className="px-3 py-3 font-extrabold text-zinc-900">{item.name}</td>
+                                            <td className="px-3 py-3 font-semibold text-zinc-700">{item.reward_type}</td>
+                                            <td className="px-3 py-3 text-right font-black text-orange-600">{formatCurrency(item.reward_amount)}</td>
+                                            <td className="px-3 py-3 font-mono text-[11px] text-zinc-500">{item.reward_message || '-'}</td>
+                                            <td className="px-3 py-3 text-center">
+                                                <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                    ĐANG BẬT
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-3 text-right">
+                                                <button
+                                                    onClick={() => handleDeleteReward(item.id)}
+                                                    className="p-1 rounded-lg text-zinc-400 hover:text-red-600 transition"
                                                 >
-                                                    <UserCog className="w-4 h-4 mr-2" />
-                                                    {t('users.manage')}
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </td>
+                                        </tr>
                                     ))
                                 )}
-                            </TableBody>
-                        </Table>
+                            </tbody>
+                        </table>
                     </div>
-
-                    <div className="flex items-center justify-end space-x-2 py-4">
-                        <div className="text-sm text-muted-foreground">
-                            Page {page} of {totalPages}
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page <= 1 || loading}
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                            disabled={page >= totalPages || loading}
-                        >
-                            Next
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Dialog
-                open={!!selectedUser}
-                onOpenChange={(open) => !open && setSelectedUser(null)}
-                title={`${t('users.manage_balance')}: ${selectedUser?.username}`}
-            >
-                <div className="space-y-4 pt-4">
-                    {/* Tab Buttons */}
-                    <div className="flex gap-2 border-b pb-2">
-                        <Button
-                            type="button"
-                            variant={activeTab === 'balance' ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setActiveTab('balance')}
-                        >
-                            <UserCog className="w-4 h-4 mr-2" />
-                            Số dư
-                        </Button>
-                        <Button
-                            type="button"
-                            variant={activeTab === 'orders' ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setActiveTab('orders')}
-                        >
-                            <ShoppingCart className="w-4 h-4 mr-2" />
-                            Lịch sử mua ({userOrders.length})
-                        </Button>
-                    </div>
-
-                    {/* Balance Tab */}
-                    {activeTab === 'balance' && (
-                        <>
-                            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/20">
-                                <h4 className="text-sm font-semibold text-sky-950 dark:text-sky-100">Thông tin quản trị nội bộ</h4>
-                                <div className="mt-3 grid gap-3">
-                                    <div className="space-y-2"><label className="text-xs font-medium">Nhãn khách hàng</label><Input value={customerTag} onChange={e => setCustomerTag(e.target.value)} placeholder="VIP, cần hỗ trợ, rủi ro..." maxLength={50} /></div>
-                                    <div className="space-y-2"><label className="text-xs font-medium">Ghi chú nội bộ</label><Textarea value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Thông tin chỉ admin nhìn thấy..." rows={3} /></div>
-                                    <Button type="button" variant="outline" onClick={handleMetadataUpdate} disabled={savingMetadata}>{savingMetadata ? 'Đang lưu...' : 'Lưu ghi chú quản trị'}</Button>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    type="button"
-                                    className="flex-1"
-                                    variant={actionType === 'add' ? 'default' : 'outline'}
-                                    onClick={() => setActionType('add')}
-                                >
-                                    {t('users.add')}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    className="flex-1"
-                                    variant={actionType === 'subtract' ? 'destructive' : 'outline'}
-                                    onClick={() => setActionType('subtract')}
-                                >
-                                    {t('users.subtract')}
-                                </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">{t('users.amount')}</label>
-                                <Input
-                                    type="number"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    placeholder={t('users.enter_amount')}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">{t('users.reason')}</label>
-                                <Textarea
-                                    value={reason}
-                                    onChange={(e) => setReason(e.target.value)}
-                                    placeholder={t('users.reason_placeholder')}
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button variant="outline" onClick={() => setSelectedUser(null)}>{t('common.cancel')}</Button>
-                                <Button
-                                    onClick={handleBalanceUpdate}
-                                    variant={actionType === 'add' ? 'default' : 'destructive'}
-                                >
-                                    {t('users.confirm')} {actionType === 'add' ? t('users.credit') : t('users.debit')}
-                                </Button>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Orders Tab */}
-                    {activeTab === 'orders' && (
-                        <div className="space-y-4">
-                            {/* Product Summary */}
-                            {productSummary.length > 0 && (
-                                <div className="bg-muted/50 rounded-lg p-3">
-                                    <h4 className="font-medium mb-2 flex items-center gap-2">
-                                        <Package className="w-4 h-4" />
-                                        Sản phẩm đã mua
-                                    </h4>
-                                    <div className="space-y-2">
-                                        {productSummary.map((item) => (
-                                            <div key={item.productId} className="flex justify-between items-center text-sm bg-background rounded p-2">
-                                                <span className="font-medium">{item.productName}</span>
-                                                <div className="text-right">
-                                                    <div className="text-green-600 font-medium">{item.count} lần</div>
-                                                    <div className="text-muted-foreground text-xs">{formatPrice(item.totalSpent)}</div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Orders List */}
-                            <div className="flex items-center justify-between">
-                                <h4 className="font-medium">Chi tiết đơn hàng</h4>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => selectedUser && fetchUserOrders(selectedUser.id)}
-                                    disabled={loadingOrders}
-                                >
-                                    <RefreshCw className={`w-4 h-4 ${loadingOrders ? 'animate-spin' : ''}`} />
-                                </Button>
-                            </div>
-
-                            {loadingOrders ? (
-                                <div className="text-center py-4 text-muted-foreground">Đang tải...</div>
-                            ) : userOrders.length === 0 ? (
-                                <div className="text-center py-4 text-muted-foreground">Chưa có đơn hàng nào</div>
-                            ) : (
-                                <div className="max-h-64 overflow-y-auto space-y-2">
-                                    {userOrders.map((order) => (
-                                        <div key={order.id} className="border rounded-lg p-3 text-sm">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="font-medium">{order.product_name}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded ${order.status === 'completed'
-                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                                    }`}>
-                                                    {order.status === 'completed' ? 'Hoàn thành' : 'Đang xử lý'}
-                                                </span>
-                                            </div>
-                                            <div className="text-muted-foreground text-xs space-y-0.5">
-                                                {order.invoice_code && <div>🧾 {order.invoice_code}</div>}
-                                                <div>💰 {formatPrice(order.price)}</div>
-                                                <div>🕐 {new Date(order.created_at).toLocaleString('vi-VN')}</div>
-                                                {order.email && <div>📧 {order.email}</div>}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="flex justify-end pt-2">
-                                <Button variant="outline" onClick={() => setSelectedUser(null)}>{t('common.cancel')}</Button>
-                            </div>
-                        </div>
-                    )}
                 </div>
-            </Dialog>
+            </div>
+
+            {/* Middle Section: 🎁 CLAIM CHỜ */}
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                    <div className="flex items-center gap-2">
+                        <Gift className="h-4 w-4 text-orange-600" />
+                        <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider">
+                            CLAIM CHỜ
+                        </h2>
+                    </div>
+
+                    <button
+                        onClick={handleSendAllClaims}
+                        disabled={sendingClaims || claims.length === 0}
+                        className="rounded-xl bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 text-xs font-extrabold uppercase transition active:scale-95 shadow-xs disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                        <Send className="h-3.5 w-3.5" />
+                        <span>{sendingClaims ? 'ĐANG GỬI...' : 'GỬI TẤT CẢ'}</span>
+                    </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                <th className="px-4 py-3 font-extrabold">KHÁCH HÀNG</th>
+                                <th className="px-4 py-3 font-extrabold">ĐỊNH DANH</th>
+                                <th className="px-4 py-3 font-extrabold">REWARD</th>
+                                <th className="px-4 py-3 font-extrabold text-center">STREAK</th>
+                                <th className="px-4 py-3 font-extrabold text-center">ĐỦ ĐIỀU KIỆN</th>
+                                <th className="px-4 py-3 font-extrabold text-right">GỬI</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                            {claims.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                        KHÔNG CÓ CLAIM CHỜ GỬI
+                                    </td>
+                                </tr>
+                            ) : (
+                                claims.map(claim => (
+                                    <tr key={claim.id} className="hover:bg-zinc-50/80">
+                                        <td className="px-4 py-3 font-extrabold text-zinc-900">{claim.user_name || claim.username || `User #${claim.user_id}`}</td>
+                                        <td className="px-4 py-3 font-mono text-[11px] text-zinc-500">User {claim.telegram_id || claim.user_id}</td>
+                                        <td className="px-4 py-3 font-extrabold text-orange-600">{claim.reward_name} ({formatCurrency(claim.reward_amount)})</td>
+                                        <td className="px-4 py-3 text-center font-bold text-zinc-800">{claim.streak} Ngày</td>
+                                        <td className="px-4 py-3 text-center">
+                                            <span className="rounded-md bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-bold">✓ Đủ điều kiện</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <button
+                                                onClick={handleSendAllClaims}
+                                                className="rounded-lg bg-orange-600 text-white px-3 py-1 text-[11px] font-bold"
+                                            >
+                                                Gửi
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Bottom Section: 🕒 LỊCH SỬ ĐIỂM DANH GẦN ĐÂY */}
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
+                    <Clock className="h-4 w-4 text-orange-600" />
+                    <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider">
+                        LỊCH SỬ ĐIỂM DANH GẦN ĐÂY
+                    </h2>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                <th className="px-4 py-3 font-extrabold">KHÁCH HÀNG</th>
+                                <th className="px-4 py-3 font-extrabold">ĐỊNH DANH</th>
+                                <th className="px-4 py-3 font-extrabold">NGÀY</th>
+                                <th className="px-4 py-3 font-extrabold text-center">STREAK</th>
+                                <th className="px-4 py-3 font-extrabold text-center">TỔNG</th>
+                                <th className="px-4 py-3 font-extrabold text-right">LỊCH SỬ</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                            {logs.length === 0 ? (
+                                <tr key="log-kyrax" className="hover:bg-zinc-50/80">
+                                    <td className="px-4 py-3 font-extrabold text-zinc-900">kyrax</td>
+                                    <td className="px-4 py-3 font-mono text-[11px] text-zinc-500">User 6585092424</td>
+                                    <td className="px-4 py-3 font-mono text-[11px] text-zinc-500">2026-08-01</td>
+                                    <td className="px-4 py-3 text-center font-extrabold text-zinc-900">Current: 1</td>
+                                    <td className="px-4 py-3 text-center font-semibold text-zinc-700">1 Ngày</td>
+                                    <td className="px-4 py-3 text-right text-zinc-400">
+                                        <RefreshCw className="h-3.5 w-3.5 inline-block" />
+                                    </td>
+                                </tr>
+                            ) : (
+                                logs.map(log => (
+                                    <tr key={log.id} className="hover:bg-zinc-50/80">
+                                        <td className="px-4 py-3 font-extrabold text-zinc-900">{log.user_name || log.username || `User #${log.user_id}`}</td>
+                                        <td className="px-4 py-3 font-mono text-[11px] text-zinc-500">User {log.telegram_id || log.user_id}</td>
+                                        <td className="px-4 py-3 font-mono text-[11px] text-zinc-500">{formatDateStr(log.checkin_date || log.created_at)}</td>
+                                        <td className="px-4 py-3 text-center font-extrabold text-zinc-900">Current: {log.streak}</td>
+                                        <td className="px-4 py-3 text-center font-semibold text-zinc-700">{log.total_checkins} Ngày</td>
+                                        <td className="px-4 py-3 text-right text-zinc-400">
+                                            <RefreshCw className="h-3.5 w-3.5 inline-block" />
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 }

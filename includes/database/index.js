@@ -370,6 +370,21 @@ export const initDb = async (config) => {
       console.log('✅ Bảng balance_logs sẵn sàng');
     } catch (e) {}
 
+    // 7. Khởi tạo Bảng translations
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS translations (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          msg_key VARCHAR(100) NOT NULL,
+          lang VARCHAR(10) NOT NULL,
+          msg_value TEXT NOT NULL,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY unique_key_lang (msg_key, lang)
+        )
+      `);
+      console.log('✅ Bảng translations sẵn sàng');
+    } catch (e) {}
+
     // ChatGPT Join FAM was removed; legacy migration is disabled.
     if (false) {
     // ensure ChatGPT FAM table exists

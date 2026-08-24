@@ -80,6 +80,18 @@ async function initDatabase() {
       )
     `);
 
+    // 7. Khởi tạo Bảng translations
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS translations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        msg_key VARCHAR(100) NOT NULL,
+        lang VARCHAR(10) NOT NULL,
+        msg_value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_key_lang (msg_key, lang)
+      )
+    `);
+
     console.log('[API_SERVER] Cập nhật CSDL tự động hoàn tất.');
   } catch (e) {
     console.error('[API_SERVER_INIT_ERR]', e);

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
     Save, Settings as SettingsIcon, Banknote, CreditCard, Trash2, Power, Download,
     DatabaseBackup, ShieldCheck, RefreshCw, Key, User, Globe, Bot, Bell,
-    Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock
+    Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock, Languages
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -393,6 +394,26 @@ export default function SettingsPage() {
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-medium text-zinc-900 outline-none focus:border-orange-500 transition"
                                 />
                             </div>
+                        </div>
+
+                        {/* Dynamic Translations Banner */}
+                        <div className="pt-3 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 rounded-xl border border-orange-200/80">
+                            <div>
+                                <div className="font-black text-xs text-orange-950 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Globe className="h-4 w-4 text-orange-600" />
+                                    <span>QUẢN LÝ NGÔN NGỮ & LỜI NHẮN BOT (CSDL DYNAMIC TRANSLATIONS)</span>
+                                </div>
+                                <p className="text-[11px] text-orange-800 font-medium mt-0.5">
+                                    Tự do chỉnh sửa mọi câu từ, menu, thông báo Tiếng Việt, Tiếng Anh, Tiếng Trung của Telegram Bot trực tiếp từ CSDL.
+                                </p>
+                            </div>
+                            <Link
+                                href="/settings/translations"
+                                className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 text-xs font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                            >
+                                <Languages className="h-4 w-4" />
+                                <span>CHỈNH SỬA NGÔN NGỮ CSDL</span>
+                            </Link>
                         </div>
                     </div>
                 </div>

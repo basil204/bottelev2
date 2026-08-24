@@ -1,8 +1,52 @@
-import { messages } from '../lang/messages.js';
+import { messages as defaultMessages } from '../lang/messages.js';
 import { query } from '../database/index.js';
 
 let exchangeRateCache = 26000;
 let lastRateUpdate = 0;
+
+let dbTranslations = { vi: {}, en: {}, zh: {} };
+let lastTranslationUpdate = 0;
+let isSeeding = false;
+
+export const loadTranslationsFromDb = async () => {
+    try {
+        const rows = await query('SELECT msg_key, lang, msg_value FROM translations');
+        if ((!rows || rows.length === 0) && !isSeeding) {
+            isSeeding = true;
+            console.log('[TRANSLATIONS] Tự động nạp dữ liệu ngôn ngữ mặc định vào CSDL...');
+            for (const [lang, keyValues] of Object.entries(defaultMessages)) {
+                for (const [msg_key, msg_value] of Object.entries(keyValues)) {
+                    await query(
+                        'INSERT IGNORE INTO translations (msg_key, lang, msg_value) VALUES (?, ?, ?)',
+                        [msg_key, lang, msg_value]
+                    );
+                }
+            }
+            isSeeding = false;
+            return loadTranslationsFromDb();
+        }
+
+        const map = { vi: {}, en: {}, zh: {} };
+        if (rows && Array.isArray(rows)) {
+            for (const row of rows) {
+                if (!map[row.lang]) map[row.lang] = {};
+                map[row.lang][row.msg_key] = row.msg_value;
+            }
+        }
+        dbTranslations = map;
+        lastTranslationUpdate = Date.now();
+        return map;
+    } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') {
+            console.error('[TRANSLATIONS_DB_ERR]', e.message);
+        }
+        return dbTranslations;
+    }
+};
+
+export const clearTranslationCache = () => {
+    lastTranslationUpdate = 0;
+};
 
 export const getExchangeRate = async () => {
     const now = Date.now();
@@ -21,8 +65,13 @@ export const getExchangeRate = async () => {
 };
 
 export const t = (key, lang = 'vi', params = {}) => {
-    const locale = messages[lang] ? messages[lang] : messages['vi'];
-    let str = locale[key] || key;
+    if (Date.now() - lastTranslationUpdate > 60 * 1000) {
+        loadTranslationsFromDb().catch(() => {});
+    }
+
+    const targetLang = ['vi', 'en', 'zh'].includes(lang) ? lang : 'vi';
+    const dict = dbTranslations[targetLang] || defaultMessages[targetLang] || defaultMessages['vi'];
+    let str = dict[key] || defaultMessages[targetLang]?.[key] || defaultMessages['vi']?.[key] || key;
 
     for (const [k, v] of Object.entries(params)) {
         str = str.replace(new RegExp(`{${k}}`, 'g'), v);

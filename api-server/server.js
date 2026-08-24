@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import pool, { query, execute } from './db.js';
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 1568;
 
 // 1. SECURITY HEADERS (Helmet)
 app.use(helmet({
@@ -150,7 +150,7 @@ const authenticateApiKey = async (req, res, next) => {
     }
 
     // Touch last_used_at timestamp
-    execute('UPDATE user_api_keys SET last_used_at = NOW() WHERE id = ?', [keyInfo.key_id]).catch(() => {});
+    execute('UPDATE user_api_keys SET last_used_at = NOW() WHERE id = ?', [keyInfo.key_id]).catch(() => { });
 
     req.user = keyInfo;
     req.apiKey = cleanKey;

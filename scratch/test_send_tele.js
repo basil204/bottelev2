@@ -29,49 +29,37 @@ const runTest = async () => {
     }
 
     if (!targetChatId) {
-        console.error('❌ Vui lòng truyền Telegram ID làm tham số');
+        console.error('❌ Vui lòng truyền Telegram ID');
         process.exit(1);
     }
 
-    console.log(`🚀 Thử nghiệm đầy đủ các loại nút InlineKeyboardButton (Telegram Bot API Spec)...`);
+    console.log(`🚀 Đang gửi Menu Nút Inline "Sản phẩm" chuẩn Emoji động tới Telegram ID: ${targetChatId}...`);
 
-    const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>DEMO TẤT CẢ CÁC LOẠI NÚT INLINE KEYBOARD</b>\n\n` +
-                        `• Tất cả các nút bấm bên dưới đều được truyền <code>icon_custom_emoji_id</code> chuẩn của Telegram Bot API!`;
+    const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\n` +
+                 `Vui lòng chọn nút Sản phẩm bên dưới (Nút Inline chuẩn, không dùng MiniApp):`;
 
     const keyboard = {
         reply_markup: {
             inline_keyboard: [
                 [
                     {
-                        text: "🛒 Mua ngay (Callback Data)",
-                        callback_data: "buy_now",
-                        icon_custom_emoji_id: "5312361253610475399"
+                        text: '{id:5312361253610475399} Sản phẩm',
+                        callback_data: 'buy_now'
                     }
                 ],
                 [
                     {
-                        text: "🔗 Nút Mở Link (URL)",
-                        url: "https://cp-admin.manhit.dev",
-                        icon_custom_emoji_id: "5312361253610475399"
-                    }
-                ],
-                [
-                    {
-                        text: "📋 Copy Mã Giảm Giá (Copy Text)",
-                        copy_text: { text: "DISCOUNT2026" },
-                        icon_custom_emoji_id: "5312361253610475399"
+                        text: '{id:5312361253610475399} Mua Gmail EDU',
+                        callback_data: 'buy_edu'
                     }
                 ]
             ]
         }
     };
 
-    console.log('📦 JSON Payload gửi sang Telegram Bot API:');
-    console.log(JSON.stringify(keyboard, null, 2));
-
     const sent = await bot.sendMessage(targetChatId, text, { parse_mode: 'HTML', ...keyboard });
 
-    console.log('✅ Gửi tin nhắn chứa InlineKeyboardButton thành công! Message ID:', sent.message_id);
+    console.log('✅ Gửi thành công nút Inline "Sản phẩm" chứa icon_custom_emoji_id! Message ID:', sent.message_id);
     process.exit(0);
 };
 

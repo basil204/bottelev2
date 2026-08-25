@@ -71,7 +71,7 @@ export const messages = {
         no_permission: 'Không có quyền truy cập.',
 
         // Keyboard Buttons
-        btn_deposit: '➕ Nạp tiền',
+        btn_deposit: '<tg-emoji emoji-id="5312361253610475399">➕</tg-emoji> Nạp tiền',
         btn_buy_menu: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Mua hàng',
         btn_buy_accounts: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Mua tài khoản',
         btn_buy_gmail_edu: '📧 Mua Gmail EDU',

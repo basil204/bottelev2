@@ -33,24 +33,22 @@ const runTest = async () => {
         process.exit(1);
     }
 
-    console.log(`🚀 Đang gửi Menu Nút Inline "Sản phẩm" chuẩn Emoji động tới Telegram ID: ${targetChatId}...`);
+    console.log(`🚀 Đang gửi Menu Nạp Tiền & Mua Hàng Inline nút Emoji động tới Telegram ID: ${targetChatId}...`);
 
-    const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\n` +
-                 `Vui lòng chọn nút Sản phẩm bên dưới (Nút Inline chuẩn, không dùng MiniApp):`;
+    const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG & NẠP TIỀN TỰ ĐỘNG</b>\n\n` +
+                 `Vui lòng chọn nút bên dưới (Chuẩn Inline Keyboard, không dùng MiniApp):`;
 
     const keyboard = {
         reply_markup: {
             inline_keyboard: [
                 [
                     {
-                        text: '{id:5312361253610475399} Sản phẩm',
-                        callback_data: 'buy_now'
-                    }
-                ],
-                [
+                        text: '{id:5312361253610475399} Nạp Tiền',
+                        callback_data: 'deposit'
+                    },
                     {
-                        text: '{id:5312361253610475399} Mua Gmail EDU',
-                        callback_data: 'buy_edu'
+                        text: '{id:5312361253610475399} Sản Phẩm / Mua Hàng',
+                        callback_data: 'buy_now'
                     }
                 ]
             ]
@@ -59,7 +57,7 @@ const runTest = async () => {
 
     const sent = await bot.sendMessage(targetChatId, text, { parse_mode: 'HTML', ...keyboard });
 
-    console.log('✅ Gửi thành công nút Inline "Sản phẩm" chứa icon_custom_emoji_id! Message ID:', sent.message_id);
+    console.log('✅ Gửi thành công nút Nạp tiền & Sản phẩm chứa icon_custom_emoji_id! Message ID:', sent.message_id);
     process.exit(0);
 };
 

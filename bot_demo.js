@@ -1,5 +1,5 @@
 /**
- * Standalone Telegram Bot Demo - Nút bấm Sản phẩm dùng Emoji Động (Inline Keyboard), Không sử dụng MiniApp
+ * Standalone Telegram Bot Demo - Tích hợp Nút Nạp tiền & Mua hàng dùng Emoji Động (Inline Keyboard), Không dùng MiniApp
  * Chạy bằng lệnh: node bot_demo.js
  */
 
@@ -39,15 +39,19 @@ const startBotDemo = async () => {
     bot.onText(/\/(start|menu)/, async (msg) => {
         const chatId = msg.chat.id;
 
-        const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\n` +
+        const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG BOT TỰ ĐỘNG</b>\n\n` +
                      `👋 Xin chào <b>${msg.from.first_name || 'bạn'}</b>!\n` +
-                     `Vui lòng chọn nút Sản phẩm bên dưới để xem danh sách:`;
+                     `Vui lòng chọn Nạp tiền hoặc Mua hàng bên dưới:`;
 
         const replyMarkup = {
             inline_keyboard: [
                 [
                     {
-                        text: '{id:5312361253610475399} Sản phẩm',
+                        text: '{id:5312361253610475399} Nạp Tiền',
+                        callback_data: 'deposit'
+                    },
+                    {
+                        text: '{id:5312361253610475399} Sản Phẩm / Mua Hàng',
                         callback_data: 'buy_now'
                     }
                 ],
@@ -55,9 +59,7 @@ const startBotDemo = async () => {
                     {
                         text: '{id:5312361253610475399} Mua Gmail EDU',
                         callback_data: 'buy_edu'
-                    }
-                ],
-                [
+                    },
                     {
                         text: '{id:5312361253610475399} Lịch Sử Đơn Hàng',
                         callback_data: 'history'
@@ -78,7 +80,22 @@ const startBotDemo = async () => {
             await bot.answerCallbackQuery(queryMsg.id);
         } catch (e) {}
 
-        if (action === 'buy_now') {
+        if (action === 'deposit') {
+            const text = `<tg-emoji emoji-id="5312361253610475399">➕</tg-emoji> <b>CHỌN PHƯƠNG THỨC NẠP TIỀN</b>\n\n` +
+                         `1. 🏦 Nạp qua Ngân Hàng (VietQR Auto)\n` +
+                         `2. 💲 Nạp qua USDT (TRC20 / Bybit)\n\n` +
+                         `Vui lòng chọn hình thức thanh toán:`;
+
+            const replyMarkup = {
+                inline_keyboard: [
+                    [{ text: '{id:5312361253610475399} Nạp Ngân Hàng (Auto)', callback_data: 'deposit_bank' }],
+                    [{ text: '{id:5312361253610475399} Nạp USDT', callback_data: 'deposit_usdt' }],
+                    [{ text: '↩️ Quay lại Menu', callback_data: 'back_menu' }]
+                ]
+            };
+
+            await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
+        } else if (action === 'buy_now') {
             const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>DANH SÁCH SẢN PHẨM KHẢ DỤNG</b>\n\n` +
                          `1. ⚡ Tài khoản ChatGPT Plus\n` +
                          `2. 🎬 Tài khoản CapCut Pro\n\n` +
@@ -108,19 +125,17 @@ const startBotDemo = async () => {
 
             await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
         } else if (action === 'back_menu') {
-            const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\nVui lòng chọn chức năng:`;
+            const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG BOT TỰ ĐỘNG</b>\n\nVui lòng chọn chức năng:`;
             const replyMarkup = {
                 inline_keyboard: [
                     [
                         {
-                            text: '{id:5312361253610475399} Sản phẩm',
-                            callback_data: 'buy_now'
-                        }
-                    ],
-                    [
+                            text: '{id:5312361253610475399} Nạp Tiền',
+                            callback_data: 'deposit'
+                        },
                         {
-                            text: '{id:5312361253610475399} Mua Gmail EDU',
-                            callback_data: 'buy_edu'
+                            text: '{id:5312361253610475399} Sản Phẩm / Mua Hàng',
+                            callback_data: 'buy_now'
                         }
                     ]
                 ]

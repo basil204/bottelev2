@@ -408,18 +408,18 @@ export const registerListeners = (bot, config) => {
       }
     }
 
-    if (isMatchButton(text, 'btn_deposit', userLang) || text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
-    if (isMatchButton(text, 'product_list', userLang) || text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_menu', userLang) || text === '🛒 Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === '📧 Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_utilities', userLang) || text === '🧰 Tiện ích') return sendUtilityMenu(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live') return handleCheckLiveCommand(bot, msg, '');
-    if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
-    if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
-    if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
-    if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
-    if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+    if (isMatchButton(text, 'btn_deposit', userLang) || isMatchButton(text, 'deposit', userLang) || text === '➕ Nạp tiền' || text === 'Nạp tiền' || text === '➕ Deposit' || text === 'Deposit' || text === '➕ 充值' || text === '充值') return startDepositFlow(bot, msg, user, config);
+    if (isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Buy Products' || text === 'Buy Products' || text === '🛒 购买产品' || text === '购买产品') return sendCategoryList(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_utilities', userLang) || text === '🧰 Tiện ích' || text === 'Tiện ích') return sendUtilityMenu(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
+    if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
+    if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket' || text === 'Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
+    if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+    if (text === '🎬 CapCut Workspace' || text === 'CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
+    if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === 'Lịch sử mua' || text === '🧾 History' || text === 'History' || text === '🧾 购买记录' || text === '购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Xử lý nút Điểm danh
     if (isMatchButton(text, 'btn_checkin', userLang) || text === '📆 Điểm danh' || text === '/checkin') {

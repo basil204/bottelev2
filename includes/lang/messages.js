@@ -162,7 +162,23 @@ export const messages = {
         // Common
         loading: 'Loading...',
         error: 'An error occurred. Please try again.',
-        no_permission: 'Access denied.'
+        no_permission: 'Access denied.',
+
+        // Keyboard Buttons
+        btn_deposit: '<tg-emoji emoji-id="5312361253610475399">➕</tg-emoji> Deposit',
+        btn_buy_menu: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Buy',
+        btn_buy_accounts: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Buy Accounts',
+        btn_buy_gmail_edu: '📧 Buy Gmail EDU',
+        btn_checkin: '📆 Check-in',
+        btn_support: '🛟 Support',
+        btn_utilities: '🧰 Utilities',
+        btn_change_language: '🌐 Language',
+        btn_main_menu: '↩️ Main Menu',
+        btn_order_history: '🧾 History',
+        btn_check_live: '🔎 Check Live',
+        btn_download_all: '⬇️ Download All',
+        btn_locket: '🔐 Locket',
+        btn_enter_coupon: '🎟️ Enter Coupon Code'
     },
     zh: {
         // Language selection
@@ -233,7 +249,23 @@ export const messages = {
         // Common
         loading: '加载中...',
         error: '出现错误，请重试。',
-        no_permission: '无访问权限。'
+        no_permission: '无访问权限。',
+
+        // Keyboard Buttons
+        btn_deposit: '<tg-emoji emoji-id="5312361253610475399">➕</tg-emoji> 充值',
+        btn_buy_menu: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> 购买',
+        btn_buy_accounts: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> 购买账号',
+        btn_buy_gmail_edu: '📧 购买 Gmail EDU',
+        btn_checkin: '📆 签到',
+        btn_support: '🛟 客服 / 支持',
+        btn_utilities: '🧰 工具箱',
+        btn_change_language: '🌐 语言',
+        btn_main_menu: '↩️ 主菜单',
+        btn_order_history: '🧾 购买记录',
+        btn_check_live: '🔎 Check Live',
+        btn_download_all: '⬇️ Download All',
+        btn_locket: '🔐 Locket',
+        btn_enter_coupon: '🎟️ 输入优惠码'
     }
 };
 

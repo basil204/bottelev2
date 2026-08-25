@@ -95,16 +95,31 @@ export const formatMoney = async (amount, lang = 'vi') => {
 
 export const isMatchButton = (text, key, lang = 'vi') => {
     if (!text || !key) return false;
+
+    const normalize = (str) => {
+        if (!str || typeof str !== 'string') return '';
+        return str
+            .replace(/<[^>]*>/g, '') // Bỏ thẻ HTML
+            .replace(/huỷ/gi, 'hủy') // Chuẩn hóa chính tả Tiếng Việt huỷ/hủy
+            .replace(/[^\p{L}\p{N}\s]/gu, '') // Bỏ emoji & ký tự đặc biệt, giữ chữ/số/khoảng trắng
+            .trim()
+            .toLowerCase();
+    };
+
     const cleanText = text.replace(/<[^>]*>/g, '').trim().toLowerCase();
+    const normText = normalize(text);
 
-    // So sánh với ngôn ngữ hiện tại của người dùng
-    const userVal = t(key, lang).replace(/<[^>]*>/g, '').trim().toLowerCase();
-    if (cleanText === userVal) return true;
+    const languages = Array.from(new Set([lang, 'vi', 'en', 'zh'])).filter(Boolean);
 
-    // So sánh với tất cả các bản dịch ngôn ngữ khác (vi, en, zh)
-    for (const l of ['vi', 'en', 'zh']) {
-        const val = t(key, l).replace(/<[^>]*>/g, '').trim().toLowerCase();
-        if (cleanText === val) return true;
+    for (const l of languages) {
+        const val = t(key, l);
+        if (!val) continue;
+
+        const cleanVal = val.replace(/<[^>]*>/g, '').trim().toLowerCase();
+        if (cleanText === cleanVal) return true;
+
+        const normVal = normalize(val);
+        if (normText && normVal && normText === normVal) return true;
     }
     return false;
 };

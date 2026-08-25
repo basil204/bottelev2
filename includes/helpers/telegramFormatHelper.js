@@ -45,6 +45,51 @@ export function markdownToTelegramHtml(text) {
     return html;
 }
 
+export function cleanButtonText(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text
+        .replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '')
+        .replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+}
+
+function sanitizeReplyMarkup(reply_markup) {
+    if (!reply_markup) return reply_markup;
+    try {
+        const markup = JSON.parse(JSON.stringify(reply_markup));
+
+        if (markup.keyboard && Array.isArray(markup.keyboard)) {
+            markup.keyboard = markup.keyboard.map((row) => {
+                if (!Array.isArray(row)) return row;
+                return row.map((btn) => {
+                    if (typeof btn === 'string') return cleanButtonText(btn);
+                    if (btn && typeof btn === 'object' && btn.text) {
+                        return { ...btn, text: cleanButtonText(btn.text) };
+                    }
+                    return btn;
+                });
+            });
+        }
+
+        if (markup.inline_keyboard && Array.isArray(markup.inline_keyboard)) {
+            markup.inline_keyboard = markup.inline_keyboard.map((row) => {
+                if (!Array.isArray(row)) return row;
+                return row.map((btn) => {
+                    if (btn && typeof btn === 'object' && btn.text) {
+                        return { ...btn, text: cleanButtonText(btn.text) };
+                    }
+                    return btn;
+                });
+            });
+        }
+
+        return markup;
+    } catch {
+        return reply_markup;
+    }
+}
+
 /**
  * Tự động gắn interceptor chuẩn hóa sendMessage & sendPhoto cho Bot Telegram
  */
@@ -56,7 +101,11 @@ export function installTelegramFormatHelper(bot) {
     bot.sendMessage = function (chatId, text, options = {}) {
         if (typeof text === 'string') {
             const formattedText = markdownToTelegramHtml(text);
-            const newOptions = { parse_mode: 'HTML', ...options };
+            const newOptions = {
+                parse_mode: 'HTML',
+                ...options,
+                reply_markup: options?.reply_markup ? sanitizeReplyMarkup(options.reply_markup) : undefined
+            };
             return originalSendMessage(chatId, formattedText, newOptions);
         }
         return originalSendMessage(chatId, text, options);
@@ -68,7 +117,8 @@ export function installTelegramFormatHelper(bot) {
             options = {
                 ...options,
                 caption: markdownToTelegramHtml(options.caption),
-                parse_mode: 'HTML'
+                parse_mode: 'HTML',
+                reply_markup: options?.reply_markup ? sanitizeReplyMarkup(options.reply_markup) : undefined
             };
         }
         return originalSendPhoto(chatId, photo, options, fileOptions);

@@ -30,17 +30,17 @@ async function run() {
     const bot = new TelegramBot(token, { polling: false });
     installTelegramFormatHelper(bot);
 
-    const testMessage = `🎉 **XÁC NHẬN TEST EMOJI THÔ tg://emoji?id=5420323339723881652**
+    const testMessage = `🎉 **XÁC NHẬN TEST EMOJI THỦ CÔNG: ![🛒](tg://emoji?id=5854776233950187351)**
 
-tg://emoji?id=5420323339723881652 **DANH MỤC MUA HÀNG GMAIL EDU**
+![🛒](tg://emoji?id=5854776233950187351) **DANH MỤC MUA HÀNG MỚI**
 
-![🔥](tg://emoji?id=5420323339723881652) **Đã hỗ trợ link thô tg://emoji?id=NUM trực tiếp!**`;
+![🔥](tg://emoji?id=5854776233950187351) **Icon giỏ hàng chuyển động Premium đã được áp dụng chuẩn!**`;
 
     try {
         const res = await bot.sendMessage(8202830305, testMessage, {
             reply_markup: {
                 keyboard: [
-                    [{ text: 'tg://emoji?id=5420323339723881652 🛒 Mua Gmail EDU' }],
+                    [{ text: '![🛒](tg://emoji?id=5854776233950187351) Mua hàng' }],
                     [{ text: '↩️ Menu chính' }]
                 ],
                 resize_keyboard: true

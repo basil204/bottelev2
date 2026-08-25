@@ -72,9 +72,9 @@ export const messages = {
 
         // Keyboard Buttons
         btn_deposit: '➕ Nạp tiền',
-        btn_buy_menu: '🛒 Mua hàng',
-        btn_buy_accounts: '🛒 Mua tài khoản',
-        btn_buy_gmail_edu: '📧 Mua Gmail EDU',
+        btn_buy_menu: '![🛒](tg://emoji?id=5854776233950187351) Mua hàng',
+        btn_buy_accounts: '![🛒](tg://emoji?id=5854776233950187351) Mua tài khoản',
+        btn_buy_gmail_edu: '![📧](tg://emoji?id=5420323339723881652) Mua Gmail EDU',
         btn_checkin: '📆 Điểm danh',
         btn_support: '🛟 Hỗ trợ / Bảo hành',
         btn_utilities: '🧰 Tiện ích',

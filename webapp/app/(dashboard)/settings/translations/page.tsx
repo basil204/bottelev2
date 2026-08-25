@@ -186,7 +186,7 @@ export default function TranslationsPage() {
                     <div className="space-y-1">
                         <div className="font-extrabold text-blue-950">2. Icon Emoji động Telegram (Custom Emoji):</div>
                         <p>
-                            Dán thẻ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&lt;tg-emoji emoji-id="5420323339723881652"&gt;⚠️&lt;/tg-emoji&gt;</code> (lấy ID từ <b>@emojiid_get_bot</b>) hoặc gõ cú pháp rút gọn <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;emoji_id:5420323339723881652&#125;</code> trước lời nhắn để hiển thị Emoji động trên Bot!
+                            Dán thẻ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&lt;tg-emoji emoji-id="5420323339723881652"&gt;⚠️&lt;/tg-emoji&gt;</code> (lấy ID từ <b>@emojiid_get_bot</b>) hoặc gõ rút gọn <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id:5420323339723881652&#125;</code> hoặc <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;emoji_id:5420323339723881652&#125;</code> ở đầu hoặc trong lời nhắn để Bot hiển thị Emoji động Telegram Premium!
                         </p>
                     </div>
                 </div>

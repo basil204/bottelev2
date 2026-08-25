@@ -7,8 +7,8 @@ export function markdownToTelegramHtml(text) {
 
     let html = text;
 
-    // Tự động xử lý nếu người dùng gõ cú pháp rút gọn kiểu: {emoji_id:5420323339723881652} ⚠️
-    html = html.replace(/\{emoji_id:(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+    // Tự động xử lý cú pháp rút gọn cho Emoji động: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652} hoặc {emoji:5420323339723881652}
+    html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
     // Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
     const htmlPlaceholders = [];

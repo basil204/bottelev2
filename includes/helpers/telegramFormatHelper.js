@@ -11,22 +11,39 @@ export function stripHtmlTags(str) {
               .trim();
 }
 
-export function cleanReplyKeyboard(replyMarkup) {
-    if (!replyMarkup || !replyMarkup.keyboard || !Array.isArray(replyMarkup.keyboard)) {
-        return replyMarkup;
-    }
-    const cleanKeyboard = replyMarkup.keyboard.map(row => {
-        if (!Array.isArray(row)) return row;
-        return row.map(btn => {
-            if (typeof btn === 'string') {
-                return { text: stripHtmlTags(btn) };
-            } else if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
-                return { ...btn, text: stripHtmlTags(btn.text) };
-            }
-            return btn;
+export function formatReplyMarkup(replyMarkup) {
+    if (!replyMarkup) return replyMarkup;
+    let newMarkup = { ...replyMarkup };
+
+    // 1. Lọc sạch thẻ HTML cho Reply Keyboard (bàn phím dưới khung chat)
+    if (newMarkup.keyboard && Array.isArray(newMarkup.keyboard)) {
+        newMarkup.keyboard = newMarkup.keyboard.map(row => {
+            if (!Array.isArray(row)) return row;
+            return row.map(btn => {
+                if (typeof btn === 'string') {
+                    return { text: stripHtmlTags(btn) };
+                } else if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
+                    return { ...btn, text: stripHtmlTags(btn.text) };
+                }
+                return btn;
+            });
         });
-    });
-    return { ...replyMarkup, keyboard: cleanKeyboard };
+    }
+
+    // 2. Chuyển đổi HTML & tg-emoji cho Inline Keyboard (Nút bấm dính theo tin nhắn)
+    if (newMarkup.inline_keyboard && Array.isArray(newMarkup.inline_keyboard)) {
+        newMarkup.inline_keyboard = newMarkup.inline_keyboard.map(row => {
+            if (!Array.isArray(row)) return row;
+            return row.map(btn => {
+                if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
+                    return { ...btn, text: markdownToTelegramHtml(btn.text) };
+                }
+                return btn;
+            });
+        });
+    }
+
+    return newMarkup;
 }
 
 export function markdownToTelegramHtml(text) {
@@ -86,7 +103,7 @@ export function installTelegramFormatHelper(bot) {
     bot.sendMessage = function (chatId, text, options = {}) {
         let newOptions = { ...options };
         if (newOptions.reply_markup) {
-            newOptions.reply_markup = cleanReplyKeyboard(newOptions.reply_markup);
+            newOptions.reply_markup = formatReplyMarkup(newOptions.reply_markup);
         }
 
         if (typeof text === 'string') {
@@ -101,7 +118,7 @@ export function installTelegramFormatHelper(bot) {
     bot.sendPhoto = function (chatId, photo, options = {}, fileOptions = {}) {
         let newOptions = { ...options };
         if (newOptions.reply_markup) {
-            newOptions.reply_markup = cleanReplyKeyboard(newOptions.reply_markup);
+            newOptions.reply_markup = formatReplyMarkup(newOptions.reply_markup);
         }
 
         if (typeof newOptions.caption === 'string') {

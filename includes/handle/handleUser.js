@@ -49,9 +49,15 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
 export const sendPurchaseMenu = async (bot, chatId, user) => {
   const { t } = await import('../helpers/langHelper.js');
+  const { createCallbackData } = await import('../../utils/index.js');
   const lang = user?.language || 'vi';
   return sendTrackedMenu(bot, chatId, t('purchase_menu_title', lang), {
     reply_markup: {
+      inline_keyboard: [
+        [{ text: t('btn_buy_accounts', lang), callback_data: createCallbackData({ action: 'list_categories' }) }],
+        [{ text: t('btn_buy_gmail_edu', lang), callback_data: createCallbackData({ action: 'gmail_edu_info' }) }],
+        [{ text: t('btn_order_history', lang), callback_data: createCallbackData({ action: 'order_history' }) }]
+      ],
       keyboard: [
         [{ text: t('btn_buy_accounts', lang) }],
         [{ text: t('btn_buy_gmail_edu', lang) }],

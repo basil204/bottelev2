@@ -169,14 +169,27 @@ export default function TranslationsPage() {
             )}
 
             {/* Help Guide Box */}
-            <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 space-y-2 text-xs text-blue-950">
-                <div className="font-extrabold flex items-center gap-1.5 text-blue-900">
-                    <Sparkles className="h-4 w-4 text-blue-600" />
-                    <span>HƯỚNG DẪN BIẾN SỐ TRONG LỜI NHẮN:</span>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4.5 space-y-3 text-xs text-blue-950 shadow-2xs">
+                <div className="font-black flex items-center gap-2 text-blue-900 text-sm border-b border-blue-100 pb-2">
+                    <Sparkles className="h-4.5 w-4.5 text-blue-600 shrink-0" />
+                    <span>HƯỚNG DẪN BIẾN SỐ & EMOJI ĐỘNG (TELEGRAM CUSTOM ANIMATED EMOJI):</span>
                 </div>
-                <p className="text-[11px] text-blue-800 leading-relaxed">
-                    Bạn có thể dùng các tham số biến như <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;amount&#125;</code>, <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;balance&#125;</code>, <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;price&#125;</code>, <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id&#125;</code> để Bot tự thế giá trị động khi gửi tin nhắn cho khách.
-                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] leading-relaxed text-blue-900">
+                    <div className="space-y-1">
+                        <div className="font-extrabold text-blue-950">1. Biến số động (Variables):</div>
+                        <p>
+                            Sử dụng các tham số như <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;amount&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;balance&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;price&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id&#125;</code> để Bot tự động thế giá trị giao dịch.
+                        </p>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="font-extrabold text-blue-950">2. Icon Emoji động Telegram (Custom Emoji):</div>
+                        <p>
+                            Dán thẻ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&lt;tg-emoji emoji-id="5420323339723881652"&gt;⚠️&lt;/tg-emoji&gt;</code> (lấy ID từ <b>@emojiid_get_bot</b>) hoặc gõ cú pháp rút gọn <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;emoji_id:5420323339723881652&#125;</code> trước lời nhắn để hiển thị Emoji động trên Bot!
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* Search Bar & Filters */}

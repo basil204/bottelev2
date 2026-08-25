@@ -8,6 +8,7 @@ import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/se
 import { startGmailCleanup } from './includes/services/gmailCleanup.js';
 
 import { config } from './config.js';
+import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
 
 const bootstrap = async () => {
   // Initialize DB first
@@ -33,6 +34,7 @@ const bootstrap = async () => {
   }
 
   const bot = new TelegramBot(botToken, { polling: true });
+  installTelegramFormatHelper(bot);
 
   const shutdown = async () => {
     await bot.stopPolling().catch(() => {});

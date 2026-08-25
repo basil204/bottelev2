@@ -26,7 +26,7 @@ export const messages = {
         product_list: '📦 **Danh sách sản phẩm:**',
         product_item: '🔹 {name} - {price} ({stock} còn lại)',
         product_detail: '📦 **{name}**\n\n💰 Giá: {price}\n📝 Mô tả: {description}\n📊 Còn lại: {stock}',
-        buy_now: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua ngay',
+        buy_now: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Mua ngay',
         back_to_products: '⬅️ Quay lại',
         out_of_stock: '❌ Sản phẩm đã hết hàng!',
         insufficient_balance: '❌ Số dư không đủ!\n\n💰 Số dư hiện tại: {balance}\n💵 Giá sản phẩm: {price}\n\nVui lòng nạp thêm tiền.',
@@ -72,8 +72,8 @@ export const messages = {
 
         // Keyboard Buttons
         btn_deposit: '➕ Nạp tiền',
-        btn_buy_menu: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua hàng',
-        btn_buy_accounts: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua tài khoản',
+        btn_buy_menu: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Mua hàng',
+        btn_buy_accounts: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> Mua tài khoản',
         btn_buy_gmail_edu: '📧 Mua Gmail EDU',
         btn_checkin: '📆 Điểm danh',
         btn_support: '🛟 Hỗ trợ / Bảo hành',
@@ -88,7 +88,7 @@ export const messages = {
 
         // Fixed Messages & Titles
         msg_account_banned: '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
-        purchase_menu_title: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> **MUA HÀNG**\n\nChọn loại sản phẩm hoặc xem lại lịch sử:',
+        purchase_menu_title: '<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> **MUA HÀNG**\n\nChọn loại sản phẩm hoặc xem lại lịch sử:',
         utility_menu_title: '🧰 **TIỆN ÍCH**\n\nChọn tiện ích cần sử dụng:',
         msg_support_guide: '🛟 **HỖ TRỢ / BẢO HÀNH**\n\nVui lòng nhập chi tiết nội dung cần hỗ trợ hoặc thông tin đơn hàng gặp lỗi (kèm mã đơn hàng nếu có).\n\n*Gõ ❌ Hủy nếu muốn hủy bỏ.*',
         msg_support_success: '✅ **Gửi yêu cầu hỗ trợ thành công!**\n\nQuản trị viên đã nhận được tin nhắn và sẽ hỗ trợ/bảo hành cho bạn sớm nhất có thể.'

@@ -15,7 +15,7 @@ export function formatReplyMarkup(replyMarkup) {
     if (!replyMarkup) return replyMarkup;
     let newMarkup = { ...replyMarkup };
 
-    // 1. Lọc sạch thẻ HTML cho Reply Keyboard (bàn phím dưới khung chat)
+    // 1. Clean Reply Keyboards (Bàn phím menu dưới khung chat)
     if (newMarkup.keyboard && Array.isArray(newMarkup.keyboard)) {
         newMarkup.keyboard = newMarkup.keyboard.map(row => {
             if (!Array.isArray(row)) return row;
@@ -30,13 +30,14 @@ export function formatReplyMarkup(replyMarkup) {
         });
     }
 
-    // 2. Chuyển đổi HTML & tg-emoji cho Inline Keyboard (Nút bấm dính theo tin nhắn)
+    // 2. Clean Inline Keyboards (Nút bấm dính theo tin nhắn)
+    // Telegram API KHÔNG hỗ trợ thẻ HTML trong button text của Inline Keyboard, tự động lọc sạch thẻ HTML
     if (newMarkup.inline_keyboard && Array.isArray(newMarkup.inline_keyboard)) {
         newMarkup.inline_keyboard = newMarkup.inline_keyboard.map(row => {
             if (!Array.isArray(row)) return row;
             return row.map(btn => {
                 if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
-                    return { ...btn, text: markdownToTelegramHtml(btn.text) };
+                    return { ...btn, text: stripHtmlTags(btn.text) };
                 }
                 return btn;
             });

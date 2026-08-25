@@ -74,7 +74,9 @@ const startBotDemo = async () => {
         const chatId = queryMsg.message.chat.id;
         const action = queryMsg.data;
 
-        await bot.answerCallbackQuery(queryMsg.id);
+        try {
+            await bot.answerCallbackQuery(queryMsg.id);
+        } catch (e) {}
 
         if (action === 'buy_now') {
             const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>DANH SÁCH SẢN PHẨM KHẢ DỤNG</b>\n\n` +

@@ -19,12 +19,6 @@ const runTest = async () => {
     const bot = new TelegramBot(botToken);
     installTelegramFormatHelper(bot);
 
-    // Gỡ bỏ nút WebApp màu xanh ở góc khung chat
-    try {
-        await bot.setChatMenuButton({ menu_button: { type: 'default' } });
-        console.log('✅ Đã gỡ bỏ nút WebApp màu xanh ở khung chat!');
-    } catch (e) {}
-
     let targetChatId = process.argv[2];
     if (!targetChatId && config.ADMIN_IDS && config.ADMIN_IDS.length > 0) {
         targetChatId = config.ADMIN_IDS[0];
@@ -39,25 +33,30 @@ const runTest = async () => {
         process.exit(1);
     }
 
-    console.log(`🚀 Đang gửi tin nhắn test mẫu chuẩn tới Telegram ID: ${targetChatId}...`);
+    console.log(`🚀 Testing auto-extracted icon_custom_emoji_id on InlineKeyboardButton to Telegram ID: ${targetChatId}...`);
 
     const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG</b>\nVui lòng chọn danh mục bên dưới:`;
 
     const keyboard = {
         reply_markup: {
             inline_keyboard: [
-                [{ text: "Mua ngay", callback_data: "buy" }] // Nút bấm phía dưới
+                [
+                    {
+                        text: "<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> Mua ngay",
+                        callback_data: "buy"
+                    }
+                ]
             ]
         }
     };
 
     const sent = await bot.sendMessage(targetChatId, text, { parse_mode: 'HTML', ...keyboard });
 
-    console.log('✅ Gửi tin nhắn test mẫu chuẩn thành công! Message ID:', sent.message_id);
+    console.log('✅ Gửi thành công nút bấm tự động trích xuất icon_custom_emoji_id! Message ID:', sent.message_id);
     process.exit(0);
 };
 
 runTest().catch(err => {
-    console.error('❌ Lỗi gửi tin nhắn Telegram:', err.message);
+    console.error('❌ Lỗi:', err.message);
     process.exit(1);
 });

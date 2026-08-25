@@ -30,14 +30,38 @@ export function formatReplyMarkup(replyMarkup) {
         });
     }
 
-    // 2. Clean Inline Keyboards (Nút bấm dính theo tin nhắn)
-    // Telegram API KHÔNG hỗ trợ thẻ HTML trong button text của Inline Keyboard, tự động lọc sạch thẻ HTML
+    // 2. Clean & Tự động trích xuất icon_custom_emoji_id cho Inline Keyboards (Nút bấm tin nhắn)
     if (newMarkup.inline_keyboard && Array.isArray(newMarkup.inline_keyboard)) {
         newMarkup.inline_keyboard = newMarkup.inline_keyboard.map(row => {
             if (!Array.isArray(row)) return row;
             return row.map(btn => {
                 if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
-                    return { ...btn, text: stripHtmlTags(btn.text) };
+                    let customEmojiId = btn.icon_custom_emoji_id || null;
+
+                    // Match <tg-emoji emoji-id="ID">
+                    if (!customEmojiId) {
+                        const tagMatch = btn.text.match(/<tg-emoji\s+emoji-id="(\d+)"/i);
+                        if (tagMatch) customEmojiId = tagMatch[1];
+                    }
+
+                    // Match tg://emoji?id=ID
+                    if (!customEmojiId) {
+                        const tgMatch = btn.text.match(/tg:\/\/emoji\?id=(\d+)/i);
+                        if (tgMatch) customEmojiId = tgMatch[1];
+                    }
+
+                    // Match {id:ID} hoặc {emoji_id:ID}
+                    if (!customEmojiId) {
+                        const codeMatch = btn.text.match(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/i);
+                        if (codeMatch) customEmojiId = codeMatch[1];
+                    }
+
+                    const cleanText = stripHtmlTags(btn.text);
+                    const newBtn = { ...btn, text: cleanText };
+                    if (customEmojiId) {
+                        newBtn.icon_custom_emoji_id = customEmojiId;
+                    }
+                    return newBtn;
                 }
                 return btn;
             });

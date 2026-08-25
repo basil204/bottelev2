@@ -92,3 +92,19 @@ export const formatMoney = async (amount, lang = 'vi') => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     }
 };
+
+export const isMatchButton = (text, key, lang = 'vi') => {
+    if (!text || !key) return false;
+    const cleanText = text.replace(/<[^>]*>/g, '').trim().toLowerCase();
+
+    // So sánh với ngôn ngữ hiện tại của người dùng
+    const userVal = t(key, lang).replace(/<[^>]*>/g, '').trim().toLowerCase();
+    if (cleanText === userVal) return true;
+
+    // So sánh với tất cả các bản dịch ngôn ngữ khác (vi, en, zh)
+    for (const l of ['vi', 'en', 'zh']) {
+        const val = t(key, l).replace(/<[^>]*>/g, '').trim().toLowerCase();
+        if (cleanText === val) return true;
+    }
+    return false;
+};

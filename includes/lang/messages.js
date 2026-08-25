@@ -68,7 +68,30 @@ export const messages = {
         // Common
         loading: 'Đang tải...',
         error: 'Có lỗi xảy ra. Vui lòng thử lại.',
-        no_permission: 'Không có quyền truy cập.'
+        no_permission: 'Không có quyền truy cập.',
+
+        // Keyboard Buttons
+        btn_deposit: '➕ Nạp tiền',
+        btn_buy_menu: '🛒 Mua hàng',
+        btn_buy_accounts: '🛒 Mua tài khoản',
+        btn_buy_gmail_edu: '📧 Mua Gmail EDU',
+        btn_checkin: '📆 Điểm danh',
+        btn_support: '🛟 Hỗ trợ / Bảo hành',
+        btn_utilities: '🧰 Tiện ích',
+        btn_change_language: '🌐 Ngôn ngữ',
+        btn_main_menu: '↩️ Menu chính',
+        btn_order_history: '🧾 Lịch sử mua',
+        btn_check_live: '🔎 Check Live',
+        btn_download_all: '⬇️ Download All',
+        btn_locket: '🔐 Locket',
+        btn_enter_coupon: '🎟️ Nhập Mã Giảm Giá',
+
+        // Fixed Messages & Titles
+        msg_account_banned: '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
+        purchase_menu_title: '🛒 **MUA HÀNG**\n\nChọn loại sản phẩm hoặc xem lại lịch sử:',
+        utility_menu_title: '🧰 **TIỆN ÍCH**\n\nChọn tiện ích cần sử dụng:',
+        msg_support_guide: '🛟 **HỖ TRỢ / BẢO HÀNH**\n\nVui lòng nhập chi tiết nội dung cần hỗ trợ hoặc thông tin đơn hàng gặp lỗi (kèm mã đơn hàng nếu có).\n\n*Gõ ❌ Hủy nếu muốn hủy bỏ.*',
+        msg_support_success: '✅ **Gửi yêu cầu hỗ trợ thành công!**\n\nQuản trị viên đã nhận được tin nhắn và sẽ hỗ trợ/bảo hành cho bạn sớm nhất có thể.'
     },
     en: {
         // Language selection

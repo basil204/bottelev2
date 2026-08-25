@@ -327,8 +327,11 @@ export const registerListeners = (bot, config) => {
       );
     }
 
+    const { t, isMatchButton } = await import('./helpers/langHelper.js');
+    const userLang = user?.language || 'vi';
+
     // Xử lý nút Huỷ (ưu tiên cao)
-    if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消') {
+    if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消' || isMatchButton(text, 'cancel', userLang)) {
       const { cancelUploadState } = await import('./handle/handleDeposit.js');
       // Clear ALL waiting states
       const { delCache } = await import('../lib/cache/index.js');
@@ -397,8 +400,7 @@ export const registerListeners = (bot, config) => {
         );
         return bot.sendMessage(
           msg.chat.id,
-          `✅ **Gửi yêu cầu hỗ trợ thành công!**\n\nQuản trị viên đã nhận được tin nhắn và sẽ hỗ trợ/bảo hành cho bạn sớm nhất có thể.`,
-          { parse_mode: 'Markdown' }
+          t('msg_support_success', userLang)
         );
       } catch (e) {
         console.error('[SUPPORT] Error saving support request:', e);
@@ -406,37 +408,36 @@ export const registerListeners = (bot, config) => {
       }
     }
 
-    if (text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
-    if (text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
-    if (text === '🛒 Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
-    if (text === '🛒 Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
-    if (text === '📧 Gmail EDU' || text === '📧 Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
-    if (text === '🧰 Tiện ích') return sendUtilityMenu(bot, msg.chat.id);
-    if (text === '🔎 Check Live') return handleCheckLiveCommand(bot, msg, '');
-    if (text === '⬇️ Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
-    if (text === '🔐 Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
-    if (text === '↩️ Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+    if (isMatchButton(text, 'btn_deposit', userLang) || text === '➕ Nạp tiền' || text === '➕ Deposit' || text === '➕ 充值') return startDepositFlow(bot, msg, user, config);
+    if (isMatchButton(text, 'product_list', userLang) || text === '🛒 Mua sản phẩm' || text === '🛒 Buy Products' || text === '🛒 购买产品') return sendCategoryList(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_menu', userLang) || text === '🛒 Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === '📧 Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_utilities', userLang) || text === '🧰 Tiện ích') return sendUtilityMenu(bot, msg.chat.id, user);
+    if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live') return handleCheckLiveCommand(bot, msg, '');
+    if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
+    if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
+    if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
     if (text === '🎬 CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
-    if (text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+    if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === '🧾 History' || text === '🧾 购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
     // Xử lý nút Điểm danh
-    if (text === '📆 Điểm danh' || text === '/checkin') {
+    if (isMatchButton(text, 'btn_checkin', userLang) || text === '📆 Điểm danh' || text === '/checkin') {
       const checkinModule = await import('../modules/commands/checkin.js');
       return checkinModule.default.handler(bot, msg);
     }
 
     // Xử lý nút Hỗ trợ / Bảo hành
-    if (text === '🛟 Hỗ trợ / Bảo hành' || text === '/support') {
+    if (isMatchButton(text, 'btn_support', userLang) || text === '🛟 Hỗ trợ / Bảo hành' || text === '/support') {
       setCache(`waiting_support_request_${msg.from.id}`, true, 10 * 60 * 1000);
       return bot.sendMessage(
         msg.chat.id,
-        `🛟 **HỖ TRỢ / BẢO HÀNH**\n\nVui lòng nhập chi tiết nội dung cần hỗ trợ hoặc thông tin đơn hàng gặp lỗi (kèm mã đơn hàng nếu có).\n\n*Gõ ❌ Hủy nếu muốn hủy bỏ.*`,
-        { parse_mode: 'Markdown' }
+        t('msg_support_guide', userLang)
       );
     }
 
     // Xử lý nút đổi ngôn ngữ
-    if (text === '🌐 Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
+    if (isMatchButton(text, 'btn_change_language', userLang) || text === '🌐 Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
       const { t } = await import('./helpers/langHelper.js');
       const { createCallbackData } = await import('../utils/index.js');
       await bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {

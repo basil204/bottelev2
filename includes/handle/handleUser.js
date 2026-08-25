@@ -26,23 +26,22 @@ export const ensureUser = async (bot, msg) => {
 
 export const buildMainKeyboard = (t, lang) => ({
   keyboard: [
-    [{ text: t('deposit', lang) }, { text: '🛒 Mua hàng' }],
-    [{ text: '📆 Điểm danh' }, { text: '🛟 Hỗ trợ / Bảo hành' }],
-    [{ text: '🧰 Tiện ích' }, { text: t('change_language', lang) }]
+    [{ text: t('btn_deposit', lang) }, { text: t('btn_buy_menu', lang) }],
+    [{ text: t('btn_checkin', lang) }, { text: t('btn_support', lang) }],
+    [{ text: t('btn_utilities', lang) }, { text: t('btn_change_language', lang) }]
   ],
   resize_keyboard: true
 });
 
 export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const lang = user?.language || 'vi';
   if (user?.is_banned) {
     return bot.sendMessage(
       chatId,
-      '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
-      { parse_mode: 'Markdown' }
+      t('msg_account_banned', lang)
     );
   }
-  const { t } = await import('../helpers/langHelper.js');
-  const lang = user.language || 'vi';
   await sendTrackedMenu(bot, chatId, t('menu_title', lang), {
     reply_markup: buildMainKeyboard(t, lang)
   });
@@ -50,30 +49,34 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
 
 export const sendPurchaseMenu = async (bot, chatId, user) => {
   const { t } = await import('../helpers/langHelper.js');
-  const lang = user.language || 'vi';
-  return sendTrackedMenu(bot, chatId, '🛒 MUA HÀNG\n\nChọn loại sản phẩm hoặc xem lại lịch sử:', {
+  const lang = user?.language || 'vi';
+  return sendTrackedMenu(bot, chatId, t('purchase_menu_title', lang), {
     reply_markup: {
       keyboard: [
-        [{ text: '🛒 Mua tài khoản' }],
-        [{ text: '📧 Mua Gmail EDU' }],
-        [{ text: t('history', lang) }],
-        [{ text: '↩️ Menu chính' }]
+        [{ text: t('btn_buy_accounts', lang) }],
+        [{ text: t('btn_buy_gmail_edu', lang) }],
+        [{ text: t('btn_order_history', lang) }],
+        [{ text: t('btn_main_menu', lang) }]
       ],
       resize_keyboard: true
     }
   });
 };
 
-export const sendUtilityMenu = async (bot, chatId) => sendTrackedMenu(bot, chatId, '🧰 TIỆN ÍCH\n\nChọn tiện ích cần sử dụng:', {
-  reply_markup: {
-    keyboard: [
-      [{ text: '🔎 Check Live' }, { text: '⬇️ Download All' }],
-      [{ text: '🔐 Locket' }],
-      [{ text: '↩️ Menu chính' }]
-    ],
-    resize_keyboard: true
-  }
-});
+export const sendUtilityMenu = async (bot, chatId, user = null) => {
+  const { t } = await import('../helpers/langHelper.js');
+  const lang = user?.language || 'vi';
+  return sendTrackedMenu(bot, chatId, t('utility_menu_title', lang), {
+    reply_markup: {
+      keyboard: [
+        [{ text: t('btn_check_live', lang) }, { text: t('btn_download_all', lang) }],
+        [{ text: t('btn_locket', lang) }],
+        [{ text: t('btn_main_menu', lang) }]
+      ],
+      resize_keyboard: true
+    }
+  });
+};
 
 export const sendOrderHistory = async (bot, chatId, userId) => {
   const { getUserById } = await import('../controllers/userController.js');

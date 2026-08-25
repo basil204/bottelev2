@@ -1,6 +1,6 @@
 /**
- * Standalone Telegram Bot Demo - Nút bấm "Sản phẩm" chuẩn Inline Keyboard với Emoji Động ({id:5312361253610475399})
- * Hoàn toàn không sử dụng MiniApp WebApp.
+ * Standalone Telegram Bot Demo - Tự động kết nối Database, gửi Nút Bàn Phím KeyboardButton & InlineKeyboardButton với icon_custom_emoji_id
+ * Theo chuẩn Telegram Bot API Spec: https://core.telegram.org/bots/api#keyboardbutton
  * Chạy độc lập bằng lệnh: node bot_demo.js
  */
 
@@ -10,20 +10,13 @@ import { config } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
 
 const startBotDemo = async () => {
-    // 1. Kết nối CSDL MySQL và lấy token & mini_app_url
+    // 1. Kết nối CSDL MySQL và lấy token
     await initDb(config);
     let token = config.TELEGRAM_BOT_TOKEN;
-    let webAppUrl = config.MINI_APP_URL || 'https://cp-admin.manhit.dev/miniapp/capcut';
 
     try {
-        const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('telegram_bot_token', 'mini_app_url')");
-        if (rows && rows.length > 0) {
-            rows.forEach(r => {
-
-                if (r.key === 'telegram_bot_token' && r.value) token = r.value;
-                if (r.key === 'mini_app_url' && r.value) webAppUrl = r.value;
-            });
-        }
+        const rows = await query("SELECT `value` FROM settings WHERE `key` = 'telegram_bot_token'");
+        if (rows && rows.length > 0 && rows[0].value) token = rows[0].value;
     } catch (e) {
         console.error('⚠️ Lỗi truy vấn Database:', e.message);
     }
@@ -38,7 +31,7 @@ const startBotDemo = async () => {
 
     try {
         const botInfo = await bot.getMe();
-        console.log(`🤖 Bot Demo đã kết nối Database & đang chạy: @${botInfo.username}`);
+        console.log(`🤖 Bot Demo đang chạy: @${botInfo.username}`);
     } catch (e) {
         console.log('🤖 Bot Demo đang chạy...');
     }
@@ -47,11 +40,12 @@ const startBotDemo = async () => {
     bot.onText(/\/(start|menu)/, async (msg) => {
         const chatId = msg.chat.id;
 
-        const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\n` +
+        const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG BOT TỰ ĐỘNG</b>\n\n` +
             `👋 Xin chào <b>${msg.from.first_name || 'bạn'}</b>!\n` +
-            `Vui lòng chọn chức năng có nút Emoji động bên dưới:`;
+            `Cả Nút Bàn Phím Dưới (KeyboardButton) và Nút Inline đều đính kèm icon_custom_emoji_id theo chuẩn Telegram Bot API Spec:`;
 
         const replyMarkup = {
+            // Nút bấm tin nhắn (InlineKeyboardButton)
             inline_keyboard: [
                 [
                     {
@@ -70,10 +64,15 @@ const startBotDemo = async () => {
                     }
                 ]
             ],
+            // Nút bấm bàn phím dưới khung chat (KeyboardButton) với icon_custom_emoji_id
             keyboard: [
                 [
                     {
-                        text: '{id:5312361253610475399} Lịch Sử Đơn Hàng'
+                        text: 'Nạp tiền',
+                        icon_custom_emoji_id: '5312361253610475399'
+                    },
+                    {
+                        text: '{id:5312361253610475399} Sản phẩm'
                     }
                 ]
             ],
@@ -88,13 +87,15 @@ const startBotDemo = async () => {
         const chatId = queryMsg.message.chat.id;
         const action = queryMsg.data;
 
-        await bot.answerCallbackQuery(queryMsg.id);
+        try {
+            await bot.answerCallbackQuery(queryMsg.id);
+        } catch (e) {}
 
         if (action === 'buy_now') {
-            const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>DANH SÁCH SẢN PHẨM</b>\n\n` +
-                `1. Tài khoản ChatGPT Plus\n` +
-                `2. Tài khoản CapCut Pro\n\n` +
-                `Vui lòng chọn sản phẩm muốn mua:`;
+            const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>DANH SÁCH SẢN PHẨM KHẢ DỤNG</b>\n\n` +
+                `1. ⚡ Tài khoản ChatGPT Plus\n` +
+                `2. 🎬 Tài khoản CapCut Pro\n\n` +
+                `Vui lòng chọn loại sản phẩm bạn muốn mua:`;
 
             const replyMarkup = {
                 inline_keyboard: [
@@ -109,7 +110,7 @@ const startBotDemo = async () => {
             const text = `📧 <b>TẠO TÀI KHOẢN GMAIL EDU</b>\n\n` +
                 `• Tên miền: <code>nttp.edu.pl</code>\n` +
                 `• Thời hạn tự xóa: 1 giờ sau khi tạo\n\n` +
-                `Bấm nút xác nhận bên dưới để khởi tạo:`;
+                `Bấm nút bên dưới để tiến hành khởi tạo:`;
 
             const replyMarkup = {
                 inline_keyboard: [
@@ -124,8 +125,16 @@ const startBotDemo = async () => {
             const replyMarkup = {
                 inline_keyboard: [
                     [
-                        { text: '{id:5312361253610475399} Mua Ngay', callback_data: 'buy_now' },
-                        { text: '{id:5312361253610475399} Gmail EDU', callback_data: 'buy_edu' }
+                        {
+                            text: '{id:5312361253610475399} Sản phẩm',
+                            callback_data: 'buy_now'
+                        }
+                    ],
+                    [
+                        {
+                            text: '{id:5312361253610475399} Mua Gmail EDU',
+                            callback_data: 'buy_edu'
+                        }
                     ]
                 ]
             };

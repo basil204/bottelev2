@@ -95,15 +95,27 @@ export const formatMoney = async (amount, lang = 'vi') => {
 
 export const isMatchButton = (text, key, lang = 'vi') => {
     if (!text || !key) return false;
-    const cleanText = text.replace(/<[^>]*>/g, '').trim().toLowerCase();
+    const sanitize = (str) => {
+        if (!str) return '';
+        return str
+            .replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '')
+            .replace(/<[^>]*>/g, '')
+            .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    };
+
+    const cleanText = sanitize(text);
+    if (!cleanText) return false;
 
     // So sánh với ngôn ngữ hiện tại của người dùng
-    const userVal = t(key, lang).replace(/<[^>]*>/g, '').trim().toLowerCase();
+    const userVal = sanitize(t(key, lang));
     if (cleanText === userVal) return true;
 
     // So sánh với tất cả các bản dịch ngôn ngữ khác (vi, en, zh)
     for (const l of ['vi', 'en', 'zh']) {
-        const val = t(key, l).replace(/<[^>]*>/g, '').trim().toLowerCase();
+        const val = sanitize(t(key, l));
         if (cleanText === val) return true;
     }
     return false;

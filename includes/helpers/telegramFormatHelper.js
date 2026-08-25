@@ -47,11 +47,14 @@ export function markdownToTelegramHtml(text) {
 
 export function cleanButtonText(text) {
     if (!text || typeof text !== 'string') return text;
-    return text
-        .replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '')
-        .replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1')
-        .replace(/<[^>]*>/g, '')
-        .trim();
+    let result = text;
+    // Chuyển đổi cú pháp {emoji_id:...} thành icon ⭐ cho Nút bấm Telegram
+    result = result.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '⭐ ');
+    // Lấy ký tự emoji dự phòng từ thẻ <tg-emoji>
+    result = result.replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1');
+    // Loại bỏ các thẻ HTML khác
+    result = result.replace(/<[^>]*>/g, '');
+    return result.replace(/\s+/g, ' ').trim();
 }
 
 function sanitizeReplyMarkup(reply_markup) {

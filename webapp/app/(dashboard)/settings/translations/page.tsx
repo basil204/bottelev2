@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
     Languages, Save, Search, RefreshCw, ArrowLeft, CheckCircle2,
-    MessageSquare, Globe, Sparkles, HelpCircle, Code
+    MessageSquare, Globe, Sparkles, HelpCircle, Code, Layers, Keyboard
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,6 +20,7 @@ export default function TranslationsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeCategoryTab, setActiveCategoryTab] = useState<'all' | 'messages' | 'inline' | 'keyboard'>('all');
     const [activeLangTab, setActiveLangTab] = useState<'all' | 'vi' | 'en' | 'zh'>('all');
     const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -41,6 +42,35 @@ export default function TranslationsPage() {
     useEffect(() => {
         fetchTranslations();
     }, []);
+
+    const getCategory = (key: string): 'messages' | 'inline' | 'keyboard' => {
+        // 1. Nút Bàn Phím Keyboard cố định bên dưới
+        const keyboardKeys = [
+            'btn_deposit', 'btn_buy_menu', 'btn_checkin', 'btn_support',
+            'btn_utilities', 'btn_change_language', 'btn_main_menu',
+            'btn_check_live', 'btn_download_all', 'btn_locket'
+        ];
+        if (keyboardKeys.includes(key) || key.startsWith('btn_kb_') || key.startsWith('keyboard_')) {
+            return 'keyboard';
+        }
+
+        // 2. Nút Bấm Inline Keyboard dính kèm tin nhắn
+        const inlineKeys = [
+            'btn_buy_accounts', 'btn_buy_gmail_edu', 'btn_order_history',
+            'btn_enter_coupon', 'btn_confirm', 'btn_cancel', 'btn_back',
+            'buy_now', 'btn_inline'
+        ];
+        if (inlineKeys.includes(key) || key.startsWith('btn_inline_') || key.startsWith('inline_') || key.startsWith('btn_buy_') || key.startsWith('btn_order_')) {
+            return 'inline';
+        }
+
+        if (key.startsWith('btn_')) {
+            return 'inline';
+        }
+
+        // 3. Nội dung tin nhắn / Lời nhắn Bot
+        return 'messages';
+    };
 
     const handleFieldChange = (key: string, field: 'vi' | 'en' | 'zh', value: string) => {
         setTranslations(prev =>
@@ -97,7 +127,20 @@ export default function TranslationsPage() {
         }
     };
 
+    // Đếm số lượng từ vựng theo từng phân loại
+    const counts = {
+        all: translations.length,
+        messages: translations.filter(item => getCategory(item.msg_key) === 'messages').length,
+        inline: translations.filter(item => getCategory(item.msg_key) === 'inline').length,
+        keyboard: translations.filter(item => getCategory(item.msg_key) === 'keyboard').length,
+    };
+
     const filteredTranslations = translations.filter(item => {
+        // Phân loại Phân mục
+        const category = getCategory(item.msg_key);
+        if (activeCategoryTab !== 'all' && category !== activeCategoryTab) return false;
+
+        // Phân loại Tìm kiếm
         const query = searchQuery.toLowerCase().trim();
         if (!query) return true;
         return (
@@ -125,7 +168,7 @@ export default function TranslationsPage() {
                             <Languages className="h-6 w-6 text-orange-600" />
                             <span>QUẢN LÝ NGÔN NGỮ & LỜI NHẮN BOT</span>
                         </h1>
-                        <p className="text-xs text-zinc-500 font-medium">Chỉnh sửa toàn bộ thông báo, menu và nội dung phản hồi đa ngôn ngữ của Telegram Bot từ CSDL</p>
+                        <p className="text-xs text-zinc-500 font-medium">Chỉnh sửa phân loại riêng: Lời nhắn Bot, Nút Bấm Inline và Nút Bàn Phím Keyboard từ CSDL</p>
                     </div>
                 </div>
 
@@ -168,6 +211,42 @@ export default function TranslationsPage() {
                 </div>
             )}
 
+            {/* Category Navigation Tabs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                    { id: 'all', label: 'TẤT CẢ THÀNH PHẦN', count: counts.all, icon: Layers, color: 'text-zinc-600', activeBg: 'bg-zinc-900 text-white' },
+                    { id: 'messages', label: '📝 LỜI NHẮN BOT', count: counts.messages, icon: MessageSquare, color: 'text-blue-600', activeBg: 'bg-blue-600 text-white' },
+                    { id: 'inline', label: '🔘 NÚT INLINE KEYBOARD', count: counts.inline, icon: Code, color: 'text-purple-600', activeBg: 'bg-purple-600 text-white' },
+                    { id: 'keyboard', label: '⌨️ NÚT BÀN PHÍM KEYBOARD', count: counts.keyboard, icon: Keyboard, color: 'text-emerald-600', activeBg: 'bg-emerald-600 text-white' }
+                ].map(tab => {
+                    const IconComponent = tab.icon;
+                    const isActive = activeCategoryTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveCategoryTab(tab.id as any)}
+                            className={`p-3.5 rounded-2xl border transition-all text-left flex items-center justify-between cursor-pointer ${isActive ? `${tab.activeBg} border-transparent shadow-md` : 'bg-white border-zinc-200 hover:border-zinc-300 text-zinc-700 shadow-2xs'}`}
+                        >
+                            <div className="space-y-0.5">
+                                <div className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isActive ? 'text-white' : tab.color}`}>
+                                    <IconComponent className="h-4 w-4 shrink-0" />
+                                    <span>{tab.label}</span>
+                                </div>
+                                <div className={`text-[10px] font-semibold ${isActive ? 'text-white/80' : 'text-zinc-400'}`}>
+                                    {tab.id === 'all' && 'Toàn bộ nội dung & nút bấm'}
+                                    {tab.id === 'messages' && 'Tin nhắn thông báo, hướng dẫn'}
+                                    {tab.id === 'inline' && 'Nút bấm đính kèm tin nhắn'}
+                                    {tab.id === 'keyboard' && 'Nút bàn phím menu bên dưới'}
+                                </div>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-black ${isActive ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-700'}`}>
+                                {tab.count}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+
             {/* Help Guide Box */}
             <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4.5 space-y-3 text-xs text-blue-950 shadow-2xs">
                 <div className="font-black flex items-center gap-2 text-blue-900 text-sm border-b border-blue-100 pb-2">
@@ -175,24 +254,31 @@ export default function TranslationsPage() {
                     <span>HƯỚNG DẪN BIẾN SỐ & EMOJI ĐỘNG (TELEGRAM CUSTOM ANIMATED EMOJI):</span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] leading-relaxed text-blue-900">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-relaxed text-blue-900">
                     <div className="space-y-1">
                         <div className="font-extrabold text-blue-950">1. Biến số động (Variables):</div>
                         <p>
-                            Sử dụng các tham số như <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;amount&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;balance&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;price&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id&#125;</code> để Bot tự động thế giá trị giao dịch.
+                            Sử dụng các tham số như <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;amount&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;balance&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;price&#125;</code>, <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id&#125;</code> để Bot tự động thế giá trị.
                         </p>
                     </div>
 
                     <div className="space-y-1">
-                        <div className="font-extrabold text-blue-950">2. Icon Emoji động Telegram (Custom Emoji):</div>
+                        <div className="font-extrabold text-blue-950">2. Emoji động ở Lời Nhắn:</div>
                         <p>
-                            Dán thẻ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&lt;tg-emoji emoji-id="5420323339723881652"&gt;⚠️&lt;/tg-emoji&gt;</code> (lấy ID từ <b>@emojiid_get_bot</b>) hoặc gõ rút gọn <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;id:5420323339723881652&#125;</code> hoặc <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;emoji_id:5420323339723881652&#125;</code> ở đầu hoặc trong lời nhắn để Bot hiển thị Emoji động Telegram Premium!
+                            Dán thẻ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&lt;tg-emoji emoji-id="5312361253610475399"&gt;🛒&lt;/tg-emoji&gt;</code> hoặc gõ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;5312361253610475399&#125;</code> trong câu văn.
+                        </p>
+                    </div>
+
+                    <div className="space-y-1">
+                        <div className="font-extrabold text-blue-950">3. Emoji động ở Nút Bấm Inline & Keyboard:</div>
+                        <p>
+                            Gõ <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">&#123;5312361253610475399&#125; Nạp tiền</code> để Bot tự động gắn <code className="bg-blue-100/90 px-1.5 py-0.5 rounded font-mono text-blue-950 font-bold">icon_custom_emoji_id</code> chuẩn Telegram API cho cả <b>Nút Inline</b> và <b>Nút Bàn Phím Cố Định</b>!
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Search Bar & Filters */}
+            {/* Search Bar & Language Filter */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
                 <div className="relative w-full sm:w-96">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
@@ -231,76 +317,99 @@ export default function TranslationsPage() {
                 </div>
             ) : filteredTranslations.length === 0 ? (
                 <div className="py-16 text-center text-xs font-bold text-zinc-400 bg-white rounded-2xl border border-zinc-200">
-                    Không tìm thấy bản dịch phù hợp với từ khóa "{searchQuery}".
+                    Không tìm thấy bản dịch phù hợp với các bộ lọc hiện tại.
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredTranslations.map((item) => (
-                        <div key={item.msg_key} className="bg-white rounded-2xl border border-zinc-200 p-4 space-y-3 shadow-2xs hover:border-zinc-300 transition">
-                            {/* Key Header */}
-                            <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-mono text-xs font-black text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg">
-                                        {item.msg_key}
+                    {filteredTranslations.map((item) => {
+                        const category = getCategory(item.msg_key);
+                        return (
+                            <div key={item.msg_key} className="bg-white rounded-2xl border border-zinc-200 p-4 space-y-3 shadow-2xs hover:border-zinc-300 transition">
+                                {/* Key Header */}
+                                <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-black text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg">
+                                            {item.msg_key}
+                                        </span>
+                                        
+                                        {/* Category Badge */}
+                                        {category === 'messages' && (
+                                            <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                                <MessageSquare className="h-3 w-3" />
+                                                <span>📝 LỜI NHẮN BOT</span>
+                                            </span>
+                                        )}
+                                        {category === 'inline' && (
+                                            <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                                <Code className="h-3 w-3" />
+                                                <span>🔘 NÚT INLINE KEYBOARD</span>
+                                            </span>
+                                        )}
+                                        {category === 'keyboard' && (
+                                            <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                                <Keyboard className="h-3 w-3" />
+                                                <span>⌨️ NÚT BÀN PHÍM KEYBOARD</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] font-mono text-zinc-400">
+                                        MÃ KHÓA CSDL
                                     </span>
                                 </div>
-                                <span className="text-[10px] font-mono text-zinc-400">
-                                    MÃ KHÓA CSDL
-                                </span>
+
+                                {/* Inputs Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {/* VI */}
+                                    {(activeLangTab === 'all' || activeLangTab === 'vi') && (
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
+                                                <span>🇻🇳 TIẾNG VIỆT</span>
+                                            </label>
+                                            <textarea
+                                                rows={category === 'messages' ? 3 : 1}
+                                                value={item.vi || ''}
+                                                onChange={(e) => handleFieldChange(item.msg_key, 'vi', e.target.value)}
+                                                className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
+                                                placeholder="Nội dung Tiếng Việt..."
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* EN */}
+                                    {(activeLangTab === 'all' || activeLangTab === 'en') && (
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
+                                                <span>🇺🇸 ENGLISH</span>
+                                            </label>
+                                            <textarea
+                                                rows={category === 'messages' ? 3 : 1}
+                                                value={item.en || ''}
+                                                onChange={(e) => handleFieldChange(item.msg_key, 'en', e.target.value)}
+                                                className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
+                                                placeholder="English translation..."
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* ZH */}
+                                    {(activeLangTab === 'all' || activeLangTab === 'zh') && (
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
+                                                <span>🇨🇳 中文 (CHINESE)</span>
+                                            </label>
+                                            <textarea
+                                                rows={category === 'messages' ? 3 : 1}
+                                                value={item.zh || ''}
+                                                onChange={(e) => handleFieldChange(item.msg_key, 'zh', e.target.value)}
+                                                className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
+                                                placeholder="中文翻译..."
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-
-                            {/* Inputs Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {/* VI */}
-                                {(activeLangTab === 'all' || activeLangTab === 'vi') && (
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
-                                            <span>🇻🇳 TIẾNG VIỆT</span>
-                                        </label>
-                                        <textarea
-                                            rows={3}
-                                            value={item.vi || ''}
-                                            onChange={(e) => handleFieldChange(item.msg_key, 'vi', e.target.value)}
-                                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
-                                            placeholder="Nội dung Tiếng Việt..."
-                                        />
-                                    </div>
-                                )}
-
-                                {/* EN */}
-                                {(activeLangTab === 'all' || activeLangTab === 'en') && (
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
-                                            <span>🇺🇸 ENGLISH</span>
-                                        </label>
-                                        <textarea
-                                            rows={3}
-                                            value={item.en || ''}
-                                            onChange={(e) => handleFieldChange(item.msg_key, 'en', e.target.value)}
-                                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
-                                            placeholder="English translation..."
-                                        />
-                                    </div>
-                                )}
-
-                                {/* ZH */}
-                                {(activeLangTab === 'all' || activeLangTab === 'zh') && (
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
-                                            <span>🇨🇳 中文 (CHINESE)</span>
-                                        </label>
-                                        <textarea
-                                            rows={3}
-                                            value={item.zh || ''}
-                                            onChange={(e) => handleFieldChange(item.msg_key, 'zh', e.target.value)}
-                                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 focus:bg-white transition"
-                                            placeholder="中文翻译..."
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

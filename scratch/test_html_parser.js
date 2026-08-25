@@ -1,45 +1,13 @@
-export function markdownToTelegramHtml(text) {
-    if (!text || typeof text !== 'string') return text;
+import { markdownToTelegramHtml, stripHtmlTags } from '../includes/helpers/telegramFormatHelper.js';
 
-    let html = text;
+console.log('--- TEST 1: Telegram Desktop copy format ---');
+console.log(markdownToTelegramHtml('![🛒](tg://emoji?id=5854776233950187351) **MUA HÀNG**'));
 
-    // Placeholders for valid HTML tags that Telegram supports
-    const htmlPlaceholders = [];
-    
-    // Match <tg-emoji ...>...</tg-emoji> and valid Telegram HTML tags
-    const tagRegex = /<(tg-emoji|b|i|u|s|code|pre|a)(\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
-    
-    html = html.replace(tagRegex, (match) => {
-        const idx = htmlPlaceholders.length;
-        htmlPlaceholders.push(match);
-        return `@@TG_TAG_HOLDER_${idx}@@`;
-    });
+console.log('--- TEST 2: Shorthand {id:...} format ---');
+console.log(markdownToTelegramHtml('{id:5854776233950187351} **MUA HÀNG**'));
 
-    // Escape raw special HTML chars
-    html = html
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+console.log('--- TEST 3: Standard <tg-emoji> format ---');
+console.log(markdownToTelegramHtml('<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> **MUA HÀNG**'));
 
-    // Convert Markdown syntax to HTML
-    // Bold: **text**
-    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-    // Bold: __text__
-    html = html.replace(/__(.*?)__/g, '<b>$1</b>');
-    // Inline code: `text`
-    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-    // Markdown link: [text](url)
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    // Restore protected HTML tags
-    htmlPlaceholders.forEach((tag, idx) => {
-        html = html.replace(`@@TG_TAG_HOLDER_${idx}@@`, tag);
-    });
-
-    return html;
-}
-
-// Test cases
-console.log('Test 1:', markdownToTelegramHtml('🎉 **Chào mừng!** <tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji>'));
-console.log('Test 2:', markdownToTelegramHtml('👤 **ID**: `12345` & Số dư: < 100$'));
-console.log('Test 3:', markdownToTelegramHtml('🔗 [Tham gia nhóm](https://t.me/group)'));
+console.log('--- TEST 4: Strip HTML for Reply Keyboard Button ---');
+console.log(stripHtmlTags('<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua tài khoản'));

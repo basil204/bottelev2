@@ -88,7 +88,7 @@ export const messages = {
 
         // Fixed Messages & Titles
         msg_account_banned: '🚫 **TÀI KHOẢN CỦA BẠN ĐÃ BỊ KHÓA!**\n\n⚠️ Bạn đã bị Admin khóa quyền truy cập hệ thống. Vui lòng liên hệ Admin để biết thêm chi tiết.',
-        purchase_menu_title: '🛒 **MUA HÀNG**\n\nChọn loại sản phẩm hoặc xem lại lịch sử:',
+        purchase_menu_title: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> **MUA HÀNG**\n\nChọn loại sản phẩm hoặc xem lại lịch sử:',
         utility_menu_title: '🧰 **TIỆN ÍCH**\n\nChọn tiện ích cần sử dụng:',
         msg_support_guide: '🛟 **HỖ TRỢ / BẢO HÀNH**\n\nVui lòng nhập chi tiết nội dung cần hỗ trợ hoặc thông tin đơn hàng gặp lỗi (kèm mã đơn hàng nếu có).\n\n*Gõ ❌ Hủy nếu muốn hủy bỏ.*',
         msg_support_success: '✅ **Gửi yêu cầu hỗ trợ thành công!**\n\nQuản trị viên đã nhận được tin nhắn và sẽ hỗ trợ/bảo hành cho bạn sớm nhất có thể.'

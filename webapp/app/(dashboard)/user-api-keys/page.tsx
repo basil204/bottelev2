@@ -11,6 +11,7 @@ interface ApiKeyItem {
     user_id: number;
     api_key: string;
     name: string;
+    permissions?: string;
     is_active: number | boolean;
     username?: string;
     user_name?: string;
@@ -40,6 +41,7 @@ export default function UserApiKeysPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
     const [keyName, setKeyName] = useState('Gmail EDU API Key');
+    const [selectedPermissions, setSelectedPermissions] = useState<string[]>(['all']);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [creating, setCreating] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -127,7 +129,8 @@ export default function UserApiKeysPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: Number(selectedUserId),
-                    name: keyName
+                    name: keyName,
+                    permissions: selectedPermissions
                 })
             });
 
@@ -136,6 +139,7 @@ export default function UserApiKeysPage() {
                 setCreatedKeyResult(data.api_key);
                 setIsCreateModalOpen(false);
                 setSelectedUserId('');
+                setSelectedPermissions(['all']);
                 fetchApiKeys();
             } else {
                 alert(data.error || 'Tạo API Key thất bại');
@@ -292,8 +296,19 @@ export default function UserApiKeysPage() {
                                                 ID: {item.user_id} | TG: {item.telegram_id || '-'}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3.5 font-semibold text-zinc-700">
-                                            {item.name}
+                                        <td className="px-4 py-3.5">
+                                            <div className="font-semibold text-zinc-900">{item.name}</div>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {(!item.permissions || item.permissions === 'all') ? (
+                                                    <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-purple-200">✨ Tất cả quyền</span>
+                                                ) : (
+                                                    item.permissions.split(',').map((p, idx) => (
+                                                        <span key={idx} className="bg-orange-100 text-orange-800 text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-orange-200">
+                                                            {p.trim()}
+                                                        </span>
+                                                    ))
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3.5">
                                             <div className="flex items-center gap-2">
@@ -337,16 +352,12 @@ export default function UserApiKeysPage() {
 
             {/* Modal: TẠO API KEY CHO USER */}
             {isCreateModalOpen && mounted && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200">
-                        <div className="h-1.5 w-full bg-orange-600" />
-
-                        <div className="flex items-center justify-between p-4 border-b border-zinc-100">
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200">
+                        <div className="flex items-center justify-between p-5 bg-zinc-50 border-b border-zinc-100">
                             <div className="flex items-center gap-2">
-                                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-600 font-bold border border-orange-200">
-                                    <Key className="h-4 w-4" />
-                                </div>
-                                <h2 className="font-extrabold text-sm uppercase text-zinc-900 tracking-wide">
+                                <Key className="h-5 w-5 text-orange-600" />
+                                <h2 className="text-sm font-black uppercase tracking-tight text-zinc-900">
                                     TẠO USER API KEY MỚI
                                 </h2>
                             </div>
@@ -392,6 +403,40 @@ export default function UserApiKeysPage() {
                                     placeholder="VD: Gmail EDU Client Key"
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                                    PHÂN QUYỀN API KEY (SCOPES)
+                                </label>
+                                <div className="space-y-2 rounded-xl border border-zinc-200 p-3 bg-zinc-50/50 text-xs">
+                                    {[
+                                        { id: 'all', label: '✨ Tất cả các quyền (Full Access)' },
+                                        { id: 'order_edu', label: '📧 Đặt & Tạo Gmail EDU (POST /api/v1/order-edu)' },
+                                        { id: 'buy_products', label: '🛒 Mua Sản Phẩm Kho (POST /api/v1/buy)' },
+                                        { id: 'check_gmail', label: '🔎 Check Live/Die Gmail (POST /api/v1/check-gmail)' },
+                                        { id: 'wallet_info', label: '💰 Xem Số Dư & Ví (GET /api/v1/user/info)' }
+                                    ].map((perm) => (
+                                        <label key={perm.id} className="flex items-center gap-2 cursor-pointer text-zinc-800 font-semibold select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPermissions.includes(perm.id)}
+                                                onChange={(e) => {
+                                                    if (perm.id === 'all') {
+                                                        setSelectedPermissions(e.target.checked ? ['all'] : []);
+                                                    } else {
+                                                        const next = e.target.checked
+                                                            ? [...selectedPermissions.filter(p => p !== 'all'), perm.id]
+                                                            : selectedPermissions.filter(p => p !== perm.id);
+                                                        setSelectedPermissions(next.length ? next : ['all']);
+                                                    }
+                                                }}
+                                                className="rounded text-orange-600 focus:ring-orange-500 h-4 w-4"
+                                            />
+                                            <span>{perm.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 

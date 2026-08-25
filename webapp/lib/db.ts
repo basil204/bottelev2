@@ -88,15 +88,16 @@ async function initAccountStorageTables() {
 
     for (const migration of [
       "ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL",
-      "ALTER TABLE users ADD COLUMN admin_note TEXT NULL"
+      "ALTER TABLE users ADD COLUMN admin_note TEXT NULL",
+      "ALTER TABLE user_api_keys ADD COLUMN permissions VARCHAR(255) DEFAULT 'all'"
     ]) {
       try {
         await pool.query(migration);
-        console.log('[DB] Added user administration metadata column');
+        console.log('[DB] Applied table column migration:', migration);
       } catch (e: unknown) {
         const dbError = e as { code?: string };
         if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
-          console.error('[DB] Error updating user administration metadata:', e);
+          console.error('[DB] Error running migration:', migration, e);
         }
       }
     }

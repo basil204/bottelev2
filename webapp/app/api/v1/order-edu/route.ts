@@ -64,7 +64,7 @@ export async function POST(request: Request) {
         // Validate API Key
         const cleanApiKey = String(apiKey).trim();
         const [keyRows] = await pool.query<RowDataPacket[]>(`
-            SELECT k.id as key_id, k.is_active, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
+            SELECT k.id as key_id, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
             FROM user_api_keys k
             INNER JOIN users u ON (k.user_id = u.id OR k.user_id = u.telegram_id)
             WHERE LOWER(TRIM(k.api_key)) = LOWER(TRIM(?)) LIMIT 1
@@ -85,6 +85,18 @@ export async function POST(request: Request) {
             }, { status: 403 });
         }
 
+        // Check Permissions (Scope)
+        const userPerms = keyInfo.permissions || 'all';
+        if (userPerms !== 'all') {
+            const scopes = userPerms.split(',').map((s: string) => s.trim().toLowerCase());
+            if (!scopes.includes('all') && !scopes.includes('order_edu')) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'API Key của bạn không có quyền tạo/đặt Gmail EDU (Thiếu quyền: order_edu).'
+                }, { status: 403 });
+            }
+        }
+
         // Get Gmail EDU settings
         const [settingsRows] = await pool.query<RowDataPacket[]>(
             "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled')"
@@ -102,10 +114,12 @@ export async function POST(request: Request) {
         }
 
         const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
-        const defaultDomain = settingsMap.gmail_edu_domain || 'suafpoly.app';
+        const defaultDomain = (body.domain && String(body.domain).trim()) 
+            ? String(body.domain).trim() 
+            : (settingsMap.gmail_edu_domain || 'nttp.edu.pl');
 
-        const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 10);
-        const domain = (body.domain && String(body.domain).trim()) ? String(body.domain).trim() : defaultDomain;
+        const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 50);
+        const domain = defaultDomain;
         const type = body.type === 'non' ? 'non' : 'edu';
         const customPassword = body.password ? String(body.password).trim() : null;
 
@@ -119,7 +133,7 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
-        // Process creation
+        // Process creation (Default: Auto delete 1h after creation)
         const createdAccounts: any[] = [];
         for (let i = 0; i < quantity; i++) {
             const username = generateUsername(body.prefix || body.username);
@@ -128,15 +142,16 @@ export async function POST(request: Request) {
 
             // Insert into gmail_accounts DB table
             await pool.query(`
-                INSERT INTO gmail_accounts (email, password, type, domain, status, created_at)
-                VALUES (?, ?, ?, ?, 'available', NOW())
+                INSERT INTO gmail_accounts (email, password, type, domain, status, delete_at, created_at)
+                VALUES (?, ?, ?, ?, 'available', DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())
             `, [email, password, type, domain]);
 
             createdAccounts.push({
                 email,
                 password,
                 type,
-                domain
+                domain,
+                auto_delete: '1h_after_login'
             });
         }
 

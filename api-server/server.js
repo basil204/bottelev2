@@ -187,16 +187,13 @@ async function getUserProductPrice(connection, userId, productId, defaultPrice, 
   return Number(defaultPrice);
 }
 
-// 4. AUTHENTICATION MIDDLEWARE WITH STRICT API KEY VALIDATION
+// Middleware xác thực User API Key
 const authenticateApiKey = async (req, res, next) => {
   try {
-    let apiKey = req.headers['x-api-key'] || req.query.api_key;
+    let apiKey = req.headers['x-api-key'] || req.query.api_key || req.body?.api_key;
     const authHeader = req.headers['authorization'];
     if (!apiKey && authHeader && authHeader.startsWith('Bearer ')) {
       apiKey = authHeader.replace('Bearer ', '').trim();
-    }
-    if (!apiKey && req.body && req.body.api_key) {
-      apiKey = req.body.api_key;
     }
 
     if (!apiKey || typeof apiKey !== 'string') {
@@ -209,7 +206,7 @@ const authenticateApiKey = async (req, res, next) => {
     const cleanKey = String(apiKey).trim();
 
     const keyRows = await query(
-      `SELECT k.id as key_id, k.name as key_name, k.is_active, u.id as user_id, u.telegram_id, u.username, u.name, u.balance, u.is_banned
+      `SELECT k.id as key_id, k.name as key_name, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance, u.is_banned
        FROM user_api_keys k
        INNER JOIN users u ON (k.user_id = u.id OR k.user_id = u.telegram_id)
        WHERE LOWER(TRIM(k.api_key)) = LOWER(TRIM(?)) LIMIT 1`,
@@ -248,6 +245,22 @@ const authenticateApiKey = async (req, res, next) => {
     console.error('[AUTH_MIDDLEWARE_ERR]', err);
     res.status(500).json({ success: false, error: 'Lỗi máy chủ khi xác thực API Key' });
   }
+};
+
+// Middleware kiểm tra quyền truy cập (Scope Permissions)
+const requireScope = (requiredScope) => (req, res, next) => {
+  const userPerms = req.user?.permissions || 'all';
+  if (userPerms === 'all') return next();
+  
+  const scopes = userPerms.split(',').map(s => s.trim().toLowerCase());
+  if (scopes.includes('all') || scopes.includes(requiredScope.toLowerCase())) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    error: `API Key của bạn không có quyền thực hiện thao tác này. (Cần quyền: ${requiredScope})`
+  });
 };
 
 // ============================================================================
@@ -605,7 +618,7 @@ function generateUsername(prefix) {
 }
 
 // G. API Order Gmail EDU Endpoint
-app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) => {
+app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('order_edu'), async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -660,11 +673,13 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) =
       }
     }
 
-    const defaultDomain = settingsMap.gmail_edu_domain || 'suafpoly.app';
+    const defaultDomain = req.body.domain && String(req.body.domain).trim() 
+      ? String(req.body.domain).trim() 
+      : (settingsMap.gmail_edu_domain || 'nttp.edu.pl');
 
     const rawQuantity = req.body.quantity;
     const quantity = Math.min(Math.max(1, parseInt(rawQuantity, 10) || 1), 50);
-    const domain = (req.body.domain && String(req.body.domain).trim()) ? String(req.body.domain).trim() : defaultDomain;
+    const domain = defaultDomain;
     const type = req.body.type === 'non' ? 'non' : 'edu';
     const customPassword = req.body.password ? String(req.body.password).trim() : null;
 
@@ -679,7 +694,7 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) =
       });
     }
 
-    // 3. Create Accounts
+    // 3. Create Accounts (Default: Auto delete 1h after creation)
     const createdAccounts = [];
     for (let i = 0; i < quantity; i++) {
       const username = generateUsername(req.body.prefix || req.body.username);
@@ -687,11 +702,11 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, async (req, res) =
       const password = customPassword || generatePassword();
 
       await connection.query(`
-        INSERT INTO gmail_accounts (email, password, type, domain, status, created_at)
-        VALUES (?, ?, ?, ?, 'available', NOW())
+        INSERT INTO gmail_accounts (email, password, type, domain, status, delete_at, created_at)
+        VALUES (?, ?, ?, ?, 'available', DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())
       `, [email, password, type, domain]);
 
-      createdAccounts.push({ email, password, type, domain });
+      createdAccounts.push({ email, password, type, domain, auto_delete: '1h_after_login' });
     }
 
     // 4. Deduct User Balance

@@ -31,6 +31,7 @@ async function ensureApiKeysTable() {
 
         await safeAddColumn('name', "VARCHAR(100) DEFAULT 'Gmail EDU API Key'");
         await safeAddColumn('is_active', 'TINYINT(1) DEFAULT 1');
+        await safeAddColumn('permissions', "VARCHAR(255) DEFAULT 'all'");
 
         // Safe add users.name column if missing
         try {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
     try {
         await ensureApiKeysTable();
         const body = await request.json();
-        const { userId, name } = body;
+        const { userId, name, permissions } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
         const adminName = await getAdminFromCookie(request);
 
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
         const realUser = users[0];
         const apiKey = `sk_edu_${crypto.randomBytes(16).toString('hex')}`;
         const keyName = name && name.trim() ? name.trim() : 'Gmail EDU API Key';
+        const permsStr = Array.isArray(permissions) ? permissions.join(',') : (permissions && String(permissions).trim() ? String(permissions).trim() : 'all');
 
         // Check if user already has an API Key
         const [existing] = await pool.query<RowDataPacket[]>(
@@ -114,14 +116,14 @@ export async function POST(request: Request) {
         if (existing.length) {
             insertId = existing[0].id;
             await pool.query(
-                'UPDATE user_api_keys SET api_key = ?, name = ?, is_active = 1, created_at = NOW() WHERE id = ?',
-                [apiKey, keyName, insertId]
+                'UPDATE user_api_keys SET api_key = ?, name = ?, permissions = ?, is_active = 1, created_at = NOW() WHERE id = ?',
+                [apiKey, keyName, permsStr, insertId]
             );
         } else {
             const [res] = await pool.query<ResultSetHeader>(`
-                INSERT INTO user_api_keys (user_id, api_key, name, is_active)
-                VALUES (?, ?, ?, 1)
-            `, [realUser.id, apiKey, keyName]);
+                INSERT INTO user_api_keys (user_id, api_key, name, permissions, is_active)
+                VALUES (?, ?, ?, ?, 1)
+            `, [realUser.id, apiKey, keyName, permsStr]);
             insertId = res.insertId;
         }
 
@@ -131,7 +133,7 @@ export async function POST(request: Request) {
                 action: 'CREATE',
                 targetType: 'SETTING',
                 targetId: insertId,
-                details: { userId: realUser.id, apiKey, keyName },
+                details: { userId: realUser.id, apiKey, keyName, permissions: permsStr },
                 ipAddress,
                 userAgent,
                 request
@@ -143,6 +145,7 @@ export async function POST(request: Request) {
             id: insertId,
             api_key: apiKey,
             name: keyName,
+            permissions: permsStr,
             message: 'Đã tạo/đổi API Key mới thành công'
         });
     } catch (error: any) {
@@ -151,18 +154,26 @@ export async function POST(request: Request) {
     }
 }
 
-// PATCH - Bật/Tắt trạng thái API Key
+// PATCH - Bật/Tắt trạng thái hoặc cập nhật Quyền API Key
 export async function PATCH(request: Request) {
     try {
         await ensureApiKeysTable();
         const body = await request.json();
-        const { id, is_active } = body;
+        const { id, is_active, permissions } = body;
         const adminName = await getAdminFromCookie(request);
 
         if (!id) return NextResponse.json({ error: 'Missing API Key ID' }, { status: 400 });
 
-        const nextActive = is_active ? 1 : 0;
-        await pool.query('UPDATE user_api_keys SET is_active = ? WHERE id = ?', [nextActive, id]);
+        if (permissions !== undefined) {
+            const permsStr = Array.isArray(permissions) ? permissions.join(',') : String(permissions || 'all');
+            await pool.query('UPDATE user_api_keys SET permissions = ? WHERE id = ?', [permsStr, id]);
+        }
+
+        let nextActive = 1;
+        if (is_active !== undefined) {
+            nextActive = is_active ? 1 : 0;
+            await pool.query('UPDATE user_api_keys SET is_active = ? WHERE id = ?', [nextActive, id]);
+        }
 
         try {
             await logAdminAction({
@@ -170,7 +181,7 @@ export async function PATCH(request: Request) {
                 action: 'UPDATE',
                 targetType: 'SETTING',
                 targetId: id,
-                details: { is_active: nextActive },
+                details: { is_active: nextActive, permissions },
                 request
             });
         } catch (e) {}

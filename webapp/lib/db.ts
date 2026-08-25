@@ -48,27 +48,35 @@ async function initAccountStorageTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
-    // Editable sold counter: displayed sold = real sold inventory + adjustment.
-    try {
-      await pool.query('ALTER TABLE products ADD COLUMN sold_adjustment INT NOT NULL DEFAULT 0');
-      console.log('[DB] Added sold_adjustment to products');
-    } catch (e: unknown) {
-      const dbError = e as { code?: string };
-      if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
-        console.error('[DB] Error adding products.sold_adjustment:', e);
-      }
-    }
+    // Ensure all products columns exist in database schema
+    const productColumns = [
+      { name: 'sold_adjustment', type: 'INT NOT NULL DEFAULT 0' },
+      { name: 'low_stock_threshold', type: 'INT NOT NULL DEFAULT 5' },
+      { name: 'delivery_type', type: 'VARCHAR(50) NULL' },
+      { name: 'prompt_message', type: 'TEXT NULL' },
+      { name: 'item_structure', type: 'VARCHAR(255) NULL' },
+      { name: 'account_prefix', type: 'VARCHAR(100) NULL' },
+      { name: 'file_delivery_mode', type: 'VARCHAR(50) NULL' },
+      { name: 'telegram_file_id', type: 'VARCHAR(255) NULL' },
+      { name: 'telegram_file_unique_id', type: 'VARCHAR(255) NULL' },
+      { name: 'access_duration_enabled', type: 'TINYINT(1) DEFAULT 0' },
+      { name: 'access_duration_days', type: 'INT DEFAULT 30' },
+      { name: 'preorder_enabled', type: 'TINYINT(1) DEFAULT 0' },
+      { name: 'preorder_fee_vnd', type: 'DECIMAL(15,2) DEFAULT 0' },
+      { name: 'preorder_fee_usdt', type: 'DECIMAL(15,2) DEFAULT 0' },
+      { name: 'preorder_max_per_user', type: 'INT DEFAULT 5' },
+      { name: 'preorder_total_limit', type: 'INT DEFAULT 100' },
+      { name: 'image_url', type: 'TEXT NULL' }
+    ];
 
-    // Inventory alerts: configurable threshold per product. This migration is
-    // safe to run on every web startup; MySQL reports a duplicate-field error
-    // when the database is already up to date.
-    try {
-      await pool.query('ALTER TABLE products ADD COLUMN low_stock_threshold INT NOT NULL DEFAULT 5 AFTER stock');
-      console.log('[DB] Added low_stock_threshold to products');
-    } catch (e: unknown) {
-      const dbError = e as { code?: string };
-      if (dbError.code !== 'ER_DUP_FIELDNAME' && dbError.code !== 'ER_NO_SUCH_TABLE') {
-        console.error('[DB] Error adding products.low_stock_threshold:', e);
+    for (const col of productColumns) {
+      try {
+        await pool.query(`ALTER TABLE products ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`[DB] Added ${col.name} column to products table`);
+      } catch (e: any) {
+        if (e.code !== 'ER_DUP_FIELDNAME' && e.code !== 'ER_NO_SUCH_TABLE') {
+          console.error(`[DB] Error adding ${col.name} to products:`, e.message);
+        }
       }
     }
 

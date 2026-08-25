@@ -182,6 +182,14 @@ export async function PUT(request: Request) {
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
+        if (!id) {
+            return NextResponse.json({ error: 'Thiếu ID sản phẩm (id is required)' }, { status: 400 });
+        }
+
+        if (!name || name.trim().length === 0) {
+            return NextResponse.json({ error: 'Tên sản phẩm không được để trống' }, { status: 400 });
+        }
+
         let finalCategoryId = category_id;
         if (!finalCategoryId) {
             const [defaultCats] = await pool.query<RowDataPacket[]>('SELECT id FROM categories WHERE name = "Khác"');
@@ -189,6 +197,11 @@ export async function PUT(request: Request) {
                 finalCategoryId = defaultCats[0].id;
             }
         }
+
+        const numPrice = Number(price) || 0;
+        const numPriority = Number(priority) || 0;
+        const numCheckLive = Number(check_live) || 0;
+        const numLowStockThreshold = Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5)));
 
         await pool.query(
             `UPDATE products SET 
@@ -199,7 +212,7 @@ export async function PUT(request: Request) {
                 image_url = ?
             WHERE id = ?`,
             [
-                name, price, description, type, code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
+                name.trim(), numPrice, description || null, type || 'stock', code || null, numPriority, numCheckLive, finalCategoryId || null, numLowStockThreshold,
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
@@ -214,16 +227,16 @@ export async function PUT(request: Request) {
             action: 'UPDATE',
             targetType: 'PRODUCT',
             targetId: id,
-            details: { name, price, type, category_id: finalCategoryId, delivery_type },
+            details: { name, price: numPrice, type: type || 'stock', category_id: finalCategoryId },
             ipAddress,
             userAgent,
             request
         });
 
-        return NextResponse.json({ message: 'Product updated' });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ success: true, message: 'Cập nhật sản phẩm thành công' });
+    } catch (error: any) {
+        console.error('[PRODUCTS_PUT_ERR]', error);
+        return NextResponse.json({ error: error?.message || 'Lỗi khi cập nhật sản phẩm' }, { status: 500 });
     }
 }
 

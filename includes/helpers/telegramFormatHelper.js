@@ -13,6 +13,9 @@ export function markdownToTelegramHtml(text) {
         return `<tg-emoji emoji-id="${emojiId}">${char}</tg-emoji>`;
     });
 
+    // Tự động chuyển đổi link thô tg://emoji?id=5420323339723881652
+    html = html.replace(/tg:\/\/emoji\?id=(\d+)/gi, '<tg-emoji emoji-id="$1">⚠️</tg-emoji>');
+
     // Tự động xử lý cú pháp rút gọn cho Emoji động: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652}
     html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⚠️</tg-emoji>');
 
@@ -56,6 +59,8 @@ export function cleanButtonText(text) {
     let result = text;
     // Chuyển đổi cú pháp Telegram Markdown Emoji ![⚠️](tg://emoji?id=...) cho Nút bấm Telegram
     result = result.replace(/!?\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '$1 ');
+    // Chuyển đổi link thô tg://emoji?id=... thành icon ⚠️ cho Nút bấm Telegram
+    result = result.replace(/tg:\/\/emoji\?id=(\d+)/gi, '⚠️ ');
     // Chuyển đổi cú pháp {emoji_id:...} thành icon ⚠️ cho Nút bấm Telegram
     result = result.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '⚠️ ');
     // Lấy ký tự emoji dự phòng từ thẻ <tg-emoji>

@@ -6,7 +6,7 @@ export function stripHtmlTags(str) {
     if (!str || typeof str !== 'string') return str;
     return str.replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1')
               .replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=\d+\)/gi, '$1')
-              .replace(/\{(?:emoji_id|emoji|id|tg_emoji):\d+\}/gi, '')
+              .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '')
               .replace(/<[^>]*>/g, '')
               .trim();
 }
@@ -50,9 +50,9 @@ export function formatReplyMarkup(replyMarkup) {
                         if (tgMatch) customEmojiId = tgMatch[1];
                     }
 
-                    // Match {id:ID} hoặc {emoji_id:ID}
+                    // Match {5312361253610475399} hoặc {id:5312361253610475399} hoặc {emoji:5312361253610475399}
                     if (!customEmojiId) {
-                        const codeMatch = btn.text.match(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/i);
+                        const codeMatch = btn.text.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
                         if (codeMatch) customEmojiId = codeMatch[1];
                     }
 
@@ -79,8 +79,8 @@ export function markdownToTelegramHtml(text) {
     // 1. Xử lý định dạng copy từ Telegram Desktop: ![🛒](tg://emoji?id=5854776233950187351)
     html = html.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
 
-    // 2. Xử lý cú pháp rút gọn: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652}
-    html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+    // 2. Xử lý cú pháp rút gọn linh hoạt: {5312361253610475399} hoặc {id:5312361253610475399} hoặc {emoji:5312361253610475399}
+    html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
     // 3. Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
     const htmlPlaceholders = [];

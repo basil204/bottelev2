@@ -15,56 +15,53 @@ export function formatReplyMarkup(replyMarkup) {
     if (!replyMarkup) return replyMarkup;
     let newMarkup = { ...replyMarkup };
 
-    // 1. Clean Reply Keyboards (Bàn phím menu dưới khung chat)
+    const processBtn = (btn) => {
+        if (!btn) return btn;
+        let textVal = typeof btn === 'string' ? btn : btn.text;
+        if (typeof textVal !== 'string') return btn;
+
+        let customEmojiId = typeof btn === 'object' && btn.icon_custom_emoji_id ? btn.icon_custom_emoji_id : null;
+
+        // Tự động bóc tách ID Emoji Động nếu có trong chuỗi chữ
+        if (!customEmojiId) {
+            const tagMatch = textVal.match(/<tg-emoji\s+emoji-id="(\d+)"/i);
+            if (tagMatch) customEmojiId = tagMatch[1];
+        }
+        if (!customEmojiId) {
+            const tgMatch = textVal.match(/tg:\/\/emoji\?id=(\d+)/i);
+            if (tgMatch) customEmojiId = tgMatch[1];
+        }
+        if (!customEmojiId) {
+            const codeMatch = textVal.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
+            if (codeMatch) customEmojiId = codeMatch[1];
+        }
+
+        const cleanText = stripHtmlTags(textVal);
+
+        if (typeof btn === 'string') {
+            const obj = { text: cleanText };
+            if (customEmojiId) obj.icon_custom_emoji_id = customEmojiId;
+            return obj;
+        } else {
+            const obj = { ...btn, text: cleanText };
+            if (customEmojiId) obj.icon_custom_emoji_id = customEmojiId;
+            return obj;
+        }
+    };
+
+    // 1. Xử lý Reply Keyboards (Nút bấm bàn phím dưới khung chat - KeyboardButton)
     if (newMarkup.keyboard && Array.isArray(newMarkup.keyboard)) {
         newMarkup.keyboard = newMarkup.keyboard.map(row => {
             if (!Array.isArray(row)) return row;
-            return row.map(btn => {
-                if (typeof btn === 'string') {
-                    return { text: stripHtmlTags(btn) };
-                } else if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
-                    return { ...btn, text: stripHtmlTags(btn.text) };
-                }
-                return btn;
-            });
+            return row.map(processBtn);
         });
     }
 
-    // 2. Clean & Tự động trích xuất icon_custom_emoji_id cho Inline Keyboards (Nút bấm tin nhắn)
+    // 2. Xử lý Inline Keyboards (Nút bấm dính kèm tin nhắn - InlineKeyboardButton)
     if (newMarkup.inline_keyboard && Array.isArray(newMarkup.inline_keyboard)) {
         newMarkup.inline_keyboard = newMarkup.inline_keyboard.map(row => {
             if (!Array.isArray(row)) return row;
-            return row.map(btn => {
-                if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
-                    let customEmojiId = btn.icon_custom_emoji_id || null;
-
-                    // Match <tg-emoji emoji-id="ID">
-                    if (!customEmojiId) {
-                        const tagMatch = btn.text.match(/<tg-emoji\s+emoji-id="(\d+)"/i);
-                        if (tagMatch) customEmojiId = tagMatch[1];
-                    }
-
-                    // Match tg://emoji?id=ID
-                    if (!customEmojiId) {
-                        const tgMatch = btn.text.match(/tg:\/\/emoji\?id=(\d+)/i);
-                        if (tgMatch) customEmojiId = tgMatch[1];
-                    }
-
-                    // Match {5312361253610475399} hoặc {id:5312361253610475399} hoặc {emoji:5312361253610475399}
-                    if (!customEmojiId) {
-                        const codeMatch = btn.text.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
-                        if (codeMatch) customEmojiId = codeMatch[1];
-                    }
-
-                    const cleanText = stripHtmlTags(btn.text);
-                    const newBtn = { ...btn, text: cleanText };
-                    if (customEmojiId) {
-                        newBtn.icon_custom_emoji_id = customEmojiId;
-                    }
-                    return newBtn;
-                }
-                return btn;
-            });
+            return row.map(processBtn);
         });
     }
 
@@ -79,7 +76,7 @@ export function markdownToTelegramHtml(text) {
     // 1. Xử lý định dạng copy từ Telegram Desktop: ![🛒](tg://emoji?id=5854776233950187351)
     html = html.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
 
-    // 2. Xử lý cú pháp rút gọn linh hoạt: {5312361253610475399} hoặc {id:5312361253610475399} hoặc {emoji:5312361253610475399}
+    // 2. Xử lý cú pháp rút gọn linh hoạt: {5312361253610475399} hoặc {id:5312361253610475399}
     html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
     // 3. Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>

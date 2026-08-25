@@ -39,7 +39,7 @@ export const adminMenu = async (bot, chatId) => {
   }
 
   const inline_keyboard = [
-    [{ text: '🌐 Mở Dashboard Admin', web_app: { url: webDomain } }]
+    [{ text: '🌐 Mở Dashboard Admin', url: webDomain }]
   ];
 
   await bot.sendMessage(

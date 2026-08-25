@@ -2,15 +2,45 @@
  * Helper hỗ trợ định dạng tin nhắn Telegram HTML & Animated Custom Emoji (<tg-emoji emoji-id="...">)
  */
 
+export function stripHtmlTags(str) {
+    if (!str || typeof str !== 'string') return str;
+    return str.replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1')
+              .replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=\d+\)/gi, '$1')
+              .replace(/\{(?:emoji_id|emoji|id|tg_emoji):\d+\}/gi, '')
+              .replace(/<[^>]*>/g, '')
+              .trim();
+}
+
+export function cleanReplyKeyboard(replyMarkup) {
+    if (!replyMarkup || !replyMarkup.keyboard || !Array.isArray(replyMarkup.keyboard)) {
+        return replyMarkup;
+    }
+    const cleanKeyboard = replyMarkup.keyboard.map(row => {
+        if (!Array.isArray(row)) return row;
+        return row.map(btn => {
+            if (typeof btn === 'string') {
+                return { text: stripHtmlTags(btn) };
+            } else if (btn && typeof btn === 'object' && typeof btn.text === 'string') {
+                return { ...btn, text: stripHtmlTags(btn.text) };
+            }
+            return btn;
+        });
+    });
+    return { ...replyMarkup, keyboard: cleanKeyboard };
+}
+
 export function markdownToTelegramHtml(text) {
     if (!text || typeof text !== 'string') return text;
 
     let html = text;
 
-    // Tự động xử lý cú pháp rút gọn cho Emoji động: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652} hoặc {emoji:5420323339723881652}
+    // 1. Xử lý định dạng copy từ Telegram Desktop: ![🛒](tg://emoji?id=5854776233950187351)
+    html = html.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
+
+    // 2. Xử lý cú pháp rút gọn: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652}
     html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
-    // Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
+    // 3. Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
     const htmlPlaceholders = [];
     const tagRegex = /<(tg-emoji|b|i|u|s|code|pre|a)(\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
     
@@ -34,7 +64,7 @@ export function markdownToTelegramHtml(text) {
     // Inline Code: `text`
     html = html.replace(/`(.*?)`/g, '<code>$1</code>');
     
-    // Link: [label](url)
+    // Link: [label](url) (trừ tg://emoji)
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
     // Khôi phục các thẻ HTML và <tg-emoji>
@@ -54,23 +84,30 @@ export function installTelegramFormatHelper(bot) {
 
     const originalSendMessage = bot.sendMessage.bind(bot);
     bot.sendMessage = function (chatId, text, options = {}) {
+        let newOptions = { ...options };
+        if (newOptions.reply_markup) {
+            newOptions.reply_markup = cleanReplyKeyboard(newOptions.reply_markup);
+        }
+
         if (typeof text === 'string') {
             const formattedText = markdownToTelegramHtml(text);
-            const newOptions = { parse_mode: 'HTML', ...options };
+            newOptions.parse_mode = 'HTML';
             return originalSendMessage(chatId, formattedText, newOptions);
         }
-        return originalSendMessage(chatId, text, options);
+        return originalSendMessage(chatId, text, newOptions);
     };
 
     const originalSendPhoto = bot.sendPhoto.bind(bot);
     bot.sendPhoto = function (chatId, photo, options = {}, fileOptions = {}) {
-        if (options && typeof options.caption === 'string') {
-            options = {
-                ...options,
-                caption: markdownToTelegramHtml(options.caption),
-                parse_mode: 'HTML'
-            };
+        let newOptions = { ...options };
+        if (newOptions.reply_markup) {
+            newOptions.reply_markup = cleanReplyKeyboard(newOptions.reply_markup);
         }
-        return originalSendPhoto(chatId, photo, options, fileOptions);
+
+        if (typeof newOptions.caption === 'string') {
+            newOptions.caption = markdownToTelegramHtml(newOptions.caption);
+            newOptions.parse_mode = 'HTML';
+        }
+        return originalSendPhoto(chatId, photo, newOptions, fileOptions);
     };
 }

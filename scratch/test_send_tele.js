@@ -19,6 +19,12 @@ const runTest = async () => {
     const bot = new TelegramBot(botToken);
     installTelegramFormatHelper(bot);
 
+    // Gỡ bỏ nút WebApp màu xanh ở góc khung chat
+    try {
+        await bot.setChatMenuButton({ menu_button: { type: 'default' } });
+        console.log('✅ Đã gỡ bỏ nút WebApp màu xanh ở khung chat!');
+    } catch (e) {}
+
     let targetChatId = process.argv[2];
     if (!targetChatId && config.ADMIN_IDS && config.ADMIN_IDS.length > 0) {
         targetChatId = config.ADMIN_IDS[0];
@@ -33,34 +39,21 @@ const runTest = async () => {
         process.exit(1);
     }
 
-    console.log(`🚀 Đang gửi tin nhắn test Emoji động tới Telegram ID: ${targetChatId}...`);
+    console.log(`🚀 Đang gửi tin nhắn test mẫu chuẩn tới Telegram ID: ${targetChatId}...`);
 
-    const messageText = `🎉 <tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> **TEST EMOJI ĐỘNG TRONG TIN NHẮN & NÚT BẤM**\n\n` +
-                        `• Cú pháp 1: <tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji>\n` +
-                        `• Cú pháp 2: ![🛒](tg://emoji?id=5854776233950187351)\n` +
-                        `• Cú pháp 3: {id:5854776233950187351}\n\n` +
-                        `Bấm vào nút bấm Inline bên dưới để kiểm tra icon động rực rỡ!`;
+    const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG</b>\nVui lòng chọn danh mục bên dưới:`;
 
-    const sent = await bot.sendMessage(targetChatId, messageText, {
+    const keyboard = {
         reply_markup: {
             inline_keyboard: [
-                [
-                    {
-                        text: '![🛒](tg://emoji?id=5854776233950187351) Nút Mua Tài Khoản Động',
-                        callback_data: 'test_click_1'
-                    }
-                ],
-                [
-                    {
-                        text: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua Hàng Siêu Tốc',
-                        callback_data: 'test_click_2'
-                    }
-                ]
+                [{ text: "Mua ngay", callback_data: "buy" }] // Nút bấm phía dưới
             ]
         }
-    });
+    };
 
-    console.log('✅ Gửi tin nhắn test thành công! Message ID:', sent.message_id);
+    const sent = await bot.sendMessage(targetChatId, text, { parse_mode: 'HTML', ...keyboard });
+
+    console.log('✅ Gửi tin nhắn test mẫu chuẩn thành công! Message ID:', sent.message_id);
     process.exit(0);
 };
 

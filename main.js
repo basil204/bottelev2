@@ -62,26 +62,14 @@ const bootstrap = async () => {
 
   registerListeners(bot, config);
 
-  // Cài đặt nút Chat Menu Button (Nút xanh WebApp "🛒 Sản phẩm" bên cạnh khung chat Telegram)
+  // Đặt Menu Button về mặc định (loại bỏ nút WebApp xanh ở khung chat Telegram)
   try {
-    let miniAppUrl = config.MINI_APP_URL || 'https://cp-admin.manhit.dev/miniapp/capcut';
-    const { query } = await import('./includes/database/index.js');
-    const dbAppUrl = await query("SELECT `value` FROM settings WHERE `key` = 'mini_app_url'");
-    if (dbAppUrl && dbAppUrl.length > 0 && dbAppUrl[0].value) {
-      miniAppUrl = dbAppUrl[0].value;
-    }
-    if (miniAppUrl) {
-      await bot.setChatMenuButton({
-        menu_button: {
-          type: 'web_app',
-          text: '🛒 Sản phẩm',
-          web_app: { url: miniAppUrl }
-        }
-      });
-      console.log('✅ Updated Telegram Chat Menu Button ("🛒 Sản phẩm") to:', miniAppUrl);
-    }
+    await bot.setChatMenuButton({
+      menu_button: { type: 'default' }
+    });
+    console.log('✅ Reset Telegram Chat Menu Button to default');
   } catch (menuErr) {
-    console.error('⚠️ Could not set chat menu button:', menuErr.message);
+    console.error('⚠️ Could not reset chat menu button:', menuErr.message);
   }
 
   await bot.setMyCommands([

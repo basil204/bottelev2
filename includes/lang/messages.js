@@ -26,7 +26,7 @@ export const messages = {
         product_list: '📦 **Danh sách sản phẩm:**',
         product_item: '🔹 {name} - {price} ({stock} còn lại)',
         product_detail: '📦 **{name}**\n\n💰 Giá: {price}\n📝 Mô tả: {description}\n📊 Còn lại: {stock}',
-        buy_now: '🛒 Mua ngay',
+        buy_now: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua ngay',
         back_to_products: '⬅️ Quay lại',
         out_of_stock: '❌ Sản phẩm đã hết hàng!',
         insufficient_balance: '❌ Số dư không đủ!\n\n💰 Số dư hiện tại: {balance}\n💵 Giá sản phẩm: {price}\n\nVui lòng nạp thêm tiền.',
@@ -72,9 +72,9 @@ export const messages = {
 
         // Keyboard Buttons
         btn_deposit: '➕ Nạp tiền',
-        btn_buy_menu: '![🛒](tg://emoji?id=5854776233950187351) Mua hàng',
-        btn_buy_accounts: '![🛒](tg://emoji?id=5854776233950187351) Mua tài khoản',
-        btn_buy_gmail_edu: '![📧](tg://emoji?id=5420323339723881652) Mua Gmail EDU',
+        btn_buy_menu: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua hàng',
+        btn_buy_accounts: '<tg-emoji emoji-id="5854776233950187351">🛒</tg-emoji> Mua tài khoản',
+        btn_buy_gmail_edu: '📧 Mua Gmail EDU',
         btn_checkin: '📆 Điểm danh',
         btn_support: '🛟 Hỗ trợ / Bảo hành',
         btn_utilities: '🧰 Tiện ích',

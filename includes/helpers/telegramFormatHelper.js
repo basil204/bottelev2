@@ -7,17 +7,8 @@ export function markdownToTelegramHtml(text) {
 
     let html = text;
 
-    // Tự động chuyển đổi cú pháp Telegram Custom Emoji Markdown: ![⚠️](tg://emoji?id=5420323339723881652) hoặc [⚠️](tg://emoji?id=5420323339723881652)
-    html = html.replace(/!?\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, (match, fallbackChar, emojiId) => {
-        const char = fallbackChar.trim() || '⚠️';
-        return `<tg-emoji emoji-id="${emojiId}">${char}</tg-emoji>`;
-    });
-
-    // Tự động chuyển đổi link thô tg://emoji?id=5420323339723881652
-    html = html.replace(/tg:\/\/emoji\?id=(\d+)/gi, '<tg-emoji emoji-id="$1">⚠️</tg-emoji>');
-
-    // Tự động xử lý cú pháp rút gọn cho Emoji động: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652}
-    html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⚠️</tg-emoji>');
+    // Tự động xử lý cú pháp rút gọn cho Emoji động: {id:5420323339723881652} hoặc {emoji_id:5420323339723881652} hoặc {emoji:5420323339723881652}
+    html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
     // Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
     const htmlPlaceholders = [];
@@ -54,58 +45,6 @@ export function markdownToTelegramHtml(text) {
     return html;
 }
 
-export function cleanButtonText(text) {
-    if (!text || typeof text !== 'string') return text;
-    let result = text;
-    // Chuyển đổi cú pháp Telegram Markdown Emoji ![⚠️](tg://emoji?id=...) cho Nút bấm Telegram
-    result = result.replace(/!?\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '$1 ');
-    // Chuyển đổi link thô tg://emoji?id=... thành icon ⚠️ cho Nút bấm Telegram
-    result = result.replace(/tg:\/\/emoji\?id=(\d+)/gi, '⚠️ ');
-    // Chuyển đổi cú pháp {emoji_id:...} thành icon ⚠️ cho Nút bấm Telegram
-    result = result.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '⚠️ ');
-    // Lấy ký tự emoji dự phòng từ thẻ <tg-emoji>
-    result = result.replace(/<tg-emoji\s+emoji-id="[^"]*">([\s\S]*?)<\/tg-emoji>/gi, '$1');
-    // Loại bỏ các thẻ HTML khác
-    result = result.replace(/<[^>]*>/g, '');
-    return result.replace(/\s+/g, ' ').trim();
-}
-
-function sanitizeReplyMarkup(reply_markup) {
-    if (!reply_markup) return reply_markup;
-    try {
-        const markup = JSON.parse(JSON.stringify(reply_markup));
-
-        if (markup.keyboard && Array.isArray(markup.keyboard)) {
-            markup.keyboard = markup.keyboard.map((row) => {
-                if (!Array.isArray(row)) return row;
-                return row.map((btn) => {
-                    if (typeof btn === 'string') return cleanButtonText(btn);
-                    if (btn && typeof btn === 'object' && btn.text) {
-                        return { ...btn, text: cleanButtonText(btn.text) };
-                    }
-                    return btn;
-                });
-            });
-        }
-
-        if (markup.inline_keyboard && Array.isArray(markup.inline_keyboard)) {
-            markup.inline_keyboard = markup.inline_keyboard.map((row) => {
-                if (!Array.isArray(row)) return row;
-                return row.map((btn) => {
-                    if (btn && typeof btn === 'object' && btn.text) {
-                        return { ...btn, text: cleanButtonText(btn.text) };
-                    }
-                    return btn;
-                });
-            });
-        }
-
-        return markup;
-    } catch {
-        return reply_markup;
-    }
-}
-
 /**
  * Tự động gắn interceptor chuẩn hóa sendMessage & sendPhoto cho Bot Telegram
  */
@@ -117,11 +56,7 @@ export function installTelegramFormatHelper(bot) {
     bot.sendMessage = function (chatId, text, options = {}) {
         if (typeof text === 'string') {
             const formattedText = markdownToTelegramHtml(text);
-            const newOptions = {
-                parse_mode: 'HTML',
-                ...options,
-                reply_markup: options?.reply_markup ? sanitizeReplyMarkup(options.reply_markup) : undefined
-            };
+            const newOptions = { parse_mode: 'HTML', ...options };
             return originalSendMessage(chatId, formattedText, newOptions);
         }
         return originalSendMessage(chatId, text, options);
@@ -133,8 +68,7 @@ export function installTelegramFormatHelper(bot) {
             options = {
                 ...options,
                 caption: markdownToTelegramHtml(options.caption),
-                parse_mode: 'HTML',
-                reply_markup: options?.reply_markup ? sanitizeReplyMarkup(options.reply_markup) : undefined
+                parse_mode: 'HTML'
             };
         }
         return originalSendPhoto(chatId, photo, options, fileOptions);

@@ -1,11 +1,12 @@
 /**
- * Standalone Telegram Bot Demo - Tự động kết nối Database, gửi Nút Xanh Lam WebApp & Emoji Động (<tg-emoji>)
+ * Standalone Telegram Bot Demo - Tự động kết nối Database, gửi Nút Xanh Lam WebApp & Nút Bấm Emoji Động (icon_custom_emoji_id)
  * Chạy độc lập bằng lệnh: node bot_demo.js
  */
 
 import TelegramBot from 'node-telegram-bot-api';
 import { query, initDb } from './includes/database/index.js';
 import { config } from './config.js';
+import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
 
 const startBotDemo = async () => {
     // 1. Kết nối CSDL MySQL và lấy token & mini_app_url
@@ -31,6 +32,7 @@ const startBotDemo = async () => {
     }
 
     const bot = new TelegramBot(token, { polling: true });
+    installTelegramFormatHelper(bot);
     
     try {
         const botInfo = await bot.getMe();
@@ -39,53 +41,31 @@ const startBotDemo = async () => {
         console.log('🤖 Bot Demo đang chạy...');
     }
 
-    /**
-     * Helper chuyển đổi cú pháp Markdown & Telegram Animated Emoji sang HTML
-     */
-    function formatTelegramHtml(text) {
-        if (!text || typeof text !== 'string') return text;
-        let html = text;
-
-        // 1. Chuyển đổi định dạng copy Telegram Desktop: ![🛒](tg://emoji?id=5312361253610475399)
-        html = html.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
-
-        // 2. Chuyển đổi cú pháp rút gọn: {id:5312361253610475399}
-        html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji):(\d+)\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
-
-        // 3. Chuyển đổi Markdown Bold: **text** -> <b>text</b>
-        html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-
-        return html;
-    }
-
-    /**
-     * Gửi tin nhắn chuẩn HTML với Custom Emoji Động & Nút Xanh WebApp
-     */
-    async function sendEmojiMessage(chatId, text, replyMarkup = null) {
-        const formattedText = formatTelegramHtml(text);
-        const options = { parse_mode: 'HTML' };
-        if (replyMarkup) {
-            options.reply_markup = replyMarkup;
-        }
-        return bot.sendMessage(chatId, formattedText, options);
-    }
-
     // Lệnh /start hoặc /menu
     bot.onText(/\/(start|menu)/, async (msg) => {
         const chatId = msg.chat.id;
 
         const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\n` +
                      `👋 Xin chào <b>${msg.from.first_name || 'bạn'}</b>!\n` +
-                     `Vui lòng chọn chức năng bên dưới hoặc bấm **Nút Xanh Lam** bên dưới để mua hàng:`;
+                     `Vui lòng chọn chức năng có nút Emoji động bên dưới:`;
 
         const replyMarkup = {
             inline_keyboard: [
                 [
-                    { text: '🛒 Mua Ngay', callback_data: 'buy_now' },
-                    { text: '📧 Gmail EDU', callback_data: 'buy_edu' }
+                    {
+                        text: '{id:5312361253610475399} Mua Ngay',
+                        callback_data: 'buy_now'
+                    },
+                    {
+                        text: '{id:5312361253610475399} Gmail EDU',
+                        callback_data: 'buy_edu'
+                    }
                 ],
                 [
-                    { text: '🧾 Lịch Sử Đơn Hàng', callback_data: 'history' }
+                    {
+                        text: '{id:5312361253610475399} Lịch Sử Đơn Hàng',
+                        callback_data: 'history'
+                    }
                 ]
             ],
             keyboard: [
@@ -99,7 +79,7 @@ const startBotDemo = async () => {
             resize_keyboard: true
         };
 
-        await sendEmojiMessage(chatId, text, replyMarkup);
+        await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
     });
 
     // Xử lý khi người dùng bấm vào các nút Inline Keyboard
@@ -117,13 +97,13 @@ const startBotDemo = async () => {
 
             const replyMarkup = {
                 inline_keyboard: [
-                    [{ text: '⚡ ChatGPT Plus - 50k', callback_data: 'item_chatgpt' }],
-                    [{ text: '🎬 CapCut Pro - 30k', callback_data: 'item_capcut' }],
+                    [{ text: '{id:5312361253610475399} ChatGPT Plus - 50k', callback_data: 'item_chatgpt' }],
+                    [{ text: '{id:5312361253610475399} CapCut Pro - 30k', callback_data: 'item_capcut' }],
                     [{ text: '↩️ Quay lại Menu', callback_data: 'back_menu' }]
                 ]
             };
 
-            await sendEmojiMessage(chatId, text, replyMarkup);
+            await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
         } else if (action === 'buy_edu') {
             const text = `📧 <b>TẠO TÀI KHOẢN GMAIL EDU</b>\n\n` +
                          `• Tên miền: <code>nttp.edu.pl</code>\n` +
@@ -132,23 +112,23 @@ const startBotDemo = async () => {
 
             const replyMarkup = {
                 inline_keyboard: [
-                    [{ text: '✅ Tạo Gmail EDU Ngay', callback_data: 'create_edu_confirm' }],
+                    [{ text: '{id:5312361253610475399} Tạo Gmail EDU Ngay', callback_data: 'create_edu_confirm' }],
                     [{ text: '↩️ Quay lại Menu', callback_data: 'back_menu' }]
                 ]
             };
 
-            await sendEmojiMessage(chatId, text, replyMarkup);
+            await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
         } else if (action === 'back_menu') {
             const text = `<tg-emoji emoji-id="5312361253610475399">🛒</tg-emoji> <b>HỆ THỐNG MUA HÀNG TỰ ĐỘNG</b>\n\nVui lòng chọn chức năng:`;
             const replyMarkup = {
                 inline_keyboard: [
                     [
-                        { text: '🛒 Mua Ngay', callback_data: 'buy_now' },
-                        { text: '📧 Gmail EDU', callback_data: 'buy_edu' }
+                        { text: '{id:5312361253610475399} Mua Ngay', callback_data: 'buy_now' },
+                        { text: '{id:5312361253610475399} Gmail EDU', callback_data: 'buy_edu' }
                     ]
                 ]
             };
-            await sendEmojiMessage(chatId, text, replyMarkup);
+            await bot.sendMessage(chatId, text, { reply_markup: replyMarkup });
         } else {
             await bot.sendMessage(chatId, `✅ Bạn vừa bấm nút: <b>${action}</b>`, { parse_mode: 'HTML' });
         }

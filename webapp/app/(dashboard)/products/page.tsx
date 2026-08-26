@@ -203,6 +203,33 @@ export default function ProductsPage() {
   const [newCustomPlan, setNewCustomPlan] = useState('Không áp dụng gói');
   const [newCustomScope, setNewCustomScope] = useState<'all_orders' | 'client_api'>('all_orders');
   const [newCustomStatus, setNewCustomStatus] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setEditingProduct(prev => ({ ...prev!, image_url: data.url }));
+      } else {
+        alert(data.error || 'Lỗi khi tải ảnh lên');
+      }
+    } catch {
+      alert('Lỗi kết nối khi tải ảnh');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -295,7 +322,11 @@ export default function ProductsPage() {
   };
 
   const openEditModal = (product: Product) => {
-    setEditingProduct({ ...product });
+    setEditingProduct({
+      ...product,
+      emoji: product.emoji || '',
+      custom_emoji_id: product.custom_emoji_id || ''
+    });
     setModalTab('general');
     setProductFormError('');
     setIsModalOpen(true);
@@ -637,11 +668,18 @@ export default function ProductsPage() {
                         {/* Sản phẩm */}
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-500 shrink-0">
-                              <Package className="h-5 w-5" />
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-600 shrink-0 font-bold text-sm">
+                              {p.emoji || (p.custom_emoji_id ? '✨' : <Package className="h-5 w-5 text-zinc-400" />)}
                             </div>
                             <div>
-                              <div className="font-extrabold text-zinc-900">{p.name}</div>
+                              <div className="font-extrabold text-zinc-900 flex items-center gap-1.5 flex-wrap">
+                                <span>{p.name}</span>
+                                {p.custom_emoji_id && (
+                                  <span className="text-[9px] font-mono font-bold bg-orange-50 text-orange-600 border border-orange-200 px-1.5 py-0.5 rounded-md" title={`Custom Emoji ID: ${p.custom_emoji_id}`}>
+                                    ID: {p.custom_emoji_id}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[10px] font-semibold text-zinc-400">ID: {p.id}</div>
                             </div>
                           </div>
@@ -847,25 +885,7 @@ export default function ProductsPage() {
                   />
                 </div>
 
-                {/* URL Hình ảnh sản phẩm */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                    URL HÌNH ẢNH SẢN PHẨM (WEB & BOT TELEGRAM)
-                  </label>
-                  <input
-                    type="text"
-                    value={editingProduct?.image_url || ''}
-                    onChange={(e) => setEditingProduct(prev => ({ ...prev!, image_url: e.target.value }))}
-                    placeholder="https://domain.com/images/product.png"
-                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none"
-                  />
-                  {editingProduct?.image_url && (
-                    <div className="mt-1 flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-2">
-                      <img src={editingProduct.image_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
-                      <span className="text-[11px] text-zinc-500 truncate">{editingProduct.image_url}</span>
-                    </div>
-                  )}
-                </div>
+
 
                 {/* Price, Cost Price, Category Grid */}
                 <div className="grid grid-cols-3 gap-3">
@@ -932,69 +952,187 @@ export default function ProductsPage() {
                   </label>
                 </div>
 
-                {/* Telegram Customization Box */}
+                {/* Telegram Customization Box (Chỉ chọn 1 trong 2) */}
                 <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-800">
-                    <Sparkles className="h-4 w-4 text-orange-500" />
-                    <span>TÙY CHỈNH NÚT BẤM TƯƠNG TÁC (TELEGRAM BUTTON)</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-800">
+                      <Sparkles className="h-4 w-4 text-orange-500" />
+                      <span>TÙY CHỈNH NÚT BẤM TƯƠNG TÁC (CHỈ CHỌN 1 TRONG 2)</span>
+                    </div>
+                    {(editingProduct?.emoji || editingProduct?.custom_emoji_id) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingProduct(prev => ({ ...prev!, emoji: '', custom_emoji_id: '' }))}
+                        className="text-[10px] text-zinc-400 hover:text-red-600 font-bold transition"
+                      >
+                        Đặt lại mặc định
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase text-zinc-500">EMOJI THƯỜNG</label>
+                    <div className={`space-y-1 rounded-xl p-2.5 transition border ${editingProduct?.emoji ? 'border-orange-500 bg-white shadow-xs' : 'border-zinc-200/80 bg-white/60'}`}>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 flex items-center justify-between">
+                        <span>1. EMOJI THƯỜNG</span>
+                        {editingProduct?.emoji && <span className="text-[9px] text-orange-600 font-extrabold">ĐANG CHỌN</span>}
+                      </label>
                       <input
                         type="text"
                         value={editingProduct?.emoji || ''}
-                        onChange={(e) => setEditingProduct(prev => ({ ...prev!, emoji: e.target.value }))}
-                        placeholder="VD: ⭐"
-                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-xs outline-none"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            emoji: val,
+                            custom_emoji_id: val ? '' : prev?.custom_emoji_id
+                          }));
+                        }}
+                        placeholder="VD: 🔥, ⭐, 🎁..."
+                        className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none focus:border-orange-500"
                       />
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase text-zinc-500">CUSTOM EMOJI ID ĐỘNG</label>
+                    <div className={`space-y-1 rounded-xl p-2.5 transition border ${editingProduct?.custom_emoji_id ? 'border-orange-500 bg-white shadow-xs' : 'border-zinc-200/80 bg-white/60'}`}>
+                      <label className="text-[10px] font-bold uppercase text-zinc-600 flex items-center justify-between">
+                        <span>2. CUSTOM EMOJI ID ĐỘNG</span>
+                        {editingProduct?.custom_emoji_id && <span className="text-[9px] text-orange-600 font-extrabold">ĐANG CHỌN</span>}
+                      </label>
                       <input
                         type="text"
                         value={editingProduct?.custom_emoji_id || ''}
-                        onChange={(e) => setEditingProduct(prev => ({ ...prev!, custom_emoji_id: e.target.value }))}
-                        placeholder="ID dạng số..."
-                        className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-xs outline-none"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            custom_emoji_id: val,
+                            emoji: val ? '' : prev?.emoji
+                          }));
+                        }}
+                        placeholder="VD: 6138847041649906237"
+                        className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-mono outline-none focus:border-orange-500"
                       />
                     </div>
                   </div>
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    💡 Nhập một trong 2 loại trên. Khi bạn gõ vào ô nào, ô còn lại sẽ tự động được xóa để tránh trùng lặp.
+                  </p>
                 </div>
 
-                {/* Product Image */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                    ẢNH ĐẠI DIỆN SẢN PHẨM
+                {/* Product Image & Upload */}
+                <div className="space-y-1.5 rounded-2xl border border-zinc-200 bg-zinc-50/60 p-3.5">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700 block">
+                    ẢNH ĐẠI DIỆN SẢN PHẨM (WEB & BOT TELEGRAM)
                   </label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-400">
-                      <Package className="h-6 w-6" />
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-zinc-200 bg-white overflow-hidden shadow-2xs">
+                      {editingProduct?.image_url ? (
+                        <img src={editingProduct.image_url} alt="Preview" className="h-full w-full object-cover" />
+                      ) : (
+                        <Package className="h-6 w-6 text-zinc-400" />
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-bold text-zinc-700 shadow-xs hover:bg-zinc-50 cursor-pointer"
-                    >
-                      <Upload className="h-4 w-4 text-orange-500" />
-                      <span>CHỌN ÁNH TẢI LÊN</span>
-                    </button>
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition">
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>{uploadingImage ? 'Đang tải lên...' : 'Tải ảnh từ máy tính'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            disabled={uploadingImage}
+                            className="hidden"
+                          />
+                        </label>
+                        {editingProduct?.image_url && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingProduct(prev => ({ ...prev!, image_url: '' }))}
+                            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition"
+                          >
+                            Xóa ảnh
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={editingProduct?.image_url || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev!, image_url: e.target.value }))}
+                        placeholder="Hoặc dán URL ảnh trực tiếp (https://...)"
+                        className="h-9 w-full rounded-xl border border-zinc-200 bg-white px-3 text-xs text-zinc-800 outline-none focus:border-orange-500 font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Description */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                    MÔ TẢ SẢN PHẨM
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                      MÔ TẢ SẢN PHẨM (HỖ TRỢ HTML & TELEGRAM BLOCKQUOTE)
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            description: (prev?.description || '') + '<blockquote>Nội dung trích dẫn...</blockquote>'
+                          }));
+                        }}
+                        className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition"
+                        title="Khung trích dẫn vạch xanh Telegram"
+                      >
+                        ❝ Trích dẫn &lt;blockquote&gt;
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            description: (prev?.description || '') + '<b>In đậm</b>'
+                          }));
+                        }}
+                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
+                      >
+                        &lt;b&gt;
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            description: (prev?.description || '') + '<i>In nghiêng</i>'
+                          }));
+                        }}
+                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
+                      >
+                        &lt;i&gt;
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct(prev => ({
+                            ...prev!,
+                            description: (prev?.description || '') + '<code>Code</code>'
+                          }));
+                        }}
+                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
+                      >
+                        &lt;code&gt;
+                      </button>
+                    </div>
+                  </div>
                   <textarea
                     rows={4}
                     value={editingProduct?.description || ''}
                     onChange={(e) => setEditingProduct(prev => ({ ...prev!, description: e.target.value }))}
-                    placeholder="Nhập mô tả sản phẩm..."
-                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 focus:border-orange-500 outline-none"
+                    placeholder="Nhập mô tả sản phẩm... Ví dụ: <blockquote>Với gói này bạn có thể:\n- Xem phim 4K\n- Dùng 1 profile riêng</blockquote>"
+                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 focus:border-orange-500 outline-none font-mono"
                   />
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    💡 <b>Mẹo định dạng Telegram:</b> Dùng thẻ <code className="bg-zinc-100 px-1 py-0.5 rounded text-zinc-700 font-bold">&lt;blockquote&gt;nội dung&lt;/blockquote&gt;</code> hoặc gõ <code className="bg-zinc-100 px-1 py-0.5 rounded text-zinc-700 font-bold">&gt; nội dung</code> ở đầu dòng để tạo khung trích dẫn có vạch xanh viền trái như Telegram!
+                  </p>
                 </div>
               </div>
             )}

@@ -17,7 +17,10 @@ export async function GET(request: Request) {
         });
 
         const [rows] = await pool.query<RowDataPacket[]>(
-            `SELECT p.*, c.name as category_name,
+            `SELECT p.*, 
+                    COALESCE(p.emoji, p.telegram_emoji) AS emoji,
+                    COALESCE(p.custom_emoji_id, p.telegram_custom_emoji_id) AS custom_emoji_id,
+                    c.name as category_name,
                     GREATEST(0, COALESCE(s.real_sold, 0) + COALESCE(p.sold_adjustment, 0)) AS sold_count,
                     COALESCE(s.real_sold, 0) AS real_sold
              FROM products p 
@@ -59,32 +62,23 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ success: true, message: 'Reordered products successfully' });
         }
 
-        if (!id) {
-            return NextResponse.json({ error: 'Missing product ID' }, { status: 400 });
-        }
+        if (!id) return NextResponse.json({ error: 'Missing product ID' }, { status: 400 });
 
-        // Handle Status (is_active) toggle switch
         if (is_active !== undefined) {
-            const nextActive = is_active ? 1 : 0;
-            await pool.query('UPDATE products SET is_active = ? WHERE id = ?', [nextActive, id]);
+            await pool.query('UPDATE products SET is_active = ? WHERE id = ?', [is_active ? 1 : 0, id]);
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
                 targetType: 'PRODUCT',
                 targetId: id,
-                details: { is_active: nextActive },
+                details: { is_active },
                 request
             });
-            return NextResponse.json({ success: true, id, is_active: nextActive });
+            return NextResponse.json({ success: true, is_active });
         }
 
-        // Handle sold_count adjustment
         if (sold_count !== undefined) {
-            const target = Math.max(0, Math.trunc(Number(sold_count)));
-            if (!Number.isFinite(target)) {
-                return NextResponse.json({ error: 'Invalid sold count' }, { status: 400 });
-            }
-
+            const target = Math.max(0, parseInt(sold_count) || 0);
             const [rows] = await pool.query<RowDataPacket[]>(
                 `SELECT COUNT(*) AS real_sold FROM accounts WHERE product_id = ? AND status = 'sold'`,
                 [id]
@@ -120,7 +114,7 @@ export async function POST(request: Request) {
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-            image_url
+            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -132,20 +126,23 @@ export async function POST(request: Request) {
             }
         }
 
+        const finalEmoji = (emoji || telegram_emoji || '').trim() || null;
+        const finalCustomEmojiId = (custom_emoji_id || telegram_custom_emoji_id || '').trim() || null;
+
         const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO products (
                 name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
                 delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
                 telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
                 preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-                image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name, price, description, type || 'stock', code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
-                image_url || null
+                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId
             ]
         );
 
@@ -156,7 +153,7 @@ export async function POST(request: Request) {
             action: 'CREATE',
             targetType: 'PRODUCT',
             targetId: result.insertId,
-            details: { name, price, type: type || 'stock', category_id: finalCategoryId, delivery_type },
+            details: { name, price, type: type || 'stock', category_id: finalCategoryId, delivery_type, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
             ipAddress,
             userAgent,
             request
@@ -178,7 +175,7 @@ export async function PUT(request: Request) {
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-            image_url
+            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -202,6 +199,8 @@ export async function PUT(request: Request) {
         const numPriority = Number(priority) || 0;
         const numCheckLive = Number(check_live) || 0;
         const numLowStockThreshold = Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5)));
+        const finalEmoji = (emoji || telegram_emoji || '').trim() || null;
+        const finalCustomEmojiId = (custom_emoji_id || telegram_custom_emoji_id || '').trim() || null;
 
         await pool.query(
             `UPDATE products SET 
@@ -209,14 +208,14 @@ export async function PUT(request: Request) {
                 delivery_type = ?, prompt_message = ?, item_structure = ?, account_prefix = ?, file_delivery_mode = ?,
                 telegram_file_id = ?, telegram_file_unique_id = ?, access_duration_enabled = ?, access_duration_days = ?,
                 preorder_enabled = ?, preorder_fee_vnd = ?, preorder_fee_usdt = ?, preorder_max_per_user = ?, preorder_total_limit = ?,
-                image_url = ?
+                image_url = ?, emoji = ?, custom_emoji_id = ?, telegram_emoji = ?, telegram_custom_emoji_id = ?
             WHERE id = ?`,
             [
                 name.trim(), numPrice, description || null, type || 'stock', code || null, numPriority, numCheckLive, finalCategoryId || null, numLowStockThreshold,
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
-                image_url || null, id
+                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId, id
             ]
         );
 
@@ -227,7 +226,7 @@ export async function PUT(request: Request) {
             action: 'UPDATE',
             targetType: 'PRODUCT',
             targetId: id,
-            details: { name, price: numPrice, type: type || 'stock', category_id: finalCategoryId },
+            details: { name, price: numPrice, type: type || 'stock', category_id: finalCategoryId, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
             ipAddress,
             userAgent,
             request

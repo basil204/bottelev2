@@ -54,16 +54,28 @@ export const sendCategoryList = async (bot, chatId, user) => {
     );
     // Màu danh mục bám đúng con số đang hiển thị: (0) đỏ, (>0) xanh.
     const hasStock = totalAccounts > 0;
-    const icon = hasStock ? '🟢' : '🔴';
+    const customEmojiId = cat.custom_emoji_id || null;
+    // Clean any existing circle emojis from name
+    const cleanName = cat.name.replace(/[🟢🔴]\s*/g, '').trim();
+    
+    let textLabel = '';
+    if (customEmojiId) {
+      textLabel = `${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`;
+    } else if (cat.emoji) {
+      textLabel = `${cat.emoji} ${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`;
+    } else {
+      textLabel = `${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`;
+    }
 
-    // Remove any existing duplicate status circle emojis
-    const cleanName = cat.name.replace(/^[🟢🔴]\s*/, '');
-
-    return {
-      text: `${icon} ${cleanName} (${totalAccounts.toLocaleString('vi-VN')})`,
+    const btnObj = {
+      text: textLabel,
       callback_data: createCallbackData({ action: 'category_products', catId: cat.id }),
       style: hasStock ? 'success' : 'danger'
     };
+    if (customEmojiId) {
+      btnObj.icon_custom_emoji_id = customEmojiId;
+    }
+    return btnObj;
   });
 
   // Chunk buttons into rows of 3 columns
@@ -122,20 +134,31 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
 
   const { getUserProductPrice } = await import('../helpers/customPricing.js');
   const inline_keyboard = await Promise.all(filteredRows.map(async (p) => {
-    let icon = '✅';
-    if (p.type === 'order') {
-      icon = '📝';
-    } else if (p.stock <= 0) {
-      icon = '❌';
-    }
+    const customEmojiId = p.custom_emoji_id || p.telegram_custom_emoji_id || null;
+    const emoji = p.emoji || p.telegram_emoji || '';
     const userPrice = await getUserProductPrice(chatId, p.id, p.price);
     const stockText = p.type === 'order' ? '' : ` (${p.stock})`;
     const priceText = await formatMoney(userPrice, lang);
-    return [{
-      text: `${icon} ${p.name} - ${priceText}${stockText}`,
+    const cleanName = p.name.replace(/[🟢🔴]\s*/g, '').trim();
+
+    let textLabel = '';
+    if (customEmojiId) {
+      textLabel = `${cleanName} - ${priceText}${stockText}`;
+    } else if (emoji) {
+      textLabel = `${emoji} ${cleanName} - ${priceText}${stockText}`;
+    } else {
+      textLabel = `${cleanName} - ${priceText}${stockText}`;
+    }
+
+    const btnObj = {
+      text: textLabel,
       callback_data: createCallbackData({ action: 'view_product', productId: p.id }),
       style: p.type === 'order' || p.stock > 0 ? 'success' : 'danger'
-    }];
+    };
+    if (customEmojiId) {
+      btnObj.icon_custom_emoji_id = customEmojiId;
+    }
+    return [btnObj];
   }));
 
   const hasPrev = page > 1;
@@ -223,8 +246,11 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
     effectivePrice = appliedCoupon.finalAmount;
   }
 
+  const customEmojiId = product.custom_emoji_id || product.telegram_custom_emoji_id || null;
+  const emojiIcon = customEmojiId ? `{${customEmojiId}}` : (product.emoji || product.telegram_emoji || '🎁');
+
   let detailText = `${titleLabel}\n\n` +
-    `🎁 **${nameLabel}:** ${product.name}\n` +
+    `${emojiIcon} **${nameLabel}:** ${product.name}\n` +
     `💰 **${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n`;
 
   if (appliedCoupon && appliedCoupon.productId === product.id) {

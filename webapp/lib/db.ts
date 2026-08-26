@@ -66,7 +66,11 @@ async function initAccountStorageTables() {
       { name: 'preorder_fee_usdt', type: 'DECIMAL(15,2) DEFAULT 0' },
       { name: 'preorder_max_per_user', type: 'INT DEFAULT 5' },
       { name: 'preorder_total_limit', type: 'INT DEFAULT 100' },
-      { name: 'image_url', type: 'TEXT NULL' }
+      { name: 'image_url', type: 'TEXT NULL' },
+      { name: 'emoji', type: 'VARCHAR(50) NULL' },
+      { name: 'custom_emoji_id', type: 'VARCHAR(100) NULL' },
+      { name: 'telegram_emoji', type: 'VARCHAR(50) NULL' },
+      { name: 'telegram_custom_emoji_id', type: 'VARCHAR(100) NULL' }
     ];
 
     for (const col of productColumns) {
@@ -160,9 +164,19 @@ async function initAccountStorageTables() {
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(255) NOT NULL UNIQUE,
           priority INT DEFAULT 0,
+          emoji VARCHAR(50) NULL,
+          custom_emoji_id VARCHAR(100) NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      for (const col of [
+        { name: 'emoji', type: 'VARCHAR(50) NULL' },
+        { name: 'custom_emoji_id', type: 'VARCHAR(100) NULL' }
+      ]) {
+        try {
+          await pool.query(`ALTER TABLE categories ADD COLUMN ${col.name} ${col.type}`);
+        } catch {}
+      }
       console.log('[DB] Categories table initialized');
     } catch (e: any) {
       console.error('[DB] Error initializing categories table:', e);

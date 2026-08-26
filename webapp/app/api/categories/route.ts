@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
         if (detailId) {
             const [categoryRows] = await pool.query<RowDataPacket[]>(
-                'SELECT id, name, priority FROM categories WHERE id = ?', [detailId]
+                'SELECT id, name, priority, emoji, custom_emoji_id FROM categories WHERE id = ?', [detailId]
             );
             if (!categoryRows.length) return NextResponse.json({ error: 'Category not found' }, { status: 404 });
             const [products] = await pool.query<RowDataPacket[]>(`

@@ -79,14 +79,23 @@ export function markdownToTelegramHtml(text) {
     // 2. Xử lý cú pháp rút gọn linh hoạt: {5312361253610475399} hoặc {id:5312361253610475399}
     html = html.replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
-    // 3. Tự động giữ nguyên các thẻ HTML chuẩn của Telegram và <tg-emoji ...>
+    // 3. Giữ nguyên các thẻ HTML chuẩn của Telegram (bao gồm <blockquote>, <blockquote expandable>, <tg-spoiler>, <tg-emoji>, <b>, <i>, <u>, <s>, <code>, <pre>, <a>)
     const htmlPlaceholders = [];
-    const tagRegex = /<(tg-emoji|b|i|u|s|code|pre|a)(\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
+    const tagRegex = /<(tg-emoji|b|strong|i|em|u|ins|s|strike|del|code|pre|blockquote|tg-spoiler|span|a)(\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
     
     html = html.replace(tagRegex, (match) => {
         const idx = htmlPlaceholders.length;
         htmlPlaceholders.push(match);
         return `@@TG_TAG_HOLDER_${idx}@@`;
+    });
+
+    // 4. Xử lý cú pháp trích dẫn Markdown dòng bắt đầu bằng `> ` thành <blockquote>...</blockquote>
+    html = html.replace(/(?:^[ \t]*>[ \t]?(.*)(?:\r?\n|$))+/gm, (match) => {
+        const lines = match.split(/\r?\n/).map(l => l.replace(/^[ \t]*>[ \t]?/, '')).filter(l => l.trim().length > 0);
+        if (!lines.length) return '';
+        const idx = htmlPlaceholders.length;
+        htmlPlaceholders.push(`<blockquote>${lines.join('\n')}</blockquote>`);
+        return `@@TG_TAG_HOLDER_${idx}@@\n`;
     });
 
     // Escape các ký tự HTML đặc biệt độc lập
@@ -99,9 +108,12 @@ export function markdownToTelegramHtml(text) {
     // Bold: **text** hoặc __text__
     html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
     html = html.replace(/__(.*?)__/g, '<b>$1</b>');
+
+    // Spoiler: ||text||
+    html = html.replace(/\|\|(.*?)\|\|/g, '<tg-spoiler>$1</tg-spoiler>');
     
     // Inline Code: `text`
-    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
     
     // Link: [label](url) (trừ tg://emoji)
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
@@ -137,7 +149,7 @@ export function installTelegramFormatHelper(bot) {
     };
 
     const originalSendPhoto = bot.sendPhoto.bind(bot);
-    bot.sendPhoto = function (chatId, photo, options = {}, fileOptions = {}) {
+    bot.sendPhoto = async function (chatId, photo, options = {}, fileOptions = {}) {
         let newOptions = { ...options };
         if (newOptions.reply_markup) {
             newOptions.reply_markup = formatReplyMarkup(newOptions.reply_markup);
@@ -147,6 +159,50 @@ export function installTelegramFormatHelper(bot) {
             newOptions.caption = markdownToTelegramHtml(newOptions.caption);
             newOptions.parse_mode = 'HTML';
         }
-        return originalSendPhoto(chatId, photo, newOptions, fileOptions);
+
+        let photoToSend = photo;
+        if (typeof photo === 'string' && (photo.startsWith('/uploads/') || photo.startsWith('uploads/'))) {
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                const cleanRel = photo.replace(/^\//, '');
+                const candidates = [
+                    path.join(process.cwd(), 'webapp', 'public', cleanRel),
+                    path.join(process.cwd(), 'public', cleanRel),
+                    path.join(process.cwd(), cleanRel)
+                ];
+                for (const c of candidates) {
+                    if (fs.existsSync(c)) {
+                        photoToSend = c;
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.warn('[TELEGRAM_PHOTO_RESOLVE_ERR]', err);
+            }
+        }
+
+        return originalSendPhoto(chatId, photoToSend, newOptions, fileOptions);
+    };
+
+    const originalEditMessageText = bot.editMessageText.bind(bot);
+    bot.editMessageText = function (text, options = {}) {
+        let newOptions = { ...options };
+        if (newOptions.reply_markup) {
+            newOptions.reply_markup = formatReplyMarkup(newOptions.reply_markup);
+        }
+
+        if (typeof text === 'string') {
+            const formattedText = markdownToTelegramHtml(text);
+            newOptions.parse_mode = 'HTML';
+            return originalEditMessageText(formattedText, newOptions);
+        }
+        return originalEditMessageText(text, newOptions);
+    };
+
+    const originalEditMessageReplyMarkup = bot.editMessageReplyMarkup.bind(bot);
+    bot.editMessageReplyMarkup = function (replyMarkup, options = {}) {
+        const formattedMarkup = formatReplyMarkup(replyMarkup);
+        return originalEditMessageReplyMarkup(formattedMarkup, options);
     };
 }

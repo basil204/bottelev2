@@ -106,25 +106,37 @@ export async function POST(request: Request) {
             const targetChan = (channelId !== undefined ? channelId : (dbMap.auto_restock_channel_id || '')).trim();
             const currentTargetType = targetType || dbMap.auto_restock_target || 'channel';
 
-            // Pick a random product
-            const [prods] = await pool.query<RowDataPacket[]>("SELECT * FROM products WHERE is_active = 1 ORDER BY RAND() LIMIT 1");
+            // Pick product based on fakeRule
+            let prodQuery = "SELECT * FROM products WHERE is_active = 1";
+            if (fakeRule === 'min_stock') {
+                prodQuery += " ORDER BY stock ASC, RAND() LIMIT 1";
+            } else {
+                prodQuery += " ORDER BY RAND() LIMIT 1";
+            }
+            const [prods] = await pool.query<RowDataPacket[]>(prodQuery);
             const product = prods[0] || { id: 1, name: 'Sản phẩm VIP #4', price: 150000 };
 
             const minQ = Number(minQty || dbMap.auto_restock_min_qty) || 15;
             const maxQ = Number(maxQty || dbMap.auto_restock_max_qty) || 50;
             const randQty = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
 
-            const textMsg =
-                `🔥 *THÔNG BÁO NHẬP KHO HÀNG (TEST)*\n\n` +
-                `📦 Sản phẩm: *${product.name}*\n` +
-                `⚡ Vừa về thêm: *+${randQty}* sản phẩm (Đơn giá: ${formatCurrency(Number(product.price) || 0)})\n` +
-                `👉 Bấm nút bên dưới để vào mua ngay kẻo hết hàng!`;
+            const isEn = channelLang === 'en';
+            const textMsg = isEn
+                ? `🔥 *STOCK RESTOCKED NOTIFICATION (TEST)*\n\n` +
+                  `📦 Product: *${product.name}*\n` +
+                  `⚡ Restocked: *+${randQty}* items (Price: ${formatCurrency(Number(product.price) || 0)})\n` +
+                  `👉 Click the button below to buy now before it runs out!`
+                : `🔥 *THÔNG BÁO NHẬP KHO HÀNG (TEST)*\n\n` +
+                  `📦 Sản phẩm: *${product.name}*\n` +
+                  `⚡ Vừa về thêm: *+${randQty}* sản phẩm (Đơn giá: ${formatCurrency(Number(product.price) || 0)})\n` +
+                  `👉 Bấm nút bên dưới để vào mua ngay kẻo hết hàng!`;
 
+            const buttonText = isEn ? '⚡ Buy Now' : '⚡ Mua ngay sản phẩm này';
             const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
             const replyMarkup = buyUrl ? {
                 inline_keyboard: [
                     [
-                        { text: '⚡ Mua ngay sản phẩm này', url: buyUrl }
+                        { text: buttonText, url: buyUrl }
                     ]
                 ]
             } : undefined;
@@ -134,7 +146,7 @@ export async function POST(request: Request) {
             let totalUsersCount = 0;
 
             // 1. Send to Channel if channel is provided
-            if (targetChan) {
+            if (targetChan && (currentTargetType === 'channel' || currentTargetType === 'both')) {
                 try {
                     const payload: any = {
                         chat_id: targetChan,
@@ -182,10 +194,16 @@ export async function POST(request: Request) {
             }
 
             // Record last run timestamp
-            const nowStr = `${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')}`;
+            const now = new Date();
+            const nowStr = `${now.toLocaleTimeString('vi-VN')} ${now.toLocaleDateString('vi-VN')}`;
+            const nowTs = String(Date.now());
             await pool.query(
                 "INSERT INTO settings (`key`, `value`) VALUES ('auto_restock_last_run', ?) ON DUPLICATE KEY UPDATE `value` = ?",
                 [nowStr, nowStr]
+            );
+            await pool.query(
+                "INSERT INTO settings (`key`, `value`) VALUES ('auto_restock_last_run_timestamp', ?) ON DUPLICATE KEY UPDATE `value` = ?",
+                [nowTs, nowTs]
             );
 
             let resultMsg = '';

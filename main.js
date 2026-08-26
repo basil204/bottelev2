@@ -6,6 +6,7 @@ import { initDb, query, closeDb } from './includes/database/index.js';
 import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
 import { startGmailCleanup } from './includes/services/gmailCleanup.js';
+import { startAutoRestockScheduler } from './includes/services/autoRestockService.js';
 
 import { config } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
@@ -86,6 +87,7 @@ const bootstrap = async () => {
   startQrExpirationChecker(bot); // Always start QR expiration checker
   startAutoDepositWatcher(bot, config);
   startGmailCleanup(5, 5); // Check login và cleanup mỗi 5 phút
+  startAutoRestockScheduler(bot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
 
 };
 

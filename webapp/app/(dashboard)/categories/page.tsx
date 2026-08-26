@@ -170,7 +170,11 @@ export default function CategoriesPage() {
     };
 
     const openModal = (category?: Category) => {
-        setEditingCategory(category || { name: '', priority: 1, emoji: '', custom_emoji_id: '' });
+        setEditingCategory(
+            category
+                ? { ...category, emoji: category.emoji || '', custom_emoji_id: category.custom_emoji_id || '' }
+                : { name: '', priority: 1, emoji: '', custom_emoji_id: '' }
+        );
         setIsModalOpen(true);
     };
 
@@ -386,35 +390,69 @@ export default function CategoriesPage() {
                                 />
                             </div>
 
-                            {/* Field 2: EMOJI THƯỜNG */}
-                            <div className="space-y-1.5">
-                                <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-                                    <Smile className="h-3.5 w-3.5 text-zinc-500" />
-                                    <span>EMOJI THƯỜNG</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingCategory?.emoji || ''}
-                                    onChange={(e) => setEditingCategory(prev => ({ ...prev!, emoji: e.target.value }))}
-                                    placeholder="VD: ✨"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
-                                />
-                            </div>
+                            {/* Telegram Customization Box (Chỉ chọn 1 trong 2) */}
+                            <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-800">
+                                        <Smile className="h-4 w-4 text-orange-500" />
+                                        <span>TÙY CHỈNH NÚT BẤM DANH MỤC (CHỈ CHỌN 1 TRONG 2)</span>
+                                    </div>
+                                    {(editingCategory?.emoji || editingCategory?.custom_emoji_id) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingCategory(prev => ({ ...prev!, emoji: '', custom_emoji_id: '' }))}
+                                            className="text-[10px] text-zinc-400 hover:text-red-600 font-bold transition"
+                                        >
+                                            Đặt lại mặc định
+                                        </button>
+                                    )}
+                                </div>
 
-                            {/* Field 3: CUSTOM EMOJI ID ĐỘNG */}
-                            <div className="space-y-1.5">
-                                <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                                    CUSTOM EMOJI ID ĐỘNG
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingCategory?.custom_emoji_id || ''}
-                                    onChange={(e) => setEditingCategory(prev => ({ ...prev!, custom_emoji_id: e.target.value }))}
-                                    placeholder="VD: 5375135722514685501"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-mono text-zinc-900 outline-none focus:border-orange-500 transition"
-                                />
-                                <p className="text-[10px] text-zinc-400 font-medium leading-normal">
-                                    Emoji động dùng ID số của custom emoji Telegram. Khi có ID động, hệ thống ưu tiên ID động thay cho emoji thường.
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className={`space-y-1 rounded-xl p-2.5 transition border ${editingCategory?.emoji ? 'border-orange-500 bg-white shadow-xs' : 'border-zinc-200/80 bg-white/60'}`}>
+                                        <label className="text-[10px] font-bold uppercase text-zinc-600 flex items-center justify-between">
+                                            <span>1. EMOJI THƯỜNG</span>
+                                            {editingCategory?.emoji && <span className="text-[9px] text-orange-600 font-extrabold">ĐANG CHỌN</span>}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editingCategory?.emoji || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditingCategory(prev => ({
+                                                    ...prev!,
+                                                    emoji: val,
+                                                    custom_emoji_id: val ? '' : prev?.custom_emoji_id
+                                                }));
+                                            }}
+                                            placeholder="VD: ✨, 📂..."
+                                            className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs outline-none focus:border-orange-500"
+                                        />
+                                    </div>
+
+                                    <div className={`space-y-1 rounded-xl p-2.5 transition border ${editingCategory?.custom_emoji_id ? 'border-orange-500 bg-white shadow-xs' : 'border-zinc-200/80 bg-white/60'}`}>
+                                        <label className="text-[10px] font-bold uppercase text-zinc-600 flex items-center justify-between">
+                                            <span>2. CUSTOM EMOJI ID ĐỘNG</span>
+                                            {editingCategory?.custom_emoji_id && <span className="text-[9px] text-orange-600 font-extrabold">ĐANG CHỌN</span>}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editingCategory?.custom_emoji_id || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditingCategory(prev => ({
+                                                    ...prev!,
+                                                    custom_emoji_id: val,
+                                                    emoji: val ? '' : prev?.emoji
+                                                }));
+                                            }}
+                                            placeholder="VD: 5375135722514685501"
+                                            className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-xs font-mono outline-none focus:border-orange-500"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-zinc-400 font-medium">
+                                    💡 Nhập một trong 2 loại trên. Khi bạn gõ vào ô nào, ô còn lại sẽ tự động được xóa để tránh trùng lặp.
                                 </p>
                             </div>
 

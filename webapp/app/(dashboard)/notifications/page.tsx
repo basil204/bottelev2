@@ -7,7 +7,8 @@ import {
     MessageSquare, HelpCircle, Bell, Target, RefreshCw, Search, Copy, Check, X,
     Send, CheckCircle2, Eye, ExternalLink, ShieldCheck, User, Package, FileText,
     ArrowRight, Sparkles, AlertCircle, Clock, Radio, Globe, Flame, Heart,
-    ThumbsUp, ThumbsDown, Trash2, Plus, Move, Layers, Settings, ShieldAlert, Zap
+    ThumbsUp, ThumbsDown, Trash2, Plus, Move, Layers, Settings, ShieldAlert, Zap,
+    Upload
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -150,6 +151,8 @@ export default function NotificationsPage() {
     const [customEmojisJson, setCustomEmojisJson] = useState('{"💥": "5368324170671282286"}');
     const [inlineBtnText, setInlineBtnText] = useState('{5375135722514685501} Xem sản phẩm');
     const [inlineBtnCallback, setInlineBtnCallback] = useState('start:shop');
+    const [broadcastImage, setBroadcastImage] = useState('');
+    const [uploadingBroadcastImage, setUploadingBroadcastImage] = useState(false);
     const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
     // Auto Restock Form State
@@ -163,6 +166,7 @@ export default function NotificationsPage() {
     const [autoRule, setAutoRule] = useState<'random' | 'specific'>('random');
     const [autoMinQty, setAutoMinQty] = useState(15);
     const [autoMaxQty, setAutoMaxQty] = useState(50);
+    const [autoLastRun, setAutoLastRun] = useState('Chưa chạy lần nào');
     const [previewLang, setPreviewLang] = useState<'VI' | 'EN' | 'RU' | 'ZH'>('VI');
     const [savingAutoConfig, setSavingAutoConfig] = useState(false);
 
@@ -289,6 +293,9 @@ export default function NotificationsPage() {
                     setAutoRule(data.config.fakeRule);
                     setAutoMinQty(data.config.minQty);
                     setAutoMaxQty(data.config.maxQty);
+                    if (data.config.lastRun) {
+                        setAutoLastRun(data.config.lastRun);
+                    }
                 }
             })
             .catch((err) => console.error(err));
@@ -458,6 +465,34 @@ export default function NotificationsPage() {
         }
     };
 
+    // Broadcast Image Upload
+    const handleBroadcastImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingBroadcastImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (res.ok && data.url) {
+                setBroadcastImage(data.url);
+                setSendType('Gửi kèm ảnh');
+            } else {
+                alert(data.error || 'Lỗi khi tải ảnh lên');
+            }
+        } catch {
+            alert('Lỗi kết nối khi tải ảnh');
+        } finally {
+            setUploadingBroadcastImage(false);
+            e.target.value = '';
+        }
+    };
+
     // Manual Broadcast Send
     const handleSendManualBroadcast = async () => {
         if (!broadcastMsg.trim()) {
@@ -470,7 +505,11 @@ export default function NotificationsPage() {
             const res = await fetch('/api/broadcast', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: broadcastMsg.trim(), type: 'custom' })
+                body: JSON.stringify({
+                    message: broadcastMsg.trim(),
+                    type: 'custom',
+                    imageUrl: broadcastImage.trim() || undefined
+                })
             });
             const data = await res.json();
             if (res.ok && data.success) {
@@ -509,6 +548,7 @@ export default function NotificationsPage() {
 
             if (res.ok) {
                 alert('Lưu cấu hình hẹn giờ thông báo kho ảo thành công!');
+                fetchAutoRestockConfig();
             } else {
                 const data = await res.json();
                 alert(data.error || 'Lỗi lưu cấu hình');
@@ -524,9 +564,24 @@ export default function NotificationsPage() {
         const res = await fetch('/api/broadcast/auto-restock', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'test_run' })
+            body: JSON.stringify({
+                action: 'test_run',
+                targetType: autoTarget,
+                channelId: autoChannelId,
+                channelLang: autoLang,
+                fakeRule: autoRule,
+                minQty: autoMinQty,
+                maxQty: autoMaxQty
+            })
         });
-        if (res.ok) alert('Đã gửi tin nhắn thông báo kho ảo thử nghiệm!');
+        if (res.ok) {
+            const data = await res.json();
+            alert(data.message || 'Đã gửi tin nhắn thông báo kho ảo thử nghiệm!');
+            fetchAutoRestockConfig();
+        } else {
+            const data = await res.json();
+            alert(data.error || 'Lỗi khi gửi thông báo thử nghiệm');
+        }
     };
 
     // Create / Save Retargeting Campaign
@@ -1259,14 +1314,43 @@ export default function NotificationsPage() {
                                         <p className="text-[10px] text-zinc-400 italic">Hỗ trợ thẻ hiệu ứng toàn màn hình: &#123;effect:fire&#125;, &#123;effect:party&#125; (tự động gửi trong chat riêng).</p>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                                         <div className="space-y-1">
                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">EMOJI ĐẦU DÒNG</label>
                                             <input type="text" value={bulletEmoji} onChange={e => setBulletEmoji(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500" />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ẢNH ĐÍNH KÈM</label>
-                                            <input type="file" className="w-full rounded-xl border border-zinc-200 bg-white p-1.5 text-xs text-zinc-500" />
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ẢNH ĐÍNH KÈM (TẢI LÊN HOẶC DÁN URL)</label>
+                                            <div className="flex items-center gap-2">
+                                                <label className="flex items-center gap-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white px-3 py-2 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition shrink-0">
+                                                    <Upload className="h-3.5 w-3.5" />
+                                                    <span>{uploadingBroadcastImage ? 'Đang tải...' : 'Chọn ảnh'}</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleBroadcastImageUpload}
+                                                        disabled={uploadingBroadcastImage}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={broadcastImage}
+                                                    onChange={e => setBroadcastImage(e.target.value)}
+                                                    placeholder="URL ảnh (https://...)"
+                                                    className="w-full rounded-xl border border-zinc-200 bg-white p-2 text-xs text-zinc-900 outline-none focus:border-orange-500 font-mono"
+                                                />
+                                                {broadcastImage && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setBroadcastImage('')}
+                                                        className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition shrink-0"
+                                                        title="Xóa ảnh"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1326,6 +1410,11 @@ export default function NotificationsPage() {
                                         </div>
 
                                         <div className="rounded-2xl bg-zinc-900 p-4 text-white text-xs font-sans space-y-3 shadow-inner">
+                                            {broadcastImage && (
+                                                <div className="overflow-hidden rounded-xl border border-zinc-700/60 bg-black/40">
+                                                    <img src={broadcastImage} alt="Broadcast Preview" className="w-full max-h-48 object-cover" />
+                                                </div>
+                                            )}
                                             <div className="whitespace-pre-wrap leading-relaxed text-[11px]">
                                                 {broadcastMsg}
                                             </div>
@@ -1344,7 +1433,7 @@ export default function NotificationsPage() {
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                 <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
                                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">TRẠNG THÁI TỰ ĐỘNG</span>
-                                    <div className="text-sm font-black text-red-600 mt-1 flex items-center gap-1.5">
+                                    <div className={`text-sm font-black mt-1 flex items-center gap-1.5 ${autoActive ? 'text-emerald-600' : 'text-red-600'}`}>
                                         <span>{autoActive ? '🟢 ĐÃ BẬT' : '🔴 ĐÃ TẮT'}</span>
                                     </div>
                                 </div>
@@ -1354,11 +1443,13 @@ export default function NotificationsPage() {
                                 </div>
                                 <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
                                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">ĐỐI TƯỢNG NHẬN TIN</span>
-                                    <div className="text-xs font-black text-purple-700 mt-1 uppercase">📢 CHỈ KÊNH TELEGRAM</div>
+                                    <div className="text-xs font-black text-purple-700 mt-1 uppercase">
+                                        {autoTarget === 'channel' ? '📢 KÊNH TELEGRAM' : autoTarget === 'users' ? '👥 TOÀN BỘ USER CSDL' : '🚀 CẢ KÊNH & USER'}
+                                    </div>
                                 </div>
                                 <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
                                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">LẦN PHÁT GẦN NHẤT</span>
-                                    <div className="text-xs font-semibold text-zinc-500 mt-1">Chưa chạy lần nào</div>
+                                    <div className="text-xs font-semibold text-zinc-700 mt-1">{autoLastRun}</div>
                                 </div>
                             </div>
 

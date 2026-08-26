@@ -544,7 +544,25 @@ export const registerListeners = (bot, config) => {
     }
 
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
-    return handleDepositAmount(bot, msg, user, config);
+    const handledDeposit = await handleDepositAmount(bot, msg, user, config);
+    if (handledDeposit) return;
+
+    // Tự động lưu tin nhắn từ khách hàng vào Hệ thống Trò chuyện / Hỗ trợ (Realtime Live Chat)
+    if (text && !text.startsWith('/')) {
+      try {
+        const { query } = await import('./database/index.js');
+        await query(
+          'INSERT INTO support_requests (user_id, telegram_id, request_type, status, customer_message, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+          [user.id, msg.from.id, 'SUPPORT', 'processing', text]
+        );
+        const { t } = await import('./helpers/langHelper.js');
+        const userLang = user?.language || 'vi';
+        const receivedMsg = t('msg_support_received', userLang) || '💬 Shop đã nhận được tin nhắn của bạn. Admin sẽ phản hồi trong giây lát!';
+        return bot.sendMessage(msg.chat.id, receivedMsg);
+      } catch (e) {
+        console.error('[CHAT] Error saving customer message:', e);
+      }
+    }
   });
 
   // Handle Photo Messages (Receipt Upload)

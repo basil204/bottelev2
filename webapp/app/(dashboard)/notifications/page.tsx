@@ -10,6 +10,7 @@ import {
     ThumbsUp, ThumbsDown, Trash2, Plus, Move, Layers, Settings, ShieldAlert, Zap
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface SupportTicket {
     id: number;
@@ -37,13 +38,22 @@ interface UserChat {
     username?: string | null;
     name?: string | null;
     balance: number;
-    created_at: string;
+    created_at?: string;
+    last_ticket_id?: number;
+    last_customer_message?: string | null;
+    last_admin_reply?: string | null;
+    last_status?: string | null;
+    last_message_time?: string | null;
+    unreplied_count?: number;
+    total_messages?: number;
 }
 
 interface ChatMessage {
-    id: number;
+    id: number | string;
+    ticket_id?: number;
     sender: 'user' | 'admin';
     text: string;
+    status?: string;
     created_at: string;
 }
 
@@ -73,6 +83,7 @@ interface ProductOption {
 
 export default function NotificationsPage() {
     const { t } = useLanguage();
+    const { formatPrice } = useCurrency();
     const router = useRouter();
     const searchParams = useSearchParams();
     const tabParam = searchParams.get('tab') || 'support';
@@ -120,8 +131,8 @@ export default function NotificationsPage() {
     const [loadingChatUsers, setLoadingChatUsers] = useState(false);
     const [selectedChatUser, setSelectedChatUser] = useState<UserChat | null>(null);
     const [chatSearch, setChatSearch] = useState('');
-    const [chatPage, setChatPage] = useState(1);
-    const [totalChatPages, setTotalChatPages] = useState(1);
+    const [chatTabFilter, setChatTabFilter] = useState<'all' | 'unreplied' | 'unread' | 'replied'>('all');
+    const [chatStats, setChatStats] = useState({ total: 0, unreplied: 0, newToday: 0 });
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [chatInputText, setChatInputText] = useState('');
     const [sendingChatMessage, setSendingChatMessage] = useState(false);
@@ -216,41 +227,51 @@ export default function NotificationsPage() {
             .catch(() => { setTickets([]); setLoadingTickets(false); });
     };
 
-    const fetchChatUsers = () => {
-        setLoadingChatUsers(true);
-        fetch(`/api/users?page=${chatPage}&limit=20&search=${chatSearch}`)
+    const fetchChatUsers = (silent = false) => {
+        if (!silent) setLoadingChatUsers(true);
+        fetch(`/api/support?action=chat_conversations&tab=${chatTabFilter}&search=${encodeURIComponent(chatSearch)}`)
             .then((res) => res.json())
             .then((data) => {
                 const list = Array.isArray(data.data) ? data.data : [];
                 setChatUsers(list);
-                setTotalChatPages(data.pagination?.totalPages || 1);
-                setLoadingChatUsers(false);
+                if (data.stats) setChatStats(data.stats);
+                if (!silent) setLoadingChatUsers(false);
                 if (list.length > 0 && !selectedChatUser) {
                     setSelectedChatUser(list[0]);
                     fetchUserChatHistory(list[0]);
                 }
             })
-            .catch(() => { setChatUsers([]); setLoadingChatUsers(false); });
+            .catch(() => {
+                if (!silent) {
+                    setChatUsers([]);
+                    setLoadingChatUsers(false);
+                }
+            });
     };
 
-    const fetchUserChatHistory = (u: UserChat) => {
+    const fetchUserChatHistory = (u: UserChat, silent = false) => {
         const tid = u.telegram_id || u.id;
-        fetch(`/api/support?telegramId=${tid}`)
+        fetch(`/api/support?action=chat_history&telegramId=${tid}`)
             .then(res => res.json())
             .then(data => {
                 const list = Array.isArray(data.data) ? data.data : [];
-                const msgs: ChatMessage[] = [];
-                list.forEach((item: any) => {
-                    if (item.customer_message) {
-                        msgs.push({ id: item.id * 2, sender: 'user', text: item.customer_message, created_at: item.created_at });
-                    }
-                    if (item.admin_reply) {
-                        msgs.push({ id: item.id * 2 + 1, sender: 'admin', text: item.admin_reply, created_at: item.updated_at || item.created_at });
-                    }
-                });
-                setChatMessages(msgs);
+                setChatMessages(list);
             })
-            .catch(() => setChatMessages([]));
+            .catch(() => {
+                if (!silent) setChatMessages([]);
+            });
+    };
+
+    const handleMarkAllRead = async () => {
+        if (!selectedChatUser) return;
+        const tid = selectedChatUser.telegram_id || selectedChatUser.id;
+        await fetch('/api/support', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'mark_all_read', telegramId: tid })
+        });
+        fetchChatUsers(true);
+        fetchUserChatHistory(selectedChatUser, true);
     };
 
     const fetchAutoRestockConfig = () => {
@@ -288,9 +309,18 @@ export default function NotificationsPage() {
 
     useEffect(() => {
         if (activeTab === 'support') fetchTickets();
-        if (activeTab === 'chat') fetchChatUsers();
+        if (activeTab === 'chat') {
+            fetchChatUsers();
+            const interval = setInterval(() => {
+                fetchChatUsers(true);
+                if (selectedChatUser) {
+                    fetchUserChatHistory(selectedChatUser, true);
+                }
+            }, 3000);
+            return () => clearInterval(interval);
+        }
         if (activeTab === 'retargeting') fetchCampaigns();
-    }, [activeTab, statusFilter, typeFilter, chatPage, retargetingStatusFilter]);
+    }, [activeTab, statusFilter, typeFilter, chatTabFilter, selectedChatUser?.telegram_id, retargetingStatusFilter]);
 
     const handleCopy = (text: string, fieldId: string) => {
         if (!text) return;
@@ -403,20 +433,26 @@ export default function NotificationsPage() {
     // Live Chat Send
     const handleSendChatMessage = async () => {
         if (!selectedChatUser || !chatInputText.trim()) return;
+        const textToSend = chatInputText.trim();
         setSendingChatMessage(true);
         try {
             const res = await fetch('/api/support', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'send_reply', telegramId: selectedChatUser.telegram_id, replyText: chatInputText.trim() })
+                body: JSON.stringify({
+                    action: 'send_reply',
+                    telegramId: selectedChatUser.telegram_id || selectedChatUser.id,
+                    replyText: textToSend
+                })
             });
 
             if (res.ok) {
-                setChatMessages(prev => [...prev, { id: Date.now(), sender: 'admin', text: chatInputText.trim(), created_at: new Date().toISOString() }]);
                 setChatInputText('');
+                fetchUserChatHistory(selectedChatUser, true);
+                fetchChatUsers(true);
             }
         } catch (e) {
-            alert('Lỗi gửi chat');
+            alert('Lỗi gửi tin nhắn');
         } finally {
             setSendingChatMessage(false);
         }
@@ -744,95 +780,372 @@ export default function NotificationsPage() {
                 </div>
             )}
 
-            {/* TAB 2: TRÒ CHUYỆN / CHAT */}
+            {/* TAB 2: TRÒ CHUYỆN / CHAT (REALTIME BOT) */}
             {activeTab === 'chat' && (
                 <div className="space-y-6">
-                    <div className="flex items-center justify-between">
+                    {/* Header with Realtime Indicator & Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600 font-bold border border-orange-200">
-                                <MessageSquare className="h-5 w-5" />
+                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 font-black border border-orange-200 shadow-2xs">
+                                <MessageSquare className="h-6 w-6" />
                             </div>
                             <div>
-                                <h1 className="text-xl sm:text-2xl font-black uppercase text-zinc-900">TRÒ CHUYỆN / CHAT</h1>
-                                <p className="text-xs text-zinc-500 font-medium">Danh sách khách hàng · Lịch sử hội thoại & Chăm sóc khách hàng</p>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-zinc-900">
+                                        TRÒ CHUYỆN / CHAT
+                                    </h1>
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-black text-emerald-700">
+                                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span>REALTIME BOT</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-zinc-500 font-medium">
+                                    Hội thoại trực tiếp với khách hàng Telegram · Tự động phân loại tin nhắn chưa đọc & chưa trả lời
+                                </p>
                             </div>
                         </div>
 
-                        <button onClick={fetchChatUsers} className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-extrabold uppercase text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5">
-                            <RefreshCw className="h-3.5 w-3.5" /><span>Làm mới</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    fetchChatUsers();
+                                    if (selectedChatUser) fetchUserChatHistory(selectedChatUser);
+                                }}
+                                className="rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-extrabold uppercase text-zinc-700 hover:bg-zinc-50 transition active:scale-95 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loadingChatUsers ? 'animate-spin text-orange-600' : ''}`} />
+                                <span>LÀM MỚI</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-14rem)] min-h-[500px]">
-                        <div className="lg:col-span-4 rounded-2xl border border-zinc-200 bg-white flex flex-col overflow-hidden shadow-2xs">
+                    {/* Chat Main Workspace Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-14rem)] min-h-[600px]">
+                        {/* LEFT COLUMN: CUSTOMER CONVERSATION LIST */}
+                        <div className="lg:col-span-4 rounded-2xl border border-zinc-200/80 bg-white flex flex-col overflow-hidden shadow-2xs">
+                            {/* Search & Header */}
                             <div className="p-3.5 border-b border-zinc-100 space-y-3 bg-zinc-50/50">
                                 <div className="flex items-center justify-between">
                                     <span className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-1.5">
-                                        <User className="h-3.5 w-3.5 text-orange-600" /><span>KHÁCH HÀNG</span>
+                                        <User className="h-3.5 w-3.5 text-orange-600" />
+                                        <span>KHÁCH HÀNG</span>
                                     </span>
-                                    <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-extrabold text-orange-600">{chatUsers.length}</span>
+                                    <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-extrabold text-orange-600">
+                                        {chatUsers.length} hội thoại
+                                    </span>
                                 </div>
+
+                                {/* Category Filters */}
+                                <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-zinc-200/60 text-[11px] font-bold">
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatTabFilter('all')}
+                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${
+                                            chatTabFilter === 'all' ? 'bg-white text-zinc-900 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                        }`}
+                                    >
+                                        Tất cả
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatTabFilter('unreplied')}
+                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${
+                                            chatTabFilter === 'unreplied' ? 'bg-white text-red-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                        }`}
+                                    >
+                                        <span>Chưa rep</span>
+                                        {chatStats.unreplied > 0 && (
+                                            <span className="rounded-full bg-red-500 text-white text-[9px] px-1 py-0.2 font-black leading-none">
+                                                {chatStats.unreplied}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatTabFilter('unread')}
+                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${
+                                            chatTabFilter === 'unread' ? 'bg-white text-orange-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                        }`}
+                                    >
+                                        <span>Mới nhất</span>
+                                        {chatStats.newToday > 0 && (
+                                            <span className="rounded-full bg-orange-500 text-white text-[9px] px-1 py-0.2 font-black leading-none">
+                                                {chatStats.newToday}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatTabFilter('replied')}
+                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${
+                                            chatTabFilter === 'replied' ? 'bg-white text-emerald-700 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                        }`}
+                                    >
+                                        Đã xong
+                                    </button>
+                                </div>
+
+                                {/* Search Bar */}
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                                    <input type="text" value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && fetchChatUsers()} placeholder="Tìm theo tên, username, chat_id..." className="w-full rounded-xl border border-zinc-200 bg-white pl-8 pr-3 py-1.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500" />
+                                    <input
+                                        type="text"
+                                        value={chatSearch}
+                                        onChange={(e) => setChatSearch(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && fetchChatUsers()}
+                                        placeholder="Tìm theo tên, username, telegram ID..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white pl-8 pr-3 py-1.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 transition"
+                                    />
+                                    {chatSearch && (
+                                        <button
+                                            onClick={() => { setChatSearch(''); fetchChatUsers(); }}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 p-1">
-                                {loadingChatUsers ? <div className="p-8 text-center text-xs text-zinc-400">Đang tải...</div> : chatUsers.map(u => (
-                                    <button key={u.id} onClick={() => { setSelectedChatUser(u); fetchUserChatHistory(u); }} className={`w-full text-left p-3 rounded-xl transition ${selectedChatUser?.id === u.id ? 'bg-orange-50/80 border border-orange-200' : 'hover:bg-zinc-50'}`}>
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-extrabold text-xs text-zinc-900 truncate">{u.name || u.username || `User #${u.id}`}</span>
-                                            {u.username && <span className="text-[10px] font-bold text-orange-600">@{u.username}</span>}
-                                        </div>
-                                        <div className="text-[10px] font-mono text-zinc-400 mt-1 flex items-center justify-between">
-                                            <span>Chat ID: {u.telegram_id || u.id}</span>
-                                            <span>User ID: {u.telegram_id || u.id}</span>
-                                        </div>
-                                    </button>
-                                ))}
+                            {/* User List */}
+                            <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 p-1.5 space-y-1">
+                                {loadingChatUsers && chatUsers.length === 0 ? (
+                                    <div className="p-8 text-center text-xs text-zinc-400">
+                                        <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2 text-orange-600" />
+                                        <span>Đang tải danh sách hội thoại...</span>
+                                    </div>
+                                ) : chatUsers.length === 0 ? (
+                                    <div className="p-8 text-center text-xs text-zinc-400">
+                                        Không tìm thấy hội thoại nào phù hợp.
+                                    </div>
+                                ) : (
+                                    chatUsers.map(u => {
+                                        const isSelected = selectedChatUser?.id === u.id || selectedChatUser?.telegram_id === u.telegram_id;
+                                        const isUnreplied = Number(u.unreplied_count) > 0 || (u.last_customer_message && (!u.last_admin_reply || u.last_admin_reply.trim() === '') && u.last_status !== 'completed');
+                                        const previewText = u.last_customer_message
+                                            ? `Khách: ${u.last_customer_message}`
+                                            : (u.last_admin_reply ? `Bạn: ${u.last_admin_reply}` : 'Chưa có tin nhắn');
+
+                                        let formattedTime = '';
+                                        if (u.last_message_time) {
+                                            const d = new Date(u.last_message_time);
+                                            formattedTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                        }
+
+                                        return (
+                                            <button
+                                                key={u.telegram_id || u.id}
+                                                onClick={() => {
+                                                    setSelectedChatUser(u);
+                                                    fetchUserChatHistory(u);
+                                                }}
+                                                className={`w-full text-left p-3 rounded-2xl transition cursor-pointer relative ${
+                                                    isSelected
+                                                        ? 'bg-orange-50 border border-orange-200 shadow-2xs'
+                                                        : 'hover:bg-zinc-50 border border-transparent'
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                                            isUnreplied
+                                                                ? 'bg-red-50 text-red-600 border border-red-200 ring-2 ring-red-400/30'
+                                                                : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+                                                        }`}>
+                                                            {u.name ? u.name.slice(0, 1).toUpperCase() : 'U'}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-extrabold text-xs text-zinc-900 truncate">
+                                                                    {u.name || u.username || `User #${u.id}`}
+                                                                </span>
+                                                                {u.username && (
+                                                                    <span className="text-[10px] font-bold text-orange-600 shrink-0">
+                                                                        @{u.username}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[10px] font-mono text-zinc-400 truncate">
+                                                                ID: {u.telegram_id || u.id}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                                                        {formattedTime && (
+                                                            <span className="text-[9px] font-mono text-zinc-400">
+                                                                {formattedTime}
+                                                            </span>
+                                                        )}
+                                                        {isUnreplied ? (
+                                                            <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 border border-red-200 px-1.5 py-0.2 text-[9px] font-black text-red-700 animate-pulse">
+                                                                CHƯA REP
+                                                            </span>
+                                                        ) : (
+                                                            u.last_admin_reply && (
+                                                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-600">
+                                                                    <Check className="h-2.5 w-2.5" /> Đã trả lời
+                                                                </span>
+                                                            )
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Last Message Snippet */}
+                                                <div className="mt-2 text-[11px] text-zinc-500 font-medium truncate flex items-center gap-1">
+                                                    <span className="truncate">{previewText}</span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
                             </div>
                         </div>
 
-                        <div className="lg:col-span-8 rounded-2xl border border-zinc-200 bg-white flex flex-col overflow-hidden shadow-2xs">
+                        {/* RIGHT COLUMN: LIVE CHAT WINDOW */}
+                        <div className="lg:col-span-8 rounded-2xl border border-zinc-200/80 bg-white flex flex-col overflow-hidden shadow-2xs">
                             {selectedChatUser ? (
                                 <>
-                                    <div className="p-3.5 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-                                        <div>
-                                            <span className="font-black text-sm text-zinc-900">{selectedChatUser.name || 'Khách hàng'}</span>
-                                            <div className="text-[11px] font-mono text-zinc-500">ID: {selectedChatUser.telegram_id} {selectedChatUser.username && `· @${selectedChatUser.username}`}</div>
+                                    {/* Chat Header */}
+                                    <div className="p-3.5 border-b border-zinc-100 bg-zinc-50/60 flex items-center justify-between shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-9 w-9 rounded-xl bg-orange-100 text-orange-700 font-black flex items-center justify-center border border-orange-200 text-sm">
+                                                {selectedChatUser.name ? selectedChatUser.name.slice(0, 1).toUpperCase() : 'U'}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-black text-sm text-zinc-900">
+                                                        {selectedChatUser.name || 'Khách hàng'}
+                                                    </span>
+                                                    {selectedChatUser.username && (
+                                                        <span className="text-xs font-bold text-orange-600 font-mono">
+                                                            @{selectedChatUser.username}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+                                                    <span>Telegram ID: <strong>{selectedChatUser.telegram_id || selectedChatUser.id}</strong></span>
+                                                    <span>·</span>
+                                                    <span>Số dư: <strong className="text-emerald-600">{formatPrice(Number(selectedChatUser.balance) || 0)}</strong></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleMarkAllRead}
+                                                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 hover:bg-emerald-100 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                title="Đánh dấu các yêu cầu của khách là Đã Xong"
+                                            >
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                <span>ĐÃ XỬ LÝ</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => fetchUserChatHistory(selectedChatUser)}
+                                                className="p-2 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 transition cursor-pointer shadow-2xs"
+                                                title="Tải lại tin nhắn"
+                                            >
+                                                <RefreshCw className="h-3.5 w-3.5" />
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-50/30">
-                                        <div className="text-center text-[11px] text-zinc-400">Cuộc trò chuyện với {selectedChatUser.name || `@${selectedChatUser.username}`}</div>
+
+                                    {/* Chat Message Stream */}
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-zinc-50/40">
+                                        <div className="text-center text-[11px] text-zinc-400 font-medium">
+                                            Lịch sử hội thoại Telegram với {selectedChatUser.name || `@${selectedChatUser.username || selectedChatUser.telegram_id}`}
+                                        </div>
+
                                         {chatMessages.length === 0 ? (
-                                            <div className="py-8 text-center text-xs text-zinc-400">Chưa có lịch sử nhắn tin. Hãy nhập nội dung và bấm Gửi để chat với khách hàng qua Telegram.</div>
+                                            <div className="py-16 text-center text-xs text-zinc-400 max-w-sm mx-auto space-y-2">
+                                                <MessageSquare className="h-8 w-8 mx-auto text-zinc-300 stroke-1" />
+                                                <p>Chưa có lịch sử tin nhắn. Nhập nội dung bên dưới và bấm <strong>GỬI</strong> để nhắn tin trực tiếp qua Telegram tới khách hàng.</p>
+                                            </div>
                                         ) : (
-                                            chatMessages.map(m => (
-                                                <div key={m.id} className={`flex ${m.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`max-w-[75%] rounded-2xl p-3 text-xs leading-relaxed ${m.sender === 'admin' ? 'bg-orange-600 text-white rounded-br-none' : 'bg-white border border-zinc-200 text-zinc-900 rounded-bl-none shadow-2xs'}`}>{m.text}</div>
-                                                </div>
-                                            ))
+                                            chatMessages.map((m, idx) => {
+                                                const isAdmin = m.sender === 'admin';
+                                                let msgTime = '';
+                                                if (m.created_at) {
+                                                    const d = new Date(m.created_at);
+                                                    msgTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                                }
+
+                                                return (
+                                                    <div
+                                                        key={m.id || idx}
+                                                        className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'} space-y-1`}
+                                                    >
+                                                        <div
+                                                            className={`max-w-[78%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs whitespace-pre-wrap break-words ${
+                                                                isAdmin
+                                                                    ? 'bg-orange-600 text-white rounded-br-xs'
+                                                                    : 'bg-white border border-zinc-200/80 text-zinc-900 rounded-bl-xs'
+                                                            }`}
+                                                        >
+                                                            {m.text}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 px-1">
+                                                            <span>{isAdmin ? 'Admin' : (selectedChatUser.name || 'Khách')}</span>
+                                                            {msgTime && <span>· {msgTime}</span>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
                                         )}
                                     </div>
-                                    <div className="p-3 border-t border-zinc-100 flex items-center gap-2">
+
+                                    {/* Quick Reply Suggestions */}
+                                    <div className="px-3 py-1.5 border-t border-zinc-100 bg-white flex items-center gap-1.5 overflow-x-auto text-[11px]">
+                                        <span className="text-zinc-400 font-bold shrink-0 text-[10px] uppercase">Gợi ý nhanh:</span>
+                                        {[
+                                            '👋 Chào bạn, shop có thể hỗ trợ gì ạ?',
+                                            '✅ Shop đã kiểm tra và xử lý xong cho bạn rồi nhé!',
+                                            '📦 Bạn vui lòng cung cấp mã đơn hàng để shop kiểm tra nhé.',
+                                            '🙏 Cảm ơn bạn đã tin tưởng và ủng hộ shop!'
+                                        ].map((template, tIdx) => (
+                                            <button
+                                                key={tIdx}
+                                                type="button"
+                                                onClick={() => setChatInputText(template)}
+                                                className="px-2 py-0.5 rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition whitespace-nowrap shrink-0 text-[11px] cursor-pointer"
+                                            >
+                                                {template}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Chat Input Bar */}
+                                    <div className="p-3 border-t border-zinc-100 bg-white flex items-center gap-2 shrink-0">
                                         <input
                                             type="text"
                                             value={chatInputText}
                                             onChange={(e) => setChatInputText(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                                            placeholder={`Nhập nội dung tin nhắn gửi tới ${selectedChatUser.name || selectedChatUser.username || selectedChatUser.telegram_id}...`}
-                                            className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500"
+                                            placeholder={`Nhập nội dung tin nhắn gửi tới ${selectedChatUser.name || selectedChatUser.username || selectedChatUser.telegram_id}... (Enter để gửi)`}
+                                            className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-2.5 text-xs font-medium text-zinc-900 outline-none focus:bg-white focus:border-orange-500 transition"
                                         />
-                                        <button onClick={handleSendChatMessage} disabled={sendingChatMessage || !chatInputText.trim()} className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-5 py-2 text-xs font-extrabold uppercase shadow-xs flex items-center gap-1.5 disabled:opacity-40">
-                                            <Send className="h-3.5 w-3.5" /><span>GỬI</span>
+                                        <button
+                                            onClick={handleSendChatMessage}
+                                            disabled={sendingChatMessage || !chatInputText.trim()}
+                                            className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-xs font-black uppercase shadow-xs flex items-center gap-1.5 disabled:opacity-40 transition active:scale-95 cursor-pointer"
+                                        >
+                                            <Send className={`h-3.5 w-3.5 ${sendingChatMessage ? 'animate-pulse' : ''}`} />
+                                            <span>{sendingChatMessage ? 'ĐANG GỬI...' : 'GỬI'}</span>
                                         </button>
                                     </div>
                                 </>
                             ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                                    <MessageSquare className="h-12 w-12 text-zinc-300 stroke-1 mb-3" />
-                                    <p className="text-xs font-medium text-zinc-400 max-w-sm">Vui lòng chọn một khách hàng từ danh sách bên trái để bắt đầu cuộc trò chuyện.</p>
+                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3">
+                                    <div className="h-16 w-16 rounded-3xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
+                                        <MessageSquare className="h-8 w-8 stroke-1" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-extrabold text-sm text-zinc-800">Chưa chọn cuộc trò chuyện</h3>
+                                        <p className="text-xs font-medium text-zinc-400 max-w-sm mt-1">
+                                            Vui lòng chọn một khách hàng từ danh sách bên trái để xem lịch sử và chat realtime qua Telegram.
+                                        </p>
+                                    </div>
                                 </div>
                             )}
                         </div>

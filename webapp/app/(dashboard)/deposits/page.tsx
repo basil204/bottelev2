@@ -1088,16 +1088,7 @@ export default function DepositsPage() {
                         </div>
                     </div>
                 </>
-            )}                   <button
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page >= totalPages || loading}
-                            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs"
-                        >
-                            Trang sau
-                        </button>
-                    </div>
-                </div>
-            </div>
+            )}
 
             {/* MODAL 1: GIÁ RIÊNG THEO KHÁCH */}
             {isCustomPriceModalOpen && selectedUser && mounted && createPortal(

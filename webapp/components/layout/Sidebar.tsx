@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import {
   BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
-  Wallet, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
+  Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
   Bell, Target, Settings, Code2, Layers, Globe, Link as LinkIcon,
   Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X
 } from 'lucide-react';

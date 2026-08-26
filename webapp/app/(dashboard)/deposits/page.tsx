@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom';
 import {
     Wallet, CreditCard, ShieldCheck, Clock, Download, RefreshCw,
     Search, Copy, Check, X, Tag, PlusCircle, MinusCircle, Ban, Eye,
-    Sparkles, ArrowDownCircle, ArrowUpCircle, FileText, Lock, Key
+    Sparkles, ArrowDownCircle, ArrowUpCircle, FileText, Lock, Key,
+    CheckCircle2, XCircle, History
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -20,6 +21,20 @@ interface UserWallet {
     updated_at?: string;
     tx_count?: number;
     last_tx_time?: string;
+}
+
+interface DepositItem {
+    id: number;
+    user_id: number;
+    username?: string | null;
+    telegram_id?: number | null;
+    amount: number;
+    type: string;
+    status: string;
+    code?: string | null;
+    content?: string | null;
+    created_at: string;
+    updated_at?: string;
 }
 
 interface CustomPriceItem {
@@ -81,6 +96,19 @@ export default function DepositsPage() {
         }
     };
 
+    const [mainTab, setMainTab] = useState<'deposits' | 'wallets'>('deposits');
+
+    // Deposit History State
+    const [deposits, setDeposits] = useState<DepositItem[]>([]);
+    const [depositLoading, setDepositLoading] = useState(true);
+    const [depositPage, setDepositPage] = useState(1);
+    const [depositTotalPages, setDepositTotalPages] = useState(1);
+    const [depositTotal, setDepositTotal] = useState(0);
+    const [depositSearch, setDepositSearch] = useState('');
+    const [depositTypeFilter, setDepositTypeFilter] = useState('all');
+    const [depositStatusFilter, setDepositStatusFilter] = useState('all');
+    const [processingDepositId, setProcessingDepositId] = useState<number | null>(null);
+
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [balanceFilter, setBalanceFilter] = useState('all');
@@ -113,8 +141,109 @@ export default function DepositsPage() {
     useEffect(() => {
         setMounted(true);
         fetchProducts();
-        fetchUsers();
-    }, [page, balanceFilter, statusFilter, sortFilter]);
+        if (mainTab === 'deposits') {
+            fetchDeposits();
+        } else {
+            fetchUsers();
+        }
+    }, [mainTab, depositPage, depositTypeFilter, depositStatusFilter, page, balanceFilter, statusFilter, sortFilter]);
+
+    const fetchDeposits = () => {
+        setDepositLoading(true);
+        const params = new URLSearchParams({
+            page: String(depositPage),
+            limit: '10',
+            search: depositSearch,
+            type: depositTypeFilter,
+            status: depositStatusFilter,
+        });
+
+        fetch(`/api/deposits?${params.toString()}`)
+            .then((res) => res.json())
+            .then((data) => {
+                setDeposits(Array.isArray(data.data) ? data.data : []);
+                setDepositTotalPages(data.pagination?.totalPages || 1);
+                setDepositTotal(data.pagination?.total || 0);
+                setDepositLoading(false);
+            })
+            .catch((err) => {
+                console.error(err);
+                setDeposits([]);
+                setDepositTotalPages(1);
+                setDepositTotal(0);
+                setDepositLoading(false);
+            });
+    };
+
+    const handleDepositSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setDepositPage(1);
+        fetchDeposits();
+    };
+
+    const handleApproveDeposit = async (d: DepositItem) => {
+        const inputAmount = window.prompt(
+            `Xác nhận DUYỆT nạp tiền #${d.id} cho Khách ${d.username || d.user_id}.\n\nNhập số tiền thực nhận (VNĐ):`,
+            String(d.amount)
+        );
+        if (inputAmount === null) return;
+        const finalAmt = Number(inputAmount);
+        if (isNaN(finalAmt) || finalAmt <= 0) {
+            alert('Số tiền không hợp lệ!');
+            return;
+        }
+
+        setProcessingDepositId(d.id);
+        try {
+            const res = await fetch('/api/deposits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    depositId: d.id,
+                    action: 'approve',
+                    amount: finalAmt
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`✅ Đã duyệt đơn nạp #${d.id} thành công!`);
+                fetchDeposits();
+            } else {
+                alert(data.error || 'Lỗi khi duyệt nạp tiền');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối server');
+        } finally {
+            setProcessingDepositId(null);
+        }
+    };
+
+    const handleRejectDeposit = async (d: DepositItem) => {
+        if (!window.confirm(`Bạn có chắc chắn muốn TỪ CHỐI yêu cầu nạp tiền #${d.id}?`)) return;
+
+        setProcessingDepositId(d.id);
+        try {
+            const res = await fetch('/api/deposits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    depositId: d.id,
+                    action: 'reject'
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`❌ Đã từ chối đơn nạp #${d.id}`);
+                fetchDeposits();
+            } else {
+                alert(data.error || 'Lỗi khi từ chối nạp tiền');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối server');
+        } finally {
+            setProcessingDepositId(null);
+        }
+    };
 
     const fetchProducts = () => {
         fetch('/api/products')
@@ -384,6 +513,10 @@ export default function DepositsPage() {
     const pageTotalBalance = users.reduce((acc, u) => acc + (Number(u.balance) || 0), 0);
     const activeCount = users.filter(u => !u.is_banned).length;
 
+    const depositPendingCount = deposits.filter(d => d.status === 'pending').length;
+    const depositApprovedCount = deposits.filter(d => d.status === 'approved').length;
+    const depositRejectedCount = deposits.filter(d => d.status === 'rejected').length;
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-2 sm:p-4">
             {/* Header Title */}
@@ -394,298 +527,568 @@ export default function DepositsPage() {
                     </div>
                     <div>
                         <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
-                            VÍ TIỀN
+                            {mainTab === 'deposits' ? 'LỊCH SỬ NẠP TIỀN' : 'VÍ & SỐ DƯ'}
                         </h1>
-                        <p className="text-xs text-zinc-500 font-medium">Quản lý số dư, nạp rút và lịch sử giao dịch ví của khách hàng</p>
+                        <p className="text-xs text-zinc-500 font-medium">
+                            {mainTab === 'deposits'
+                                ? 'Theo dõi các yêu cầu nạp tiền, duyệt nạp USDT và Ngân hàng'
+                                : 'Quản lý số dư, nạp rút và lịch sử giao dịch ví của khách hàng'}
+                        </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => alert('Đã xuất file CSV thành công!')}
-                        className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-extrabold uppercase text-zinc-700 hover:bg-zinc-50 transition active:scale-95 shadow-2xs flex items-center gap-1.5"
+                        className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-extrabold uppercase text-zinc-700 hover:bg-zinc-50 transition active:scale-95 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                     >
                         <Download className="h-3.5 w-3.5" />
                         <span>XUẤT CSV</span>
                     </button>
                     <button
-                        onClick={fetchUsers}
+                        onClick={() => mainTab === 'deposits' ? fetchDeposits() : fetchUsers()}
                         title="Tải lại"
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 active:scale-95 transition shadow-2xs"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 active:scale-95 transition shadow-2xs cursor-pointer"
                     >
-                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-4 w-4 ${(mainTab === 'deposits' ? depositLoading : loading) ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
             </div>
 
-            {/* Summary Cards Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG KHÁCH</span>
-                        <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
-                            <span className="text-xs font-bold">👤</span>
+            {/* Main Tabs Navigation */}
+            <div className="flex items-center gap-2 border-b border-zinc-200 pb-2 overflow-x-auto">
+                <button
+                    onClick={() => setMainTab('deposits')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                        mainTab === 'deposits'
+                            ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                            : 'bg-zinc-100/80 text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
+                    }`}
+                >
+                    <History className="h-4 w-4" />
+                    <span>LỊCH SỬ NẠP TIỀN ({depositTotal})</span>
+                </button>
+                <button
+                    onClick={() => setMainTab('wallets')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                        mainTab === 'wallets'
+                            ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                            : 'bg-zinc-100/80 text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
+                    }`}
+                >
+                    <Wallet className="h-4 w-4" />
+                    <span>QUẢN LÝ VÍ & SỐ DƯ ({totalUsers})</span>
+                </button>
+            </div>
+
+            {mainTab === 'deposits' ? (
+                <>
+                    {/* Summary Cards Grid for Deposit History */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG YÊU CẦU</span>
+                                <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                                    <FileText className="h-3.5 w-3.5" />
+                                </div>
+                            </div>
+                            <div className="text-xl font-black text-zinc-900 mt-1">{depositTotal}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Trang {depositPage}/{depositTotalPages}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700">ĐANG CHỜ DUYỆT</span>
+                                <Clock className="h-4 w-4 text-amber-600" />
+                            </div>
+                            <div className="text-xl font-black text-amber-700 mt-1">{depositPendingCount} Đơn</div>
+                            <p className="text-[10px] text-amber-600/80 font-medium mt-0.5">Yêu cầu cần xử lý ngay</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">ĐÃ THÀNH CÔNG</span>
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div className="text-xl font-black text-emerald-700 mt-1">{depositApprovedCount} Đơn</div>
+                            <p className="text-[10px] text-emerald-600/80 font-medium mt-0.5">Đã cộng số dư tự động/thủ công</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-red-200/80 bg-red-50/50 p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">ĐÃ TỪ CHỐI</span>
+                                <XCircle className="h-4 w-4 text-red-600" />
+                            </div>
+                            <div className="text-xl font-black text-red-700 mt-1">{depositRejectedCount} Đơn</div>
+                            <p className="text-[10px] text-red-600/80 font-medium mt-0.5">Đã bị từ chối/hủy bỏ</p>
                         </div>
                     </div>
-                    <div className="text-xl font-black text-zinc-900 mt-1">{totalUsers}</div>
-                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Trang hiện tại {page}/{totalPages}</p>
-                </div>
 
-                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">SỐ DƯ TRANG NÀY</span>
-                        <CreditCard className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <div className="text-xl font-black text-emerald-600 mt-1">{formatCurrency(pageTotalBalance)}</div>
-                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">{users.length} ví hiển thị</p>
-                </div>
+                    {/* Deposit Filter Form */}
+                    <form onSubmit={handleDepositSearchSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-6 relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                            <input
+                                type="text"
+                                value={depositSearch}
+                                onChange={(e) => setDepositSearch(e.target.value)}
+                                placeholder="Tìm theo mã đơn (#ID), username, Telegram ID..."
+                                className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 transition shadow-2xs"
+                            />
+                        </div>
 
-                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TRẠNG THÁI</span>
-                        <ShieldCheck className="h-4 w-4 text-sky-500" />
-                    </div>
-                    <div className="text-sm font-black text-emerald-600 mt-1 flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>{activeCount} Đang hoạt động</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Không có ví bị khóa</p>
-                </div>
+                        <div className="sm:col-span-2">
+                            <select
+                                value={depositTypeFilter}
+                                onChange={(e) => setDepositTypeFilter(e.target.value)}
+                                className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs cursor-pointer"
+                            >
+                                <option value="all">Tất cả phương thức</option>
+                                <option value="bank">Ngân hàng (Bank)</option>
+                                <option value="usdt">Ví USDT</option>
+                            </select>
+                        </div>
 
-                <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">GIAO DỊCH</span>
-                        <Clock className="h-4 w-4 text-orange-500" />
-                    </div>
-                    <div className="text-xl font-black text-zinc-900 mt-1">370</div>
-                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Giao dịch tích lũy trên trang</p>
-                </div>
-            </div>
+                        <div className="sm:col-span-2">
+                            <select
+                                value={depositStatusFilter}
+                                onChange={(e) => setDepositStatusFilter(e.target.value)}
+                                className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs cursor-pointer"
+                            >
+                                <option value="all">Tất cả trạng thái</option>
+                                <option value="pending">Đang chờ (Pending)</option>
+                                <option value="approved">Đã duyệt (Approved)</option>
+                                <option value="rejected">Từ chối (Rejected)</option>
+                            </select>
+                        </div>
 
-            {/* Filter Row Form */}
-            <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                <div className="sm:col-span-6 relative">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Tìm user ID, chat ID, username, tên khách..."
-                        className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 transition shadow-2xs"
-                    />
-                </div>
+                        <div className="sm:col-span-2 flex gap-2">
+                            <button
+                                type="submit"
+                                className="w-full rounded-xl bg-orange-600 px-5 text-xs font-extrabold uppercase text-white hover:bg-orange-700 active:scale-95 transition shadow-xs whitespace-nowrap cursor-pointer"
+                            >
+                                TÌM KIẾM
+                            </button>
+                        </div>
+                    </form>
 
-                <div className="sm:col-span-2">
-                    <select
-                        value={balanceFilter}
-                        onChange={(e) => setBalanceFilter(e.target.value)}
-                        className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
-                    >
-                        <option value="all">Tất cả số dư</option>
-                        <option value="has_balance">Có số dư (&gt;0)</option>
-                        <option value="zero_balance">Số dư = 0</option>
-                    </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
-                    >
-                        <option value="all">Tất cả trạng thái</option>
-                        <option value="active">Đang hoạt động</option>
-                        <option value="banned">Bị khóa</option>
-                    </select>
-                </div>
-
-                <div className="sm:col-span-2 flex gap-2">
-                    <select
-                        value={sortFilter}
-                        onChange={(e) => setSortFilter(e.target.value)}
-                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
-                    >
-                        <option value="balance_desc">Số dư: Cao → Thấp</option>
-                        <option value="balance_asc">Số dư: Thấp → Cao</option>
-                    </select>
-                    <button
-                        type="submit"
-                        className="rounded-xl bg-orange-600 px-5 text-xs font-extrabold uppercase text-white hover:bg-orange-700 active:scale-95 transition shadow-xs whitespace-nowrap"
-                    >
-                        TÌM KIẾM
-                    </button>
-                </div>
-            </form>
-
-            {/* User Wallets Table */}
-            <div className="rounded-2xl border border-zinc-200 bg-white shadow-2xs overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
-                                <th className="px-4 py-3.5 font-extrabold">KHÁCH TELEGRAM</th>
-                                <th className="px-4 py-3.5 font-extrabold">ĐỊNH DANH</th>
-                                <th className="px-4 py-3.5 font-extrabold text-right">SỐ DƯ</th>
-                                <th className="px-4 py-3.5 font-extrabold">GIAO DỊCH</th>
-                                <th className="px-4 py-3.5 font-extrabold">CẬP NHẬT</th>
-                                <th className="px-4 py-3.5 font-extrabold text-right">THAO TÁC</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
-                                        Đang tải danh sách ví khách hàng...
-                                    </td>
-                                </tr>
-                            ) : users.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
-                                        Không tìm thấy khách hàng nào.
-                                    </td>
-                                </tr>
-                            ) : (
-                                users.map((u) => {
-                                    const tid = u.telegram_id || u.id;
-                                    return (
-                                        <tr key={u.id} className="hover:bg-zinc-50/80 transition-colors">
-                                            {/* Column 1: KHÁCH TELEGRAM */}
-                                            <td className="px-4 py-3.5">
-                                                <div className="font-extrabold text-zinc-900 text-xs flex items-center gap-1.5">
-                                                    <span>👤 {u.name || u.username || `User #${u.id}`}</span>
-                                                </div>
-                                                {u.username && (
-                                                    <div className="text-[11px] font-bold text-orange-600 mt-0.5 flex items-center gap-1">
-                                                        <span>@{u.username}</span>
-                                                    </div>
-                                                )}
-                                                <div className="mt-1">
-                                                    {Boolean(u.is_banned) ? (
-                                                        <span className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-700">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                                            ĐÃ BỊ KHÓA / BANNED
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                            ĐANG HOẠT ĐỘNG
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            {/* Column 2: ĐỊNH DANH */}
-                                            <td className="px-4 py-3.5 space-y-1 font-mono text-[11px]">
-                                                <div className="flex items-center gap-2 text-zinc-500">
-                                                    <span>User <strong className="text-zinc-900">{tid}</strong></span>
-                                                    <button onClick={() => handleCopy(String(tid), `uid-${u.id}`)}>
-                                                        {copiedField === `uid-${u.id}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-zinc-400" />}
-                                                    </button>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-zinc-500">
-                                                    <span>Chat <strong className="text-zinc-900">{tid}</strong></span>
-                                                    <button onClick={() => handleCopy(String(tid), `cid-${u.id}`)}>
-                                                        {copiedField === `cid-${u.id}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-zinc-400" />}
-                                                    </button>
-                                                </div>
-                                            </td>
-
-                                            {/* Column 3: SỐ DƯ */}
-                                            <td className="px-4 py-3.5 text-right font-black text-emerald-600 text-sm">
-                                                {formatCurrency(u.balance)}
-                                            </td>
-
-                                            {/* Column 4: GIAO DỊCH */}
-                                            <td className="px-4 py-3.5">
-                                                <div className="font-extrabold text-zinc-900 text-xs">
-                                                    {u.tx_count || 15} Giao dịch
-                                                </div>
-                                                <div className="text-[10px] text-zinc-400 font-medium mt-0.5">
-                                                    Lần gần nhất: {formatTime(u.last_tx_time || u.updated_at || u.created_at)}
-                                                </div>
-                                            </td>
-
-                                            {/* Column 5: CẬP NHẬT */}
-                                            <td className="px-4 py-3.5 text-[10px] font-mono text-zinc-500 space-y-0.5">
-                                                <div>Ví: {formatTime(u.updated_at || u.created_at)}</div>
-                                                <div>User: {formatTime(u.created_at)}</div>
-                                            </td>
-
-                                            {/* Column 6: THAO TÁC */}
-                                            <td className="px-4 py-3.5 text-right">
-                                                <div className="flex items-center justify-end gap-1.5 flex-wrap sm:flex-nowrap">
-                                                    <button
-                                                        onClick={() => handleGenerateApiKeyForUser(u)}
-                                                        className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer"
-                                                        title="Tạo/Xem API Key mua toàn bộ sản phẩm qua API"
-                                                    >
-                                                        <Key className="h-3.5 w-3.5" />
-                                                        <span>API KEY</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openCustomPriceModal(u)}
-                                                        className="rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50 active:scale-95 transition shadow-2xs flex items-center gap-1"
-                                                    >
-                                                        <Tag className="h-3.5 w-3.5 text-zinc-400" />
-                                                        <span>GIÁ RIÊNG</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openBalanceModal(u, 'add')}
-                                                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 active:scale-95 transition shadow-2xs flex items-center gap-1"
-                                                    >
-                                                        <PlusCircle className="h-3.5 w-3.5" />
-                                                        <span>NẠP VÍ</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openBalanceModal(u, 'subtract')}
-                                                        className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 active:scale-95 transition shadow-2xs flex items-center gap-1"
-                                                    >
-                                                        <MinusCircle className="h-3.5 w-3.5" />
-                                                        <span>ĐIỀU CHỈNH</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleToggleBanUser(u)}
-                                                        className={`rounded-xl border px-2.5 py-1.5 text-[11px] font-bold active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer ${
-                                                            Boolean(u.is_banned)
-                                                                ? 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
-                                                                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-red-50 hover:text-red-600'
-                                                        }`}
-                                                        title={Boolean(u.is_banned) ? 'Click để Mở khóa user' : 'Click để Khóa / Chặn user'}
-                                                    >
-                                                        <Ban className="h-3.5 w-3.5" />
-                                                        <span>{Boolean(u.is_banned) ? 'ĐÃ CHẶN' : 'CHẶN USER'}</span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openBalanceModal(u, 'add')}
-                                                        className="p-1.5 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 transition active:scale-95 shadow-2xs"
-                                                        title="Xem lịch sử giao dịch"
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    </button>
-                                                </div>
+                    {/* Deposit Table */}
+                    <div className="rounded-2xl border border-zinc-200 bg-white shadow-2xs overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                        <th className="px-4 py-3.5 font-extrabold">MÃ ĐƠN</th>
+                                        <th className="px-4 py-3.5 font-extrabold">KHÁCH HÀNG</th>
+                                        <th className="px-4 py-3.5 font-extrabold">PHƯƠNG THỨC</th>
+                                        <th className="px-4 py-3.5 font-extrabold text-right">SỐ TIỀN</th>
+                                        <th className="px-4 py-3.5 font-extrabold">NỘI DUNG / MÃ GD</th>
+                                        <th className="px-4 py-3.5 font-extrabold">TRẠNG THÁI</th>
+                                        <th className="px-4 py-3.5 font-extrabold">THỜI GIAN</th>
+                                        <th className="px-4 py-3.5 font-extrabold text-right">THAO TÁC</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100">
+                                    {depositLoading ? (
+                                        <tr>
+                                            <td colSpan={8} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                                Đang tải danh sách lịch sử nạp tiền...
                                             </td>
                                         </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                    ) : deposits.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={8} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                                Không có lịch sử nạp tiền nào.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        deposits.map((d) => (
+                                            <tr key={d.id} className="hover:bg-zinc-50/80 transition-colors">
+                                                <td className="px-4 py-3.5 font-extrabold font-mono text-zinc-900">
+                                                    #{d.id}
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="font-extrabold text-zinc-900 text-xs">
+                                                        @{d.username || `User #${d.user_id}`}
+                                                    </div>
+                                                    <div className="text-[10px] text-zinc-400 font-mono">
+                                                        ID: {d.telegram_id || d.user_id}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    {d.type === 'usdt' ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                            💲 USDT (TRC20/Bybit)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
+                                                            🏦 NGÂN HÀNG
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right font-black text-emerald-600 text-sm">
+                                                    {formatCurrency(d.amount)}
+                                                </td>
+                                                <td className="px-4 py-3.5 font-mono text-[11px] text-zinc-600 max-w-[200px] truncate" title={d.code || d.content || ''}>
+                                                    {d.code || d.content || '-'}
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    {d.status === 'pending' ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 animate-pulse">
+                                                            <Clock className="h-3 w-3" />
+                                                            ĐANG CHỜ DUYỆT
+                                                        </span>
+                                                    ) : d.status === 'approved' ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+                                                            <CheckCircle2 className="h-3 w-3" />
+                                                            THÀNH CÔNG
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2.5 py-1 text-[10px] font-extrabold text-red-700">
+                                                            <XCircle className="h-3 w-3" />
+                                                            ĐÃ TỪ CHỐI
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-[10px] font-mono text-zinc-500 whitespace-nowrap">
+                                                    {formatTime(d.created_at)}
+                                                </td>
+                                                <td className="px-4 py-3.5 text-right">
+                                                    {d.status === 'pending' ? (
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                                onClick={() => handleApproveDeposit(d)}
+                                                                disabled={processingDepositId === d.id}
+                                                                className="rounded-xl border border-emerald-200 bg-emerald-600 px-3 py-1.5 text-[11px] font-extrabold text-white hover:bg-emerald-700 active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                                                            >
+                                                                <Check className="h-3.5 w-3.5" />
+                                                                <span>DUYỆT</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRejectDeposit(d)}
+                                                                disabled={processingDepositId === d.id}
+                                                                className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-bold text-red-700 hover:bg-red-100 active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                                <span>TỪ CHỐI</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] font-semibold text-zinc-400">Đã xử lý</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
 
-                {/* Table Pagination */}
-                <div className="flex items-center justify-between p-4 border-t border-zinc-100 bg-zinc-50/50">
-                    <div className="text-xs text-zinc-500 font-medium">
-                        Trang <span className="font-bold text-zinc-900">{page}</span> / {totalPages}
+                        {/* Deposit Pagination */}
+                        <div className="flex items-center justify-between p-4 border-t border-zinc-100 bg-zinc-50/50">
+                            <div className="text-xs text-zinc-500 font-medium">
+                                Trang <span className="font-bold text-zinc-900">{depositPage}</span> / {depositTotalPages} ({depositTotal} giao dịch)
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setDepositPage(p => Math.max(1, p - 1))}
+                                    disabled={depositPage <= 1 || depositLoading}
+                                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs cursor-pointer"
+                                >
+                                    Trang trước
+                                </button>
+                                <button
+                                    onClick={() => setDepositPage(p => Math.min(depositTotalPages, p + 1))}
+                                    disabled={depositPage >= depositTotalPages || depositLoading}
+                                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs cursor-pointer"
+                                >
+                                    Trang sau
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page <= 1 || loading}
-                            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs"
-                        >
-                            Trang trước
-                        </button>
-                        <button
+                </>
+            ) : (
+                <>
+                    {/* Summary Cards Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG KHÁCH</span>
+                                <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                                    <span className="text-xs font-bold">👤</span>
+                                </div>
+                            </div>
+                            <div className="text-xl font-black text-zinc-900 mt-1">{totalUsers}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Trang hiện tại {page}/{totalPages}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">SỐ DƯ TRANG NÀY</span>
+                                <CreditCard className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div className="text-xl font-black text-emerald-600 mt-1">{formatCurrency(pageTotalBalance)}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">{users.length} ví hiển thị</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TRẠNG THÁI</span>
+                                <ShieldCheck className="h-4 w-4 text-sky-500" />
+                            </div>
+                            <div className="text-sm font-black text-emerald-600 mt-1 flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>{activeCount} Đang hoạt động</span>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Không có ví bị khóa</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">GIAO DỊCH</span>
+                                <Clock className="h-4 w-4 text-orange-500" />
+                            </div>
+                            <div className="text-xl font-black text-zinc-900 mt-1">370</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Giao dịch tích lũy trên trang</p>
+                        </div>
+                    </div>
+
+                    {/* Filter Row Form */}
+                    <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-6 relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Tìm user ID, chat ID, username, tên khách..."
+                                className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-2.5 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 transition shadow-2xs"
+                            />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                            <select
+                                value={balanceFilter}
+                                onChange={(e) => setBalanceFilter(e.target.value)}
+                                className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
+                            >
+                                <option value="all">Tất cả số dư</option>
+                                <option value="has_balance">Có số dư (&gt;0)</option>
+                                <option value="zero_balance">Số dư = 0</option>
+                            </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full h-full min-h-[38px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
+                            >
+                                <option value="all">Tất cả trạng thái</option>
+                                <option value="active">Đang hoạt động</option>
+                                <option value="banned">Bị khóa</option>
+                            </select>
+                        </div>
+
+                        <div className="sm:col-span-2 flex gap-2">
+                            <select
+                                value={sortFilter}
+                                onChange={(e) => setSortFilter(e.target.value)}
+                                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 outline-none focus:border-orange-500 transition shadow-2xs"
+                            >
+                                <option value="balance_desc">Số dư: Cao → Thấp</option>
+                                <option value="balance_asc">Số dư: Thấp → Cao</option>
+                            </select>
+                            <button
+                                type="submit"
+                                className="rounded-xl bg-orange-600 px-5 text-xs font-extrabold uppercase text-white hover:bg-orange-700 active:scale-95 transition shadow-xs whitespace-nowrap"
+                            >
+                                TÌM KIẾM
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* User Wallets Table */}
+                    <div className="rounded-2xl border border-zinc-200 bg-white shadow-2xs overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr className="border-b border-zinc-100 bg-zinc-50/60 text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                                        <th className="px-4 py-3.5 font-extrabold">KHÁCH TELEGRAM</th>
+                                        <th className="px-4 py-3.5 font-extrabold">ĐỊNH DANH</th>
+                                        <th className="px-4 py-3.5 font-extrabold text-right">SỐ DƯ</th>
+                                        <th className="px-4 py-3.5 font-extrabold">GIAO DỊCH</th>
+                                        <th className="px-4 py-3.5 font-extrabold">CẬP NHẬT</th>
+                                        <th className="px-4 py-3.5 font-extrabold text-right">THAO TÁC</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                                Đang tải danh sách ví khách hàng...
+                                            </td>
+                                        </tr>
+                                    ) : users.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                                Không tìm thấy khách hàng nào.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        users.map((u) => {
+                                            const tid = u.telegram_id || u.id;
+                                            return (
+                                                <tr key={u.id} className="hover:bg-zinc-50/80 transition-colors">
+                                                    {/* Column 1: KHÁCH TELEGRAM */}
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="font-extrabold text-zinc-900 text-xs flex items-center gap-1.5">
+                                                            <span>👤 {u.name || u.username || `User #${u.id}`}</span>
+                                                        </div>
+                                                        {u.username && (
+                                                            <div className="text-[11px] font-bold text-orange-600 mt-0.5 flex items-center gap-1">
+                                                                <span>@{u.username}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="mt-1">
+                                                            {Boolean(u.is_banned) ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-md bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                                                    ĐÃ BỊ KHÓA / BANNED
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                                    ĐANG HOẠT ĐỘNG
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Column 2: ĐỊNH DANH */}
+                                                    <td className="px-4 py-3.5 space-y-1 font-mono text-[11px]">
+                                                        <div className="flex items-center gap-2 text-zinc-500">
+                                                            <span>User <strong className="text-zinc-900">{tid}</strong></span>
+                                                            <button onClick={() => handleCopy(String(tid), `uid-${u.id}`)}>
+                                                                {copiedField === `uid-${u.id}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-zinc-400" />}
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-zinc-500">
+                                                            <span>Chat <strong className="text-zinc-900">{tid}</strong></span>
+                                                            <button onClick={() => handleCopy(String(tid), `cid-${u.id}`)}>
+                                                                {copiedField === `cid-${u.id}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-zinc-400" />}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Column 3: SỐ DƯ */}
+                                                    <td className="px-4 py-3.5 text-right font-black text-emerald-600 text-sm">
+                                                        {formatCurrency(u.balance)}
+                                                    </td>
+
+                                                    {/* Column 4: GIAO DỊCH */}
+                                                    <td className="px-4 py-3.5">
+                                                        <div className="font-extrabold text-zinc-900 text-xs">
+                                                            {u.tx_count || 15} Giao dịch
+                                                        </div>
+                                                        <div className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                                                            Lần gần nhất: {formatTime(u.last_tx_time || u.updated_at || u.created_at)}
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Column 5: CẬP NHẬT */}
+                                                    <td className="px-4 py-3.5 text-[10px] font-mono text-zinc-500 space-y-0.5">
+                                                        <div>Ví: {formatTime(u.updated_at || u.created_at)}</div>
+                                                        <div>User: {formatTime(u.created_at)}</div>
+                                                    </td>
+
+                                                    {/* Column 6: THAO TÁC */}
+                                                    <td className="px-4 py-3.5 text-right">
+                                                        <div className="flex items-center justify-end gap-1.5 flex-wrap sm:flex-nowrap">
+                                                            <button
+                                                                onClick={() => handleGenerateApiKeyForUser(u)}
+                                                                className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                                                                title="Tạo/Xem API Key mua toàn bộ sản phẩm qua API"
+                                                            >
+                                                                <Key className="h-3.5 w-3.5" />
+                                                                <span>API KEY</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => openCustomPriceModal(u)}
+                                                                className="rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50 active:scale-95 transition shadow-2xs flex items-center gap-1"
+                                                            >
+                                                                <Tag className="h-3.5 w-3.5 text-zinc-400" />
+                                                                <span>GIÁ RIÊNG</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => openBalanceModal(u, 'add')}
+                                                                className="rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 active:scale-95 transition shadow-2xs flex items-center gap-1"
+                                                            >
+                                                                <PlusCircle className="h-3.5 w-3.5" />
+                                                                <span>NẠP VÍ</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => openBalanceModal(u, 'subtract')}
+                                                                className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 active:scale-95 transition shadow-2xs flex items-center gap-1"
+                                                            >
+                                                                <MinusCircle className="h-3.5 w-3.5" />
+                                                                <span>ĐIỀU CHỈNH</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleToggleBanUser(u)}
+                                                                className={`rounded-xl border px-2.5 py-1.5 text-[11px] font-bold active:scale-95 transition shadow-2xs flex items-center gap-1 cursor-pointer ${
+                                                                    Boolean(u.is_banned)
+                                                                        ? 'border-red-300 bg-red-100 text-red-700 hover:bg-red-200'
+                                                                        : 'border-zinc-200 bg-white text-zinc-600 hover:bg-red-50 hover:text-red-600'
+                                                                }`}
+                                                                title={Boolean(u.is_banned) ? 'Click để Mở khóa user' : 'Click để Khóa / Chặn user'}
+                                                            >
+                                                                <Ban className="h-3.5 w-3.5" />
+                                                                <span>{Boolean(u.is_banned) ? 'ĐÃ CHẶN' : 'CHẶN USER'}</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => openBalanceModal(u, 'add')}
+                                                                className="p-1.5 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 transition active:scale-95 shadow-2xs"
+                                                                title="Xem lịch sử giao dịch"
+                                                            >
+                                                                <Eye className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Table Pagination */}
+                        <div className="flex items-center justify-between p-4 border-t border-zinc-100 bg-zinc-50/50">
+                            <div className="text-xs text-zinc-500 font-medium">
+                                Trang <span className="font-bold text-zinc-900">{page}</span> / {totalPages}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page <= 1 || loading}
+                                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs"
+                                >
+                                    Trang trước
+                                </button>
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page >= totalPages || loading}
+                                    className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs"
+                                >
+                                    Trang sau
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}                   <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page >= totalPages || loading}
                             className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition active:scale-95 shadow-2xs"

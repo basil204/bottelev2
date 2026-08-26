@@ -21,17 +21,38 @@ export async function GET(request: Request) {
         const page = Number(searchParams.get('page')) || 1;
         const limit = Number(searchParams.get('limit')) || 10;
         const type = searchParams.get('type'); // 'usdt' | 'bank' | null (all)
+        const status = searchParams.get('status'); // 'pending' | 'approved' | 'rejected' | null (all)
+        const search = searchParams.get('search');
         const offset = (page - 1) * limit;
 
-        let whereClause = '';
+        const whereConditions: string[] = [];
         const params: any[] = [];
+
         if (type && ['usdt', 'bank'].includes(type)) {
-            whereClause = 'WHERE d.type = ?';
+            whereConditions.push('d.type = ?');
             params.push(type);
         }
 
+        if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+            whereConditions.push('d.status = ?');
+            params.push(status);
+        }
+
+        if (search) {
+            const numSearch = Number(search);
+            if (!isNaN(numSearch) && numSearch > 0) {
+                whereConditions.push('(u.username LIKE ? OR u.telegram_id LIKE ? OR d.id = ? OR d.user_id = ?)');
+                params.push(`%${search}%`, `%${search}%`, numSearch, numSearch);
+            } else {
+                whereConditions.push('(u.username LIKE ? OR u.telegram_id LIKE ?)');
+                params.push(`%${search}%`, `%${search}%`);
+            }
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
         const [rows] = await pool.query(`
-            SELECT d.*, u.username 
+            SELECT d.*, u.username, u.telegram_id
             FROM deposits d 
             LEFT JOIN users u ON d.user_id = u.id 
             ${whereClause}
@@ -39,10 +60,9 @@ export async function GET(request: Request) {
             LIMIT ? OFFSET ?
         `, [...params, limit, offset]);
 
-        let countQuery = 'SELECT COUNT(*) as total FROM deposits d';
-        if (whereClause) countQuery += ` ${whereClause}`;
+        let countQuery = `SELECT COUNT(*) as total FROM deposits d LEFT JOIN users u ON d.user_id = u.id ${whereClause}`;
         const [countResult] = await pool.query<any[]>(countQuery, params);
-        const total = countResult[0].total;
+        const total = countResult[0]?.total || 0;
 
         return NextResponse.json({
             data: rows,
@@ -50,7 +70,7 @@ export async function GET(request: Request) {
                 page,
                 limit,
                 total,
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(total / limit) || 1
             }
         });
     } catch (error) {

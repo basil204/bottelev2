@@ -32,7 +32,7 @@ export async function POST(request: Request) {
             }, { status: 401 });
         }
 
-        // Validate API Keya
+        // Validate API Key
         const cleanApiKey = String(apiKey).trim();
         const [keyRows] = await pool.query<RowDataPacket[]>(`
             SELECT k.id as key_id, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance

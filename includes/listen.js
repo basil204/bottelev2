@@ -493,6 +493,10 @@ export const registerListeners = (bot, config) => {
       }
     }
 
+    // Kiểm tra state mua Gmail EDU (số lượng / mật khẩu)
+    const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
+    if (handledGmailEdu) return;
+
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     const handledDeposit = await handleDepositAmount(bot, msg, user, config);
     if (handledDeposit) return;
@@ -704,6 +708,61 @@ export const registerListeners = (bot, config) => {
               parse_mode: 'Markdown',
               reply_markup: buildMainKeyboard(t, newLang)
             });
+            return;
+          }
+
+        case 'gmail_pw_auto':
+          {
+            const { handleBuyGmailEdu } = await import('./handle/handleGmailEdu.js');
+            await handleBuyGmailEdu(bot, query.message, user, data.qty || 1, user.language || 'vi', null, config);
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+        case 'gmail_pw_custom':
+          {
+            const { setCache } = await import('../lib/cache/index.js');
+            setCache(`gmail_edu_waiting_${query.from.id}`, {
+              waitingPassword: true,
+              quantity: data.qty || 1,
+              lang: user.language || 'vi'
+            }, 10 * 60 * 1000);
+            const pwdMsg = user.language === 'en'
+              ? '✏️ **Please enter your desired password** (at least 8 characters, containing uppercase, lowercase, numbers, and special symbols):'
+              : '✏️ **Vui lòng nhập mật khẩu bạn muốn đặt** (tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt):';
+            await bot.sendMessage(chatId, pwdMsg, { parse_mode: 'Markdown' });
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+        case 'gmail_pw_cancel':
+        case 'gmail_deposit_cancel':
+          {
+            const { delCache } = await import('../lib/cache/index.js');
+            delCache(`gmail_edu_waiting_${query.from.id}`);
+            delCache(`gmail_edu_purchase_${query.from.id}`);
+            const cancelMsg = user.language === 'en' ? '❌ Cancelled Gmail EDU purchase.' : '❌ Đã hủy giao dịch mua Gmail EDU.';
+            await bot.sendMessage(chatId, cancelMsg);
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+        case 'gmail_buy_again':
+          {
+            const { showGmailEduInfo } = await import('./handle/handleGmailEdu.js');
+            await showGmailEduInfo(bot, chatId, user);
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+        case 'gmail_deposit_bank':
+          {
+            const { promptForBankDeposit } = await import('./handle/handleDeposit.js');
+            await promptForBankDeposit(bot, chatId, query.from.id, config);
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+        case 'gmail_deposit_usdt':
+          {
+            const { showUsdtOptions } = await import('./handle/handleDeposit.js');
+            await showUsdtOptions(bot, chatId, config);
+            await bot.answerCallbackQuery(query.id);
             return;
           }
 

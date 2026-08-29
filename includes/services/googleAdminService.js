@@ -11,13 +11,25 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Paths to credential files
-const CREDENTIALS_PATH = path.join(__dirname, '../../database/google/client_secret.json');
-const TOKEN_PATH = path.join(__dirname, '../../database/google/token.json');
+function findFile(paths) {
+    for (const p of paths) {
+        const full = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
+        if (fs.existsSync(full)) return full;
+    }
+    return paths[0];
+}
 
-// Default EDU domain 
-const DEFAULT_EDU_DOMAIN = 'suafpoly.app';
-const DEFAULT_NON_DOMAIN = 'krishokerbondhu.org';
+const getCredentialsPath = () => findFile([
+    path.join(__dirname, '../../database/google/client_secret.json'),
+    'database/google/client_secret.json',
+    'webapp/database/google/client_secret.json'
+]);
+
+const getTokenPath = () => findFile([
+    path.join(__dirname, '../../database/google/token.json'),
+    'database/google/token.json',
+    'webapp/database/google/token.json'
+]);
 
 let authClient = null;
 let adminService = null;
@@ -29,29 +41,41 @@ export const initializeAuth = async () => {
     try {
         if (authClient) return authClient;
 
+        const credPath = getCredentialsPath();
+        const tokenPath = getTokenPath();
+
+        if (!fs.existsSync(credPath)) {
+            throw new Error(`Client secret file not found at: ${credPath}`);
+        }
+
         // Đọc credentials
-        const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'));
-        const { client_id, client_secret, redirect_uris } = credentials.web;
+        const credentials = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+        const web = credentials.web || credentials.installed;
+        if (!web) {
+            throw new Error('Invalid client_secret.json format');
+        }
+        const { client_id, client_secret, redirect_uris } = web;
 
         // Tạo OAuth2 client
-        authClient = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+        authClient = new google.auth.OAuth2(client_id, client_secret, redirect_uris ? redirect_uris[0] : undefined);
 
         // Đọc token đã lưu
-        if (fs.existsSync(TOKEN_PATH)) {
-            const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+        if (fs.existsSync(tokenPath)) {
+            const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
             authClient.setCredentials(token);
 
             // Auto-refresh token nếu hết hạn
             authClient.on('tokens', (tokens) => {
                 if (tokens.refresh_token) {
-                    // Lưu token mới
-                    const currentToken = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-                    currentToken.refresh_token = tokens.refresh_token;
-                    fs.writeFileSync(TOKEN_PATH, JSON.stringify(currentToken, null, 2));
+                    try {
+                        const currentToken = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+                        currentToken.refresh_token = tokens.refresh_token;
+                        fs.writeFileSync(tokenPath, JSON.stringify(currentToken, null, 2));
+                    } catch (e) {}
                 }
             });
         } else {
-            throw new Error('Token file not found. Please run OAuth flow first.');
+            throw new Error(`Token file not found at: ${tokenPath}. Please run OAuth flow first.`);
         }
 
         console.log('[GOOGLE_ADMIN] ✅ Auth initialized successfully');

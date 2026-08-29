@@ -1,36 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-
-// Sinh password ngẫu nhiên 12 ký tự
-function generatePassword() {
-    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-    const numbers = '0123456789';
-    const special = '!@#$%&*';
-    let password = '';
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    password += special[Math.floor(Math.random() * special.length)];
-    const all = uppercase + lowercase + numbers + special;
-    for (let i = 0; i < 8; i++) {
-        password += all[Math.floor(Math.random() * all.length)];
-    }
-    return password.split('').sort(() => Math.random() - 0.5).join('');
-}
-
-// Sinh username ngẫu nhiên
-function generateUsername(prefix?: string) {
-    if (prefix && prefix.trim()) {
-        const cleanPrefix = prefix.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanPrefix) return `${cleanPrefix}${Math.floor(Math.random() * 899 + 100)}`;
-    }
-    const chars = 'abcdefghijklmnopqrstuvwxyz';
-    let str = '';
-    for (let i = 0; i < 7; i++) str += chars[Math.floor(Math.random() * chars.length)];
-    return `${str}${Math.floor(Math.random() * 89 + 10)}`;
-}
+import { createEduAccount, generateRandomPassword, generateRandomUsername } from '@/lib/googleAdminService';
 
 // Handler POST đặt Gmail EDU bằng User API Key
 export async function POST(request: Request) {
@@ -116,7 +87,7 @@ export async function POST(request: Request) {
         const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
         const defaultDomain = (body.domain && String(body.domain).trim()) 
             ? String(body.domain).trim() 
-            : (settingsMap.gmail_edu_domain || 'nttp.edu.pl');
+            : (settingsMap.gmail_edu_domain || 'suafpoly.app');
 
         const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 50);
         const domain = defaultDomain;
@@ -133,12 +104,24 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
-        // Process creation (Default: Auto delete 1h after creation)
+        // Process creation via Google Admin API
         const createdAccounts: any[] = [];
+        const failedCreation: string[] = [];
+
         for (let i = 0; i < quantity; i++) {
-            const username = generateUsername(body.prefix || body.username);
-            const email = `${username}@${domain}`;
-            const password = customPassword || generatePassword();
+            const username = generateRandomUsername(body.prefix || body.username);
+            const password = customPassword || generateRandomPassword();
+
+            // Call Google Admin API
+            const createRes = await createEduAccount(username, domain, password);
+
+            if (!createRes.success) {
+                console.error(`[API_ORDER_EDU] Failed to create account for ${username}@${domain}:`, createRes.error);
+                failedCreation.push(createRes.error || 'Google Admin API Error');
+                continue;
+            }
+
+            const email = createRes.email;
 
             // Insert into gmail_accounts DB table
             await pool.query(`
@@ -153,15 +136,28 @@ export async function POST(request: Request) {
                 domain,
                 auto_delete: '1h_after_login'
             });
+
+            if (i < quantity - 1) {
+                await new Promise(r => setTimeout(r, 1000));
+            }
         }
 
+        if (createdAccounts.length === 0) {
+            return NextResponse.json({
+                success: false,
+                error: `Không thể tạo tài khoản trên Google Admin API: ${failedCreation[0] || 'Lỗi hệ thống'}`
+            }, { status: 500 });
+        }
+
+        const actualTotalCost = pricePerUnit * createdAccounts.length;
+
         // Deduct user balance
-        await pool.query('UPDATE users SET balance = balance - ? WHERE id = ?', [totalCost, keyInfo.user_id]);
+        await pool.query('UPDATE users SET balance = balance - ? WHERE id = ?', [actualTotalCost, keyInfo.user_id]);
 
         // Add balance log
         try {
             await pool.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
-                keyInfo.user_id, -totalCost, `buy_gmail_edu_api_${quantity}_items`
+                keyInfo.user_id, -actualTotalCost, `buy_gmail_edu_api_${createdAccounts.length}_items`
             ]);
         } catch (e) {}
 
@@ -173,7 +169,7 @@ export async function POST(request: Request) {
         const [orderRes] = await pool.query<ResultSetHeader>(`
             INSERT INTO orders (user_id, price, email, note, status)
             VALUES (?, ?, ?, ?, 'completed')
-        `, [keyInfo.user_id, totalCost, accountsFormatted, `API Order Gmail EDU (${quantity} tài khoản)`]);
+        `, [keyInfo.user_id, actualTotalCost, accountsFormatted, `API Order Gmail EDU (${createdAccounts.length} tài khoản)`]);
 
         const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
 
@@ -181,14 +177,14 @@ export async function POST(request: Request) {
             await pool.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
         } catch (e) {}
 
-        const newBalance = currentBalance - totalCost;
+        const newBalance = currentBalance - actualTotalCost;
 
         return NextResponse.json({
             success: true,
             message: 'Đặt Gmail EDU qua API thành công!',
             invoice_code: invoiceCode,
-            quantity,
-            total_cost: totalCost,
+            quantity: createdAccounts.length,
+            total_cost: actualTotalCost,
             price_per_unit: pricePerUnit,
             remaining_balance: newBalance,
             data: createdAccounts

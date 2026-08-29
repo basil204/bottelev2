@@ -5,9 +5,6 @@ import { sendPhoto } from '@/lib/telegram';
 
 // Kiểm tra lỗi Telegram có phải user đã block/deactivated không
 function isUserBlockedError(response: Response | null, error: unknown): boolean {
-    // Telegram error codes:
-    // 403 - Forbidden: bot was blocked by the user
-    // 400 - Bad Request: chat not found (user deleted account)
     if (response && (response.status === 403 || response.status === 400)) {
         return true;
     }
@@ -31,8 +28,23 @@ async function removeDeadUser(telegramId: string) {
     }
 }
 
-// Gửi tin nhắn theo batch, mỗi batch gửi song song, giữa các batch delay để tránh rate limit
-// Tự động xóa user không gửi được (blocked/deactivated)
+// Format message text converting animated emoji IDs and markdown to Telegram HTML
+function formatTelegramText(text: string): string {
+    if (!text || typeof text !== 'string') return text;
+    let formatted = text;
+
+    // Convert {5375135722514685501} or {id:5375135722514685501} to <tg-emoji emoji-id="5375135722514685501">⭐</tg-emoji>
+    formatted = formatted.replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+    formatted = formatted.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
+
+    // Format markdown bold & code
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    return formatted;
+}
+
+// Gửi tin nhắn theo batch song song
 async function sendBatch(
     users: RowDataPacket[],
     sendFn: (telegramId: string) => Promise<{ ok: boolean; blocked: boolean }>,
@@ -58,7 +70,6 @@ async function sendBatch(
                 if (result.value.ok) {
                     sent++;
                 } else if (result.value.blocked) {
-                    // User đã block bot hoặc deactivated → xóa khỏi DB
                     await removeDeadUser(result.value.telegramId);
                     removed++;
                 } else {
@@ -69,7 +80,6 @@ async function sendBatch(
             }
         }
 
-        // Delay giữa các batch để tránh rate limit (Telegram cho phép ~30 msg/s)
         if (i + batchSize < users.length) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
         }
@@ -81,7 +91,7 @@ async function sendBatch(
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { type, productName, productPrice, addedCount, totalStock, productId } = body;
+        const { type, productName, productPrice, addedCount, totalStock, productId, buttonText, buttonUrl, buttonCallback } = body;
 
         // Get shop name, bot token and bot username from settings
         const [settings] = await pool.query<RowDataPacket[]>(
@@ -136,31 +146,13 @@ export async function POST(request: Request) {
         // Build message based on type
         let broadcastMessage = '';
 
-        if (type === 'new_product') {
-            broadcastMessage = `🔥 🔥 ${categoryName || productName} có sản phẩm mới\n\n` +
-                `🛍️ ${productName}\n` +
-                (categoryName ? `📁 Danh mục: ${categoryName}\n` : '') +
-                `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}₫\n\n` +
-                `👇 Bấm nút bên dưới để mua ngay:`;
-        } else if (type === 'stock_added') {
-            broadcastMessage = `🔥 🔥 ${categoryName || productName} có hàng mới\n\n` +
-                `🛍️ ${productName}\n` +
-                (categoryName ? `📁 Danh mục: ${categoryName}\n` : '') +
-                `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}₫\n` +
-                `📦 Tồn kho: ${totalStock} · vừa nhập ${addedCount}\n\n` +
-                `👇 Bấm nút bên dưới để mua ngay:`;
-        } else if (type === 'custom' || body.message) {
+        if (type === 'custom' || body.message) {
             const customMessage = body.message;
             if (!customMessage || !customMessage.trim()) {
                 return NextResponse.json({ error: 'Message is required for custom broadcast' }, { status: 400 });
             }
-            broadcastMessage = `📢 ${shopName} thông báo:\n\n${customMessage}`;
-        } else {
-            return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
-        }
-
-        // Product broadcasts start with the product itself — no generic SHOP heading.
-        if (type === 'new_product') {
+            broadcastMessage = customMessage.trim();
+        } else if (type === 'new_product') {
             broadcastMessage = `🎁 Sản phẩm: ${productName}\n` +
                 `💰 Giá: ${Number(fetchedPrice).toLocaleString('vi-VN')}đ\n\n` +
                 `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
@@ -169,39 +161,115 @@ export async function POST(request: Request) {
                 `➕ Vừa thêm: ${addedCount} tài khoản\n` +
                 `📦 Tồn hiện tại: ${totalStock} tài khoản\n\n` +
                 `👉 Click nút bên dưới để vào bot mua ngay nhé!`;
+        } else {
+            return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 });
         }
+
+        // Format HTML and dynamic animated emojis in message text
+        broadcastMessage = formatTelegramText(broadcastMessage);
 
         const imageUrl = body.imageUrl;
         let finalImageUrl = imageUrl;
-        if (imageUrl && imageUrl.startsWith('/')) {
-            const protocol = request.headers.get('x-forwarded-proto') || 'http';
-            const host = request.headers.get('host');
-            if (host) {
-                finalImageUrl = `${protocol}://${host}${imageUrl}`;
-            }
+        if (imageUrl && imageUrl.trim()) {
+            finalImageUrl = imageUrl.trim();
         }
 
-        // Build inline keyboard reply markup if bot username and product ID are present
-        let replyMarkup: { inline_keyboard: Array<Array<{ text: string; url: string; style?: 'primary' | 'success' | 'danger' }>> } | undefined;
-        if (botUsername && productId) {
+        // Build inline keyboard reply markup
+        let replyMarkup: any = undefined;
+
+        if (Array.isArray(body.inlineKeyboard) && body.inlineKeyboard.length > 0) {
+            const formattedRows = body.inlineKeyboard.map((row: any[]) => {
+                if (!Array.isArray(row)) return [];
+                return row.map((btn: any) => {
+                    let textVal = (btn.text || '').trim();
+                    let customEmojiId: string | undefined = undefined;
+
+                    const codeMatch = textVal.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
+                    if (codeMatch) {
+                        customEmojiId = codeMatch[1];
+                        textVal = textVal.replace(codeMatch[0], '').trim();
+                    }
+
+                    if (!textVal) textVal = 'Xem sản phẩm';
+
+                    let btnObj: any = { text: textVal };
+                    if (customEmojiId) {
+                        btnObj.icon_custom_emoji_id = customEmojiId;
+                    }
+
+                    if (btn.type === 'product' && btn.productId) {
+                        const urlVal = botUsername 
+                            ? `https://t.me/${botUsername}?start=buy_${btn.productId}` 
+                            : `https://t.me?start=buy_${btn.productId}`;
+                        btnObj.url = urlVal;
+                    } else if (btn.type === 'url' || (btn.url && (btn.url.startsWith('http://') || btn.url.startsWith('https://')))) {
+                        btnObj.url = (btn.url || btn.value || '').trim() || `https://t.me/${botUsername || ''}`;
+                    } else {
+                        let target = (btn.callbackData || btn.value || btn.url || '').trim();
+                        if (target.startsWith('start:')) {
+                            const param = target.replace(/^start:/, '');
+                            btnObj.url = botUsername ? `https://t.me/${botUsername}?start=${param}` : `https://t.me?start=${param}`;
+                        } else if (target.startsWith('buy_')) {
+                            btnObj.url = botUsername ? `https://t.me/${botUsername}?start=${target}` : `https://t.me?start=${target}`;
+                        } else if (target.startsWith('http://') || target.startsWith('https://')) {
+                            btnObj.url = target;
+                        } else {
+                            btnObj.url = botUsername ? `https://t.me/${botUsername}` : 'https://t.me';
+                        }
+                    }
+
+                    return btnObj;
+                }).filter((b: any) => Boolean(b.text));
+            }).filter((r: any[]) => r.length > 0);
+
+            if (formattedRows.length > 0) {
+                replyMarkup = { inline_keyboard: formattedRows };
+            }
+        } else if (buttonText && buttonText.trim()) {
+            let textVal = buttonText.trim();
+            let urlVal = (buttonUrl || buttonCallback || '').trim();
+            let customEmojiId: string | undefined = undefined;
+
+            const codeMatch = textVal.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
+            if (codeMatch) {
+                customEmojiId = codeMatch[1];
+                textVal = textVal.replace(codeMatch[0], '').trim();
+            }
+
+            if (!textVal) textVal = 'Xem sản phẩm';
+
+            if (urlVal.startsWith('start:')) {
+                const param = urlVal.replace(/^start:/, '');
+                urlVal = botUsername ? `https://t.me/${botUsername}?start=${param}` : `https://t.me?start=${param}`;
+            } else if (urlVal.startsWith('buy_')) {
+                urlVal = botUsername ? `https://t.me/${botUsername}?start=${urlVal}` : `https://t.me?start=${urlVal}`;
+            } else if (!urlVal.startsWith('http://') && !urlVal.startsWith('https://')) {
+                urlVal = botUsername ? `https://t.me/${botUsername}` : 'https://t.me';
+            }
+
+            const btnObj: any = { text: textVal, url: urlVal, style: 'primary' };
+            if (customEmojiId) {
+                btnObj.icon_custom_emoji_id = customEmojiId;
+            }
+
+            replyMarkup = {
+                inline_keyboard: [[btnObj]]
+            };
+        } else if (botUsername && productId) {
             replyMarkup = {
                 inline_keyboard: [
                     [
-                        { text: '🛒 Mua Ngay', url: `https://t.me/${botUsername}?start=buy_${productId}` }
+                        { text: '🛒 Mua Ngay', url: `https://t.me/${botUsername}?start=buy_${productId}`, style: 'primary' }
                     ]
                 ]
             };
         }
 
-        // Gửi theo batch song song (25 tin/batch, delay 1s giữa các batch)
-        // User nào block bot hoặc deactivated sẽ tự động bị xóa khỏi DB
-        if (replyMarkup) replyMarkup.inline_keyboard[0][0].style = 'primary';
-
         const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
             try {
                 if (finalImageUrl) {
-                    await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken, replyMarkup);
-                    return { ok: true, blocked: false };
+                    const success = await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken, replyMarkup);
+                    return { ok: success, blocked: !success };
                 } else {
                     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                         method: 'POST',
@@ -218,7 +286,6 @@ export async function POST(request: Request) {
                         return { ok: true, blocked: false };
                     }
 
-                    // Kiểm tra nếu user đã block/deactivated
                     if (isUserBlockedError(response, null)) {
                         return { ok: false, blocked: true };
                     }

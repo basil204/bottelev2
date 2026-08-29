@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, Plus, Pencil, Trash2, Search, X, Smile, Hash, Layers, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Category {
@@ -11,6 +12,7 @@ interface Category {
     priority: number;
     emoji?: string | null;
     custom_emoji_id?: string | null;
+    is_active?: boolean | number;
     product_count?: number;
     total_accounts?: number;
     sold_accounts?: number;
@@ -156,6 +158,7 @@ export default function CategoriesPage() {
                 priority: editingCategory.priority ?? 0,
                 emoji: editingCategory.emoji?.trim() || null,
                 custom_emoji_id: editingCategory.custom_emoji_id?.trim() || null,
+                is_active: editingCategory.is_active ?? 1,
             }),
         });
 
@@ -169,11 +172,25 @@ export default function CategoriesPage() {
         }
     };
 
+    const handleToggleStatus = async (category: Category) => {
+        const nextStatus = category.is_active ? 0 : 1;
+        setCategories(current => current.map(c => c.id === category.id ? { ...c, is_active: nextStatus } : c));
+        try {
+            await fetch('/api/categories', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: category.id, is_active: nextStatus }),
+            });
+        } catch {
+            fetchCategories();
+        }
+    };
+
     const openModal = (category?: Category) => {
         setEditingCategory(
             category
-                ? { ...category, emoji: category.emoji || '', custom_emoji_id: category.custom_emoji_id || '' }
-                : { name: '', priority: 1, emoji: '', custom_emoji_id: '' }
+                ? { ...category, emoji: category.emoji || '', custom_emoji_id: category.custom_emoji_id || '', is_active: category.is_active ?? 1 }
+                : { name: '', priority: 1, emoji: '', custom_emoji_id: '', is_active: 1 }
         );
         setIsModalOpen(true);
     };
@@ -249,19 +266,20 @@ export default function CategoriesPage() {
                                 <th className="px-4 py-3.5 font-extrabold">EMOJI THƯỜNG</th>
                                 <th className="px-4 py-3.5 font-extrabold">EMOJI ĐỘNG (ID)</th>
                                 <th className="px-4 py-3.5 font-extrabold text-center">SẮP XẾP</th>
+                                <th className="px-4 py-3.5 font-extrabold text-center">TRẠNG THÁI</th>
                                 <th className="px-4 py-3.5 font-extrabold text-right">HÀNH ĐỘNG</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                    <td colSpan={7} className="py-12 text-center text-xs font-medium text-zinc-400">
                                         Đang tải dữ liệu...
                                     </td>
                                 </tr>
                             ) : filteredCategories.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="py-12 text-center text-xs font-medium text-zinc-400">
+                                    <td colSpan={7} className="py-12 text-center text-xs font-medium text-zinc-400">
                                         Không tìm thấy danh mục nào.
                                     </td>
                                 </tr>
@@ -321,6 +339,12 @@ export default function CategoriesPage() {
                                         </td>
                                         <td className="px-4 py-3.5 text-center font-mono font-extrabold text-zinc-800">
                                             {cat.priority ?? 0}
+                                        </td>
+                                        <td className="px-4 py-3.5 text-center">
+                                            <Switch
+                                                checked={Boolean(cat.is_active ?? 1)}
+                                                onCheckedChange={() => handleToggleStatus(cat)}
+                                            />
                                         </td>
                                         <td className="px-4 py-3.5 text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -469,6 +493,19 @@ export default function CategoriesPage() {
                                     placeholder="Nhỏ hiện trước"
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 />
+                            </div>
+
+                            {/* Field 5: TRẠNG THÁI (IS_ACTIVE) */}
+                            <div className="pt-2">
+                                <label className="flex items-center gap-2 text-xs font-extrabold text-zinc-800 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(editingCategory?.is_active ?? 1)}
+                                        onChange={(e) => setEditingCategory(prev => ({ ...prev!, is_active: e.target.checked ? 1 : 0 }))}
+                                        className="h-4 w-4 rounded accent-orange-600"
+                                    />
+                                    <span>BẬT / HIỂN THỊ DANH MỤC (ACTIVE)</span>
+                                </label>
                             </div>
                         </div>
 

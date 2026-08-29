@@ -6,6 +6,21 @@ node_modules/
 .env.*.local
 *.env
 
+# Credentials & Secrets - DO NOT COMMIT
+client_secret.json
+cookies_*.txt
+admin_store.json
+tokens.json
+cookies_cache/
+
+# Backups & Temporary files
+backups/
+*.sql
+scratch/
+webapp/public/uploads/
+joincapcut-master/
+webapp/app/joincapcut-master/
+
 # Next.js
 .next/
 out/
@@ -27,3 +42,4 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+

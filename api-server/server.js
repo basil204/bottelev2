@@ -44,12 +44,28 @@ async function initDatabase() {
     await safeAddColumn('users', 'is_banned', 'TINYINT(1) DEFAULT 0');
     await safeAddColumn('users', 'language', "VARCHAR(10) DEFAULT 'vi'");
 
-    // 3. Bổ sung các cột cho bảng products
+    // 3. Bổ sung các cột cho bảng categories & products
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        priority INT DEFAULT 0,
+        emoji VARCHAR(50) DEFAULT NULL,
+        custom_emoji_id VARCHAR(100) DEFAULT NULL,
+        is_active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await safeAddColumn('categories', 'is_active', 'TINYINT(1) DEFAULT 1');
+    await safeAddColumn('categories', 'emoji', 'VARCHAR(50) DEFAULT NULL');
+    await safeAddColumn('categories', 'custom_emoji_id', 'VARCHAR(100) DEFAULT NULL');
+
     await safeAddColumn('products', 'priority', 'INT DEFAULT 0');
     await safeAddColumn('products', 'type', "VARCHAR(50) DEFAULT 'stock'");
     await safeAddColumn('products', 'prompt_message', 'TEXT NULL');
     await safeAddColumn('products', 'category_id', 'INT NULL');
     await safeAddColumn('products', 'is_active', 'TINYINT(1) DEFAULT 1');
+    await safeAddColumn('products', 'require_email', 'TINYINT(1) DEFAULT 0');
 
     // 4. Bổ sung các cột cho bảng orders
     await safeAddColumn('orders', 'invoice_code', 'VARCHAR(100) NULL');
@@ -343,7 +359,7 @@ app.post('/api/v1/user/api-key', async (req, res) => {
 app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
   try {
     const categoryId = req.query.categoryId ? parseInt(req.query.categoryId, 10) : null;
-    let whereClause = 'WHERE (p.is_active IS NULL OR p.is_active = 1)';
+    let whereClause = 'WHERE (p.is_active IS NULL OR p.is_active = 1) AND (c.is_active IS NULL OR c.is_active = 1)';
     const params = [];
 
     if (categoryId && !isNaN(categoryId)) {
@@ -352,7 +368,7 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
     }
 
     const products = await query(`
-      SELECT p.id, p.name, p.price, p.description, p.type, p.prompt_message, p.category_id, p.image_url,
+      SELECT p.id, p.name, p.price, p.description, p.type, p.require_email, p.prompt_message, p.category_id, p.image_url,
              c.name as category_name,
              COALESCE(st.stock, 0) as stock
       FROM products p
@@ -373,6 +389,7 @@ app.get('/api/v1/products', authenticateApiKey, async (req, res) => {
         user_price: userPrice,
         description: p.description || '',
         type: p.type || 'stock',
+        require_email: Boolean(p.require_email || p.type === 'order'),
         stock: p.type === 'order' ? 9999 : Number(p.stock || 0),
         category_name: p.category_name || 'Khác',
         image_url: p.image_url || null,
@@ -433,18 +450,33 @@ app.post('/api/v1/buy', buyLimiter, authenticateApiKey, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Tài khoản người dùng đã bị khóa.' });
     }
 
-    // B. Lock Product Row
+    // B. Lock Product Row & Category Row
     const [prodRows] = await connection.query(
-      'SELECT id, name, price, type, is_active FROM products WHERE id = ? FOR UPDATE',
+      `SELECT p.id, p.name, p.price, p.type, p.require_email, p.is_active, c.is_active as cat_active 
+       FROM products p 
+       LEFT JOIN categories c ON p.category_id = c.id 
+       WHERE p.id = ? FOR UPDATE`,
       [productId]
     );
 
-    if (!prodRows || prodRows.length === 0 || !prodRows[0].is_active) {
+    if (!prodRows || prodRows.length === 0 || !prodRows[0].is_active || (prodRows[0].cat_active !== null && !prodRows[0].cat_active)) {
       await connection.rollback();
       return res.status(404).json({ success: false, error: 'Sản phẩm không tồn tại hoặc đã ngưng kinh doanh.' });
     }
 
     const product = prodRows[0];
+    const isEmailRequired = Boolean(product.require_email || product.type === 'order');
+
+    if (isEmailRequired) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!customEmail || !emailRegex.test(customEmail)) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Sản phẩm này yêu cầu nhập email nhận hàng/xử lý (custom_email). Vui lòng cung cấp email hợp lệ.'
+        });
+      }
+    }
 
     // C. Calculate User Custom Price
     const unitPrice = await getUserProductPrice(connection, user.id, product.id, product.price);

@@ -110,7 +110,7 @@ export async function POST(request: Request) {
         await dbReady;
         const body = await request.json();
         const {
-            name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
+            name, price, description, type, code, priority, check_live, is_active, require_email, category_id, low_stock_threshold,
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
@@ -128,17 +128,23 @@ export async function POST(request: Request) {
 
         const finalEmoji = (emoji || telegram_emoji || '').trim() || null;
         const finalCustomEmojiId = (custom_emoji_id || telegram_custom_emoji_id || '').trim() || null;
+        const numIsActive = is_active !== undefined ? (is_active ? 1 : 0) : 1;
+        const numRequireEmail = require_email ? 1 : 0;
+        let finalType = type || 'stock';
+        if (delivery_type === 'Nhập tay (Hỏi đáp, giao thủ công)' || (delivery_type && delivery_type.includes('Nhập tay'))) {
+            finalType = 'order';
+        }
 
         const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO products (
-                name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
+                name, price, description, type, code, priority, check_live, is_active, require_email, category_id, low_stock_threshold,
                 delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
                 telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
                 preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
                 image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                name, price, description, type || 'stock', code || null, priority || 0, check_live || 0, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
+                name, price, description, finalType, code || null, priority || 0, check_live || 0, numIsActive, numRequireEmail, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
@@ -153,7 +159,7 @@ export async function POST(request: Request) {
             action: 'CREATE',
             targetType: 'PRODUCT',
             targetId: result.insertId,
-            details: { name, price, type: type || 'stock', category_id: finalCategoryId, delivery_type, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
+            details: { name, price, type: finalType, is_active: numIsActive, require_email: numRequireEmail, category_id: finalCategoryId, delivery_type, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
             ipAddress,
             userAgent,
             request
@@ -171,7 +177,7 @@ export async function PUT(request: Request) {
         await dbReady;
         const body = await request.json();
         const {
-            id, name, price, description, type, code, priority, check_live, category_id, low_stock_threshold,
+            id, name, price, description, type, code, priority, check_live, is_active, require_email, category_id, low_stock_threshold,
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
@@ -198,20 +204,26 @@ export async function PUT(request: Request) {
         const numPrice = Number(price) || 0;
         const numPriority = Number(priority) || 0;
         const numCheckLive = Number(check_live) || 0;
+        const numIsActive = is_active !== undefined ? (is_active ? 1 : 0) : 1;
+        const numRequireEmail = require_email ? 1 : 0;
         const numLowStockThreshold = Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5)));
         const finalEmoji = (emoji || telegram_emoji || '').trim() || null;
         const finalCustomEmojiId = (custom_emoji_id || telegram_custom_emoji_id || '').trim() || null;
+        let finalType = type || 'stock';
+        if (delivery_type === 'Nhập tay (Hỏi đáp, giao thủ công)' || (delivery_type && delivery_type.includes('Nhập tay'))) {
+            finalType = 'order';
+        }
 
         await pool.query(
             `UPDATE products SET 
-                name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, category_id = ?, low_stock_threshold = ?,
+                name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, is_active = ?, require_email = ?, category_id = ?, low_stock_threshold = ?,
                 delivery_type = ?, prompt_message = ?, item_structure = ?, account_prefix = ?, file_delivery_mode = ?,
                 telegram_file_id = ?, telegram_file_unique_id = ?, access_duration_enabled = ?, access_duration_days = ?,
                 preorder_enabled = ?, preorder_fee_vnd = ?, preorder_fee_usdt = ?, preorder_max_per_user = ?, preorder_total_limit = ?,
                 image_url = ?, emoji = ?, custom_emoji_id = ?, telegram_emoji = ?, telegram_custom_emoji_id = ?
             WHERE id = ?`,
             [
-                name.trim(), numPrice, description || null, type || 'stock', code || null, numPriority, numCheckLive, finalCategoryId || null, numLowStockThreshold,
+                name.trim(), numPrice, description || null, finalType, code || null, numPriority, numCheckLive, numIsActive, numRequireEmail, finalCategoryId || null, numLowStockThreshold,
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
@@ -226,7 +238,7 @@ export async function PUT(request: Request) {
             action: 'UPDATE',
             targetType: 'PRODUCT',
             targetId: id,
-            details: { name, price: numPrice, type: type || 'stock', category_id: finalCategoryId, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
+            details: { name, price: numPrice, type: type || 'stock', is_active: numIsActive, require_email: numRequireEmail, category_id: finalCategoryId, emoji: finalEmoji, custom_emoji_id: finalCustomEmojiId },
             ipAddress,
             userAgent,
             request

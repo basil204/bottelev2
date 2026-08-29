@@ -59,25 +59,35 @@ export async function sendPhoto(chatId: number | string, photo: string, caption?
         let isLocalFile = false;
         let localFilePath = '';
 
-        if (typeof photo === 'string' && (photo.startsWith('/uploads/') || photo.startsWith('uploads/') || (!photo.startsWith('http://') && !photo.startsWith('https://') && !photo.startsWith('AgAC')))) {
-            const cleanRel = photo.replace(/^\//, '');
-            const candidates = [
-                path.join(process.cwd(), 'public', cleanRel),
-                path.join(process.cwd(), 'webapp', 'public', cleanRel),
-                photo
-            ];
-            for (const c of candidates) {
-                if (fs.existsSync(c)) {
+        let cleanRel = photo;
+        if (cleanRel.includes('/uploads/')) {
+            cleanRel = 'uploads/' + cleanRel.split('/uploads/')[1];
+        } else {
+            cleanRel = cleanRel.replace(/^\//, '');
+        }
+
+        const candidates = [
+            path.join(process.cwd(), cleanRel),
+            path.join(process.cwd(), 'public', cleanRel),
+            path.join(process.cwd(), 'webapp', 'public', cleanRel),
+            path.join(process.cwd(), '..', 'webapp', 'public', cleanRel),
+            photo
+        ];
+
+        for (const c of candidates) {
+            try {
+                if (c && fs.existsSync(c) && fs.statSync(c).isFile()) {
                     isLocalFile = true;
                     localFilePath = c;
                     break;
                 }
-            }
+            } catch (e) {}
         }
 
         let response: Response;
 
         if (isLocalFile) {
+            console.log(`[TELEGRAM] 📸 Sending photo from local file: ${localFilePath}`);
             const fileBuffer = fs.readFileSync(localFilePath);
             const blob = new Blob([fileBuffer]);
             const formData = new FormData();
@@ -96,6 +106,7 @@ export async function sendPhoto(chatId: number | string, photo: string, caption?
                 body: formData,
             });
         } else {
+            console.log(`[TELEGRAM] 🌐 Sending photo from URL: ${photo}`);
             response = await fetch(`https://api.telegram.org/bot${useToken}/sendPhoto`, {
                 method: 'POST',
                 headers: {
@@ -115,6 +126,7 @@ export async function sendPhoto(chatId: number | string, photo: string, caption?
         if (!data.ok) {
             console.error("Failed to send Telegram photo:", data);
             if (caption) {
+                console.log(`[TELEGRAM] ⚠️ Photo send failed (${data.description || 'Unknown'}), fallback to sendMessage...`);
                 await sendMessage(chatId, caption.replace(/<[^>]*>/g, ''), useToken);
                 return true;
             }

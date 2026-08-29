@@ -1,5 +1,6 @@
 import { query } from '../database/index.js';
 import { formatCurrency } from '../../utils/index.js';
+import { t } from '../helpers/langHelper.js';
 
 let schedulerInterval = null;
 let isRunning = false;
@@ -62,23 +63,34 @@ export const executeAutoRestock = async (bot, customParams = null) => {
     const channelId = (customParams?.channelId !== undefined ? customParams.channelId : (settingsMap.auto_restock_channel_id || '')).trim();
     const channelLang = customParams?.channelLang || settingsMap.auto_restock_lang || 'vi';
     const fakeRule = customParams?.fakeRule || settingsMap.auto_restock_rule || 'random';
+    const specificProdId = customParams?.productId || settingsMap.auto_restock_product_id || '0';
+    const customImage = (customParams?.customImage !== undefined ? customParams.customImage : (settingsMap.auto_restock_custom_image || '')).trim();
+    const useProductImage = customParams?.useProductImage !== undefined ? customParams.useProductImage : (settingsMap.auto_restock_use_product_image === '1');
     const minQty = Number(customParams?.minQty || settingsMap.auto_restock_min_qty) || 15;
     const maxQty = Number(customParams?.maxQty || settingsMap.auto_restock_max_qty) || 50;
 
-    // 2. Chọn sản phẩm theo quy tắc (random hoặc min_stock)
-    let prodQuery = "SELECT * FROM products WHERE is_active = 1";
-    if (fakeRule === 'min_stock') {
-      prodQuery += " ORDER BY stock ASC, RAND() LIMIT 1";
-    } else {
-      prodQuery += " ORDER BY RAND() LIMIT 1";
+    // 2. Chọn sản phẩm theo quy tắc (random, min_stock hoặc specific)
+    let product = null;
+    if (fakeRule === 'specific' && specificProdId && specificProdId !== '0') {
+      const prods = await query("SELECT * FROM products WHERE id = ?", [specificProdId]);
+      if (prods && prods.length > 0) product = prods[0];
     }
 
-    const prods = await query(prodQuery);
-    if (!prods || prods.length === 0) {
-      console.log('[AUTO_RESTOCK] ⚠️ Không có sản phẩm nào đang kích hoạt (is_active = 1)');
-      return { success: false, reason: 'no_products' };
+    if (!product) {
+      let prodQuery = "SELECT * FROM products WHERE is_active = 1";
+      if (fakeRule === 'min_stock') {
+        prodQuery += " ORDER BY stock ASC, RAND() LIMIT 1";
+      } else {
+        prodQuery += " ORDER BY RAND() LIMIT 1";
+      }
+
+      const prods = await query(prodQuery);
+      if (!prods || prods.length === 0) {
+        console.log('[AUTO_RESTOCK] ⚠️ Không có sản phẩm nào đang kích hoạt (is_active = 1)');
+        return { success: false, reason: 'no_products' };
+      }
+      product = prods[0];
     }
-    const product = prods[0];
 
     // 3. Tính số lượng ảo ngẫu nhiên
     const safeMin = Math.min(minQty, maxQty);
@@ -97,20 +109,16 @@ export const executeAutoRestock = async (bot, customParams = null) => {
     }
 
     const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
-    const isEn = channelLang === 'en';
 
-    // 5. Soạn tin nhắn
-    const textMsg = isEn
-      ? `🔥 *STOCK RESTOCKED NOTIFICATION*\n\n` +
-        `📦 Product: *${product.name}*\n` +
-        `⚡ Restocked: *+${randQty}* items (Price: ${formatCurrency(Number(product.price) || 0)})\n` +
-        `👉 Click the button below to buy now before it runs out!`
-      : `🔥 *THÔNG BÁO NHẬP KHO HÀNG*\n\n` +
-        `📦 Sản phẩm: *${product.name}*\n` +
-        `⚡ Vừa về thêm: *+${randQty}* sản phẩm (Đơn giá: ${formatCurrency(Number(product.price) || 0)})\n` +
-        `👉 Bấm nút bên dưới để vào mua ngay kẻo hết hàng!`;
+    // 5. Soạn tin nhắn từ hệ thống ngôn ngữ cấu hình
+    const formattedPrice = formatCurrency(Number(product.price) || 0);
+    const textMsg = t('auto_restock_notify', channelLang, {
+      name: product.name,
+      quantity: randQty,
+      price: formattedPrice
+    });
 
-    const buttonText = isEn ? '⚡ Buy Now' : '⚡ Mua ngay sản phẩm này';
+    const buttonText = t('btn_buy_now_direct', channelLang);
     const replyMarkup = buyUrl ? {
       inline_keyboard: [
         [
@@ -119,9 +127,20 @@ export const executeAutoRestock = async (bot, customParams = null) => {
       ]
     } : undefined;
 
-    const sendOpts = {
-      parse_mode: 'Markdown',
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+    let imageUrlToUse = customImage;
+    if (!imageUrlToUse && useProductImage && product.image_url && String(product.image_url).trim().startsWith('http')) {
+      imageUrlToUse = product.image_url.trim();
+    }
+
+    const sendBotMsg = async (targetId) => {
+      const opts = {
+        parse_mode: 'Markdown',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+      };
+      if (imageUrlToUse) {
+        return bot.sendPhoto(targetId, imageUrlToUse, { caption: textMsg, ...opts });
+      }
+      return bot.sendMessage(targetId, textMsg, opts);
     };
 
     let channelSuccess = false;
@@ -131,7 +150,7 @@ export const executeAutoRestock = async (bot, customParams = null) => {
     // 6. Gửi tới Channel nếu có
     if (channelId && (targetType === 'channel' || targetType === 'both')) {
       try {
-        await bot.sendMessage(channelId, textMsg, sendOpts);
+        await sendBotMsg(channelId);
         channelSuccess = true;
         console.log(`[AUTO_RESTOCK] 📢 Đã gửi thông báo tới kênh Telegram: ${channelId}`);
       } catch (chanErr) {
@@ -146,12 +165,11 @@ export const executeAutoRestock = async (bot, customParams = null) => {
         totalUsersCount = users.length;
         for (const u of users) {
           try {
-            await bot.sendMessage(u.telegram_id, textMsg, sendOpts);
+            await sendBotMsg(u.telegram_id);
             userSuccessCount++;
-            // Chờ một khoảng ngắn 40ms giữa mỗi user để tránh giới hạn rate-limit của Telegram
             await new Promise((r) => setTimeout(r, 40));
           } catch (uErr) {
-            // Bỏ qua lỗi gửi từng user (vd: user đã block bot)
+            // Bỏ qua lỗi từng user
           }
         }
         console.log(`[AUTO_RESTOCK] 👥 Đã gửi thông báo tới ${userSuccessCount}/${totalUsersCount} người dùng CSDL`);

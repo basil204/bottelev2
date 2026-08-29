@@ -1,4 +1,5 @@
 import { createPool, type Pool } from 'mysql2/promise';
+import type { RowDataPacket } from 'mysql2';
 import { runPendingMigrations } from './dbMigrations';
 
 // Load .env is handled by Next.js automatically
@@ -109,10 +110,15 @@ async function initAccountStorageTables() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS account_types (
         id INT PRIMARY KEY AUTO_INCREMENT,
-        name VARCHAR(100) NOT NULL,
+        name VARCHAR(100) NOT NULL UNIQUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Auto-seed default account types if empty
+    await pool.query(
+      "INSERT IGNORE INTO account_types (name) VALUES ('CapCut Pro'), ('Gmail EDU'), ('Canva Pro')"
+    );
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS stored_accounts (
@@ -126,11 +132,93 @@ async function initAccountStorageTables() {
         note TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (account_type_id) REFERENCES account_types(id) ON DELETE CASCADE,
-        INDEX idx_type (account_type_id),
-        INDEX idx_payment_status (payment_status),
         INDEX idx_sale_status (sale_status)
       )
     `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS capcut_admin_workspaces (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        admin_email VARCHAR(255) NOT NULL,
+        admin_password VARCHAR(255) NOT NULL,
+        admin_cookie TEXT NOT NULL,
+        workspace_id VARCHAR(100) NOT NULL UNIQUE,
+        workspace_name VARCHAR(255) NULL,
+        member_limit INT DEFAULT 7,
+        member_cnt INT DEFAULT 1,
+        team_vip_end BIGINT DEFAULT 0,
+        status ENUM('active', 'full', 'expired', 'disabled') DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_status (status),
+        INDEX idx_ws_id (workspace_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS capcut_user_warranties (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        telegram_id VARCHAR(50) NOT NULL,
+        user_capcut_email VARCHAR(255) NOT NULL,
+        user_capcut_uid VARCHAR(100) NULL,
+        workspace_id VARCHAR(100) NOT NULL,
+        admin_email VARCHAR(255) NULL,
+        price_paid DECIMAL(15,2) DEFAULT 0,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NULL,
+        status ENUM('active', 'expired', 'refunded') DEFAULT 'active',
+        note TEXT NULL,
+        INDEX idx_tg_id (telegram_id),
+        INDEX idx_user_email (user_capcut_email),
+        INDEX idx_ws_id (workspace_id),
+        INDEX idx_admin_email (admin_email)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    try {
+      await pool.query("ALTER TABLE capcut_user_warranties ADD COLUMN admin_email VARCHAR(255) NULL AFTER workspace_id");
+    } catch (e: any) {}
+
+    // Create broadcast_templates table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS broadcast_templates (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(50) DEFAULT 'general',
+        message TEXT NOT NULL,
+        image_url TEXT NULL,
+        inline_keyboard JSON NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // Seed default templates if empty
+    try {
+      const [tplCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as cnt FROM broadcast_templates');
+      if (tplCount[0]?.cnt === 0) {
+        await pool.query(
+          `INSERT INTO broadcast_templates (title, category, message, image_url, inline_keyboard) VALUES
+           (?, 'product', ?, '', ?),
+           (?, 'general', ?, '', ?),
+           (?, 'maintenance', ?, '', ?)`,
+          [
+            'Hàng mới lên kho',
+            '{5375135722514685501} HÀNG MỚI VỪA LÊN KHO\n\nSản phẩm hot vừa được nhập thêm.\nNhanh tay mua trước khi hết hàng.',
+            JSON.stringify([[{ id: 'btn_1', text: '{5375135722514685501} Xem sản phẩm', type: 'callback', callbackData: 'start:shop' }]]),
+            'Thông báo Khuyến mãi & Sự kiện',
+            '🎉 **CHƯƠNG TRÌNH KHUYẾN MÃI ĐẶC BIỆT**\n\nShop giảm giá cực sốc tất cả các sản phẩm hôm nay!\nĐừng bỏ lỡ cơ hội sở hữu tài khoản VIP giá cực ưu đãi.',
+            JSON.stringify([[{ id: 'btn_2', text: '🔥 Mua Ngay Giảm Giá', type: 'callback', callbackData: 'start:shop' }]]),
+            'Thông báo Bảo trì hệ thống',
+            '⚠️ **THÔNG BÁO BẢO TRÌ HỆ THỐNG**\n\nHệ thống sẽ tiến hành bảo trì nâng cấp trong ít phút.\nCác giao dịch hiện tại có thể bị gián đoạn nhẹ. Xin cảm ơn sự kiên nhẫn của bạn!',
+            JSON.stringify([[{ id: 'btn_3', text: '📞 Liên Hệ Hỗ Trợ', type: 'url', url: 'https://t.me' }]])
+          ]
+        );
+      }
+    } catch (e: any) {
+      console.error('[DB] Error seeding broadcast_templates:', e?.message);
+    }
+
 
     // Add invoice_code column to orders table if not exists
     try {

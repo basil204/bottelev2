@@ -5,7 +5,8 @@ import Link from 'next/link';
 import {
     Save, Settings as SettingsIcon, Banknote, CreditCard, Trash2, Power, Download,
     DatabaseBackup, ShieldCheck, RefreshCw, Key, User, Globe, Bot, Bell,
-    Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock, Languages
+    Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock, Languages,
+    CloudUpload, FileText, ExternalLink
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -118,8 +119,162 @@ export default function SettingsPage() {
     const [configuringBank, setConfiguringBank] = useState<string>('vcb');
     const [adminRole, setAdminRole] = useState<string>('admin');
 
+    // Google Drive Backup State
+    const [driveFolderId, setDriveFolderId] = useState('');
+    const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
+    const [autoBackupInterval, setAutoBackupInterval] = useState('24h');
+    const [driveClientId, setDriveClientId] = useState('');
+    const [driveClientSecret, setDriveClientSecret] = useState('');
+    const [driveRefreshToken, setDriveRefreshToken] = useState('');
+    const [isDriveConnected, setIsDriveConnected] = useState(false);
+    const [backupHistory, setBackupHistory] = useState<any[]>([]);
+    const [loadingDriveBackup, setLoadingDriveBackup] = useState(false);
+    const [creatingBackup, setCreatingBackup] = useState(false);
+    const [savingDriveConfig, setSavingDriveConfig] = useState(false);
+    const [uploadingJson, setUploadingJson] = useState(false);
+
+    const handleUploadJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingJson(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const jsonText = event.target?.result as string;
+            try {
+                const res = await fetch('/api/backup/drive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'upload_json',
+                        jsonContent: jsonText
+                    })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    alert(data.message || 'Đã nhập file JSON thành công!');
+                    fetchBackupData();
+                } else {
+                    alert(data.error || 'Lỗi đọc file JSON');
+                }
+            } catch (err) {
+                alert('Lỗi xử lý file JSON');
+            } finally {
+                setUploadingJson(false);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const fetchBackupData = async () => {
+        setLoadingDriveBackup(true);
+        try {
+            const res = await fetch('/api/backup/drive');
+            if (res.ok) {
+                const data = await res.json();
+                setIsDriveConnected(Boolean(data.isDriveConnected));
+                if (data.config) {
+                    setDriveFolderId(data.config.google_drive_folder_id || '');
+                    setAutoBackupEnabled(Boolean(data.config.auto_backup_enabled));
+                    setAutoBackupInterval(data.config.auto_backup_interval || '24h');
+                    setDriveClientId(data.config.google_drive_client_id || '');
+                    setDriveClientSecret(data.config.google_drive_client_secret || '');
+                    setDriveRefreshToken(data.config.google_drive_refresh_token || '');
+                }
+                if (Array.isArray(data.history)) {
+                    setBackupHistory(data.history);
+                }
+            }
+        } catch (e) {
+            console.error('Fetch backup error:', e);
+        } finally {
+            setLoadingDriveBackup(false);
+        }
+    };
+
+    const handleSaveDriveConfig = async () => {
+        setSavingDriveConfig(true);
+        try {
+            const res = await fetch('/api/backup/drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'save_config',
+                    folderId: driveFolderId.trim(),
+                    autoEnabled: autoBackupEnabled,
+                    autoInterval: autoBackupInterval,
+                    clientId: driveClientId.trim(),
+                    clientSecret: driveClientSecret.trim(),
+                    refreshToken: driveRefreshToken.trim()
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                alert('Đã lưu cấu hình tự động sao lưu Google Drive thành công!');
+                fetchBackupData();
+            } else {
+                alert(data.error || 'Lỗi lưu cấu hình Google Drive');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ');
+        } finally {
+            setSavingDriveConfig(false);
+        }
+    };
+
+    const handleCreateBackupNow = async () => {
+        setCreatingBackup(true);
+        try {
+            const res = await fetch('/api/backup/drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_backup',
+                    folderId: driveFolderId.trim(),
+                    clientId: driveClientId.trim(),
+                    clientSecret: driveClientSecret.trim(),
+                    refreshToken: driveRefreshToken.trim()
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                alert(data.message || 'Đã sao lưu thành công!');
+                fetchBackupData();
+            } else {
+                alert(data.error || 'Lỗi khi tạo bản sao lưu');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ khi sao lưu');
+        } finally {
+            setCreatingBackup(false);
+        }
+    };
+
+    const handleDeleteBackup = async (fileName: string) => {
+        if (!confirm(`Xác nhận xóa bản sao lưu ${fileName}?`)) return;
+        try {
+            const res = await fetch('/api/backup/drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete_backup',
+                    fileName
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                fetchBackupData();
+            } else {
+                alert(data.error || 'Lỗi xóa bản sao lưu');
+            }
+        } catch (e) {
+            alert('Lỗi kết nối máy chủ');
+        }
+    };
+
     useEffect(() => {
         fetchSettings();
+        fetchBackupData();
         // Check admin role from cookie
         const cookies = document.cookie.split(';');
         for (const cookie of cookies) {
@@ -806,24 +961,308 @@ export default function SettingsPage() {
                 </div>
             )}
 
-            {/* TAB 6: SAO LƯU SQL */}
+            {/* TAB 6: HỆ THỐNG TỰ ĐỘNG SAO LƯU DỮ LIỆU LÊN GOOGLE DRIVE */}
             {activeTab === 'backup' && adminRole === 'super_admin' && (
-                <div className="space-y-5 text-xs max-w-2xl mx-auto">
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center space-y-4 shadow-2xs">
-                        <DatabaseBackup className="h-10 w-10 text-orange-600 mx-auto" />
-                        <h3 className="font-extrabold text-sm text-zinc-900">XUẤT BẢN SAO LƯU DATABASE MYSQL (.SQL)</h3>
-                        <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                            Tạo file SQL chứa toàn bộ cấu trúc bảng và toàn bộ dữ liệu đơn hàng, người dùng, giao dịch của hệ thống.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handleExportSql}
-                            disabled={exportingSql}
-                            className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs uppercase px-6 py-3 shadow-xs disabled:opacity-50 flex items-center justify-center gap-2 mx-auto"
-                        >
-                            <Download className="h-4 w-4" />
-                            <span>{exportingSql ? 'ĐANG TẠO FILE SQL...' : 'TẢI FILE SQL DATABASE'}</span>
-                        </button>
+                <div className="space-y-6 text-xs max-w-5xl mx-auto">
+                    {/* Header Banner Status */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent p-5 rounded-2xl border border-emerald-500/20">
+                        <div className="flex items-center gap-3.5">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-500/20 shrink-0">
+                                <DatabaseBackup className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
+                                    TỰ ĐỘNG SAO LƯU DỮ LIỆU LÊN GOOGLE DRIVE
+                                </h2>
+                                <p className="text-xs text-zinc-600 font-medium mt-0.5">
+                                    Hệ thống tự động xuất bản sao lưu SQL CSDL MySQL và tải lên tài khoản Google Drive cá nhân/doanh nghiệp.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <a
+                                href="/api/backup/drive/auth"
+                                className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs uppercase px-4 py-2.5 shadow-md transition active:scale-95 flex items-center gap-2 cursor-pointer"
+                                title="Đăng nhập Google bằng 1-Click để cấp quyền lưu file tự động"
+                            >
+                                <Globe className="h-4 w-4" />
+                                <span>🔗 ĐĂNG NHẬP CẤP QUYỀN GOOGLE (1-CLICK)</span>
+                            </a>
+
+                            {isDriveConnected ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                                    🟢 ĐÃ KẾT NỐI GOOGLE DRIVE
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 font-extrabold text-xs">
+                                    🟡 ĐANG LƯU BẢN SAO LƯU LOCAL
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Instant Action Buttons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3 shadow-xs">
+                            <div className="flex items-center gap-2 font-extrabold text-emerald-950 text-xs uppercase">
+                                <CloudUpload className="h-4 w-4 text-emerald-600" />
+                                <span>TẠO BẢN SAO LƯU & TẢI LÊN DRIVER NGAY</span>
+                            </div>
+                            <p className="text-[11px] text-emerald-900/80 leading-relaxed font-medium">
+                                Xuất tức thì file `.sql` chứa toàn bộ bảng CSDL MySQL và tự động đồng bộ đẩy file lên thư mục Google Drive của bạn.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleCreateBackupNow}
+                                disabled={creatingBackup}
+                                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase py-3 shadow-md transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                                <RefreshCw className={`h-4 w-4 ${creatingBackup ? 'animate-spin' : ''}`} />
+                                <span>{creatingBackup ? 'ĐANG SAO LƯU & TẢI LÊN DRIVER...' : '🚀 TẠO BẢN SAO LƯU NGAY'}</span>
+                            </button>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3 shadow-xs">
+                            <div className="flex items-center gap-2 font-extrabold text-zinc-900 text-xs uppercase">
+                                <Download className="h-4 w-4 text-orange-600" />
+                                <span>TẢI THỦ CÔNG FILE SQL MÁY CHỦ</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">
+                                Tải file sao lưu CSDL dạng `.sql` trực tiếp về máy tính cá nhân để lưu giữ hoặc khôi phục thủ công khi cần.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleExportSql}
+                                disabled={exportingSql}
+                                className="w-full rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800 font-extrabold text-xs uppercase py-3 shadow-2xs transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                                <Download className="h-4 w-4 text-orange-600" />
+                                <span>{exportingSql ? 'ĐANG XUẤT SQL...' : '📥 TẢI FILE SQL DATABASE'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Google Drive Config Card */}
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                            <h3 className="font-extrabold text-xs uppercase text-zinc-900 tracking-wider flex items-center gap-2">
+                                <SettingsIcon className="h-4 w-4 text-orange-600" />
+                                <span>CẤU HÌNH THÔNG SỐ TỰ ĐỘNG SAO LƯU GOOGLE DRIVE</span>
+                            </h3>
+
+                            <label className="flex items-center gap-2 cursor-pointer font-extrabold text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                <input
+                                    type="checkbox"
+                                    checked={autoBackupEnabled}
+                                    onChange={(e) => setAutoBackupEnabled(e.target.checked)}
+                                    className="h-4 w-4 rounded accent-emerald-600 cursor-pointer"
+                                />
+                                <span>BẬT TỰ ĐỘNG SAO LƯU THEO LỊCH</span>
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">
+                                    THỜI GIAN ĐỊNH KỲ SAO LƯU (AUTO INTERVAL)
+                                </label>
+                                <select
+                                    value={autoBackupInterval}
+                                    onChange={(e) => setAutoBackupInterval(e.target.value)}
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-emerald-500 transition"
+                                >
+                                    <option value="6h">⚡ Mỗi 6 Giờ (4 lần / ngày)</option>
+                                    <option value="12h">⚡ Mỗi 12 Giờ (2 lần / ngày)</option>
+                                    <option value="24h">📅 Mỗi Ngày (Tự động 00:00 hàng ngày)</option>
+                                    <option value="weekly">📆 Mỗi Tuần (1 lần / tuần)</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">
+                                    GOOGLE DRIVE FOLDER ID (MÃ THƯ MỤC TRÊN DRIVER)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={driveFolderId}
+                                    onChange={(e) => setDriveFolderId(e.target.value)}
+                                    placeholder="Ví dụ: 1A2b3C4d5E6F7g8H9i0J (Lấy từ URL thư mục Drive)"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 outline-none focus:border-emerald-500 transition text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        {/* File JSON Credentials Upload Banner */}
+                        <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-black text-xs text-blue-950 uppercase">
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                    <span>TẢI LÊN FILE CREDENTIALS / SERVICE ACCOUNT (.JSON)</span>
+                                </div>
+                                <label className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-black uppercase transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                                    <Plus className="h-4 w-4" />
+                                    <span>{uploadingJson ? 'ĐANG TẢI VÀ NẠP JSON...' : '📂 CHỌN FILE JSON CREDENTIALS'}</span>
+                                    <input
+                                        type="file"
+                                        accept=".json"
+                                        onChange={handleUploadJsonFile}
+                                        className="hidden"
+                                    />
+                                </label>
+                            </div>
+                            <p className="text-[11px] text-blue-900/80 font-medium">
+                                Nhanh chóng kết nối bằng cách chọn file <code className="font-bold bg-blue-100 px-1 py-0.5 rounded text-blue-950">client_secret.json</code> hoặc <code className="font-bold bg-blue-100 px-1 py-0.5 rounded text-blue-950">service_account.json</code> đã tải về từ Google Cloud Console.
+                            </p>
+                        </div>
+
+                        {/* Optional Custom OAuth API Credentials */}
+                        <div className="pt-3 border-t border-zinc-100 space-y-3">
+                            <span className="text-[11px] font-extrabold uppercase text-zinc-500 block">
+                                CẤU HÌNH TÙY CHỌN GOOGLE OAUTH2 CREDENTIALS (NHẬP TAY NẾU CẦN):
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-zinc-500">CLIENT ID</label>
+                                    <input
+                                        type="text"
+                                        value={driveClientId}
+                                        onChange={(e) => setDriveClientId(e.target.value)}
+                                        placeholder="xxx.apps.googleusercontent.com"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-800 text-[11px] outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-zinc-500">CLIENT SECRET</label>
+                                    <input
+                                        type="password"
+                                        value={driveClientSecret}
+                                        onChange={(e) => setDriveClientSecret(e.target.value)}
+                                        placeholder="GOCS-..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-800 text-[11px] outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-zinc-500">REFRESH TOKEN</label>
+                                    <input
+                                        type="password"
+                                        value={driveRefreshToken}
+                                        onChange={(e) => setDriveRefreshToken(e.target.value)}
+                                        placeholder="1//0..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-800 text-[11px] outline-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={handleSaveDriveConfig}
+                                disabled={savingDriveConfig}
+                                className="rounded-xl bg-zinc-900 hover:bg-black text-white px-6 py-2.5 text-xs font-black uppercase tracking-wider transition shadow-xs flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                                <Save className="h-4 w-4 text-emerald-400" />
+                                <span>{savingDriveConfig ? 'ĐANG LƯU...' : '💾 LƯU CẤU HÌNH GOOGLE DRIVE'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Backup History Table */}
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                            <div className="font-extrabold text-xs uppercase text-zinc-900 tracking-wider flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-orange-600" />
+                                <span>LỊCH SỬ BẢN SAO LƯU GOOGLE DRIVE & LOCAL ({backupHistory.length})</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={fetchBackupData}
+                                className="px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-100 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loadingDriveBackup ? 'animate-spin' : ''}`} />
+                                <span>LÀM MỚI</span>
+                            </button>
+                        </div>
+
+                        {loadingDriveBackup && backupHistory.length === 0 ? (
+                            <div className="p-8 text-center text-xs text-zinc-400">
+                                <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-orange-600" />
+                                Đang cập nhật lịch sử sao lưu...
+                            </div>
+                        ) : backupHistory.length === 0 ? (
+                            <div className="p-8 text-center text-xs text-zinc-400 space-y-1">
+                                <DatabaseBackup className="h-8 w-8 text-zinc-300 mx-auto mb-2" />
+                                <p className="font-bold text-zinc-600">Chưa có bản sao lưu nào được tạo.</p>
+                                <p className="text-[10px]">Bấm nút "Tạo bản sao lưu ngay" phía trên để tạo bản sao lưu đầu tiên.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-zinc-200 bg-zinc-50/80 text-[10px] uppercase tracking-wider text-zinc-500 font-extrabold">
+                                            <th className="p-3">TÊN FILE SQL</th>
+                                            <th className="p-3">DUNG LƯỢNG</th>
+                                            <th className="p-3">THỜI GIAN TẠO</th>
+                                            <th className="p-3 text-center">GOOGLE DRIVE</th>
+                                            <th className="p-3 text-right">THAO TÁC</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100">
+                                        {backupHistory.map((item) => (
+                                            <tr key={item.id || item.fileName} className="hover:bg-zinc-50/80 transition">
+                                                <td className="p-3 font-mono font-bold text-zinc-900 text-[11px]">
+                                                    {item.fileName}
+                                                </td>
+                                                <td className="p-3 font-mono text-zinc-600 text-xs">
+                                                    {item.sizeKb} KB
+                                                </td>
+                                                <td className="p-3 text-zinc-600 text-xs">
+                                                    {new Date(item.createdAt).toLocaleString('vi-VN')}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {item.driveUploaded ? (
+                                                        <a
+                                                            href={item.driveLink || '#'}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black hover:underline border border-emerald-300"
+                                                        >
+                                                            <ExternalLink className="h-3 w-3" />
+                                                            Đã lưu Drive
+                                                        </a>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300">
+                                                            💾 Bản lưu Local
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <a
+                                                            href={item.filePath}
+                                                            download={item.fileName}
+                                                            className="p-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition"
+                                                            title="Tải về file SQL"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handleDeleteBackup(item.fileName)}
+                                                            className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                                            title="Xóa bản sao lưu"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

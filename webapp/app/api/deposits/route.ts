@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { sendMessage } from '@/lib/telegram';
+import { getTemplateFromDb, renderTemplate } from '@/lib/templateHelper';
 import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 
 
@@ -170,26 +171,39 @@ export async function POST(request: Request) {
                 await connection.commit();
 
                 // Notify User
-                const [userRows] = await pool.query<any[]>('SELECT telegram_id FROM users WHERE id = ?', [deposit.user_id]);
-                const telegramId = userRows[0]?.telegram_id;
+                const [userRows] = await pool.query<any[]>('SELECT telegram_id, username, balance FROM users WHERE id = ?', [deposit.user_id]);
+                const userObj = userRows[0];
+                const telegramId = userObj?.telegram_id;
                 if (telegramId) {
-                    let msg = `✅ Yêu cầu nạp tiền #${depositId} đã được duyệt.\n💰 Số tiền nạp: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(deposit.amount)}`;
-                    if (bonusAmount > 0) {
-                        msg += `\n🎁 Khuyến mãi: +${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(bonusAmount)}`;
-                    }
-                    msg += `\n💵 Tổng cộng: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(finalAmount)}`;
+                    const templateStr = await getTemplateFromDb('msg_template_deposit');
+                    const msg = renderTemplate(templateStr, {
+                        deposit_id: depositId,
+                        amount: new Intl.NumberFormat('vi-VN').format(deposit.amount),
+                        bonus: new Intl.NumberFormat('vi-VN').format(bonusAmount),
+                        total: new Intl.NumberFormat('vi-VN').format(finalAmount),
+                        new_balance: new Intl.NumberFormat('vi-VN').format(userObj?.balance || 0),
+                        username: userObj?.username || ''
+                    });
                     await sendMessage(telegramId, msg);
                 }
 
             } else {
                 // Reject
+                const { reason } = body;
                 await connection.query('UPDATE deposits SET status = ? WHERE id = ?', ['rejected', depositId]);
                 await connection.commit();
                 // Notify User
-                const [userRows] = await pool.query<any[]>('SELECT telegram_id FROM users WHERE id = ?', [deposit.user_id]);
-                const telegramId = userRows[0]?.telegram_id;
+                const [userRows] = await pool.query<any[]>('SELECT telegram_id, username FROM users WHERE id = ?', [deposit.user_id]);
+                const userObj = userRows[0];
+                const telegramId = userObj?.telegram_id;
                 if (telegramId) {
-                    await sendMessage(telegramId, `❌ Yêu cầu nạp tiền #${depositId} đã bị từ chối.`);
+                    const templateStr = await getTemplateFromDb('msg_template_deposit_reject');
+                    const msg = renderTemplate(templateStr, {
+                        deposit_id: depositId,
+                        reason: reason || 'Nội dung thông tin không khớp hoặc không hợp lệ',
+                        username: userObj?.username || ''
+                    });
+                    await sendMessage(telegramId, msg);
                 }
             }
 

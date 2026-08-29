@@ -11,16 +11,32 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL UNIQUE,
+  priority INT DEFAULT 0,
+  emoji VARCHAR(50) DEFAULT NULL,
+  custom_emoji_id VARCHAR(100) DEFAULT NULL,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
+  code VARCHAR(100) NULL,
   price DECIMAL(18,2) NOT NULL,
   description TEXT,
   stock INT DEFAULT 0,
   low_stock_threshold INT NOT NULL DEFAULT 5,
   sold_adjustment INT NOT NULL DEFAULT 0,
-  type ENUM('auto', 'manual') DEFAULT 'auto',
-  priority INT DEFAULT 0
+  type VARCHAR(50) DEFAULT 'stock',
+  category_id INT NULL DEFAULT NULL,
+  priority INT DEFAULT 0,
+  is_active TINYINT(1) DEFAULT 1,
+  require_email TINYINT(1) DEFAULT 0,
+  check_live TINYINT(1) DEFAULT 0,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS accounts (

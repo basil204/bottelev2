@@ -59,16 +59,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, priority, emoji, custom_emoji_id } = body;
+        const { name, priority, emoji, custom_emoji_id, is_active } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!name || name.trim().length === 0) {
             return NextResponse.json({ error: 'Tên thư mục là bắt buộc' }, { status: 400 });
         }
 
+        const activeVal = is_active !== undefined ? (is_active ? 1 : 0) : 1;
+
         const [result] = await pool.query<ResultSetHeader>(
-            'INSERT INTO categories (name, priority, emoji, custom_emoji_id) VALUES (?, ?, ?, ?)',
-            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null]
+            'INSERT INTO categories (name, priority, emoji, custom_emoji_id, is_active) VALUES (?, ?, ?, ?, ?)',
+            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null, activeVal]
         );
 
         // Log action
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
             action: 'CREATE',
             targetType: 'CATEGORY' as any,
             targetId: result.insertId,
-            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id },
+            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id, is_active: activeVal },
             ipAddress,
             userAgent,
             request
@@ -97,7 +99,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { id, name, priority, emoji, custom_emoji_id } = body;
+        const { id, name, priority, emoji, custom_emoji_id, is_active } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
@@ -105,9 +107,11 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'Tên thư mục là bắt buộc' }, { status: 400 });
         }
 
+        const activeVal = is_active !== undefined ? (is_active ? 1 : 0) : 1;
+
         await pool.query(
-            'UPDATE categories SET name = ?, priority = ?, emoji = ?, custom_emoji_id = ? WHERE id = ?',
-            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null, id]
+            'UPDATE categories SET name = ?, priority = ?, emoji = ?, custom_emoji_id = ?, is_active = ? WHERE id = ?',
+            [name.trim(), priority || 0, emoji || null, custom_emoji_id || null, activeVal, id]
         );
 
         // Log action
@@ -117,7 +121,7 @@ export async function PUT(request: Request) {
             action: 'UPDATE',
             targetType: 'CATEGORY' as any,
             targetId: id,
-            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id },
+            details: { name: name.trim(), priority: priority || 0, emoji, custom_emoji_id, is_active: activeVal },
             ipAddress,
             userAgent,
             request
@@ -185,8 +189,22 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
     try {
         const body = await request.json();
-        const { reorder } = body;
+        const { id, is_active, reorder } = body;
         const adminName = await getAdminFromCookie(request);
+
+        if (id && is_active !== undefined) {
+            const activeVal = is_active ? 1 : 0;
+            await pool.query('UPDATE categories SET is_active = ? WHERE id = ?', [activeVal, id]);
+            await logAdminAction({
+                adminName: adminName || 'System',
+                action: 'UPDATE',
+                targetType: 'CATEGORY' as any,
+                targetId: id,
+                details: { is_active: activeVal },
+                request
+            });
+            return NextResponse.json({ success: true, is_active: activeVal });
+        }
 
         if (Array.isArray(reorder)) {
             for (const item of reorder) {
@@ -203,7 +221,7 @@ export async function PATCH(request: Request) {
             });
             return NextResponse.json({ success: true, message: 'Reordered categories successfully' });
         }
-        return NextResponse.json({ error: 'No reorder payload' }, { status: 400 });
+        return NextResponse.json({ error: 'No valid patch payload' }, { status: 400 });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

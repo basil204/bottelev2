@@ -1,0 +1,31 @@
+fetch("https://edit-api-sg.capcut.com/cc/v1/workspace/get_invitation_link", {
+  "headers": {
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "en-US,en;q=0.9,vi;q=0.8",
+    "app-sdk-version": "48.0.0",
+    "appid": "348188",
+    "appvr": "5.8.0",
+    "content-type": "application/json",
+    "device-time": "1759304283",
+    "did": "7553826660933699073",
+    "lan": "en",
+    "loc": "sg",
+    "pf": "7",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Chromium\";v=\"140\", \"Not=A?Brand\";v=\"24\", \"Google Chrome\";v=\"140\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "sign": "7f9daa202995b37f1de8064fb3d8e26e",
+    "sign-ver": "1",
+    "store-country-code": "vn",
+    "store-country-code-src": "uid",
+    "tdid": "",
+    "cookie": "_gcl_au=1.1.929051992.1758762337; _ga=GA1.1.125931593.1758762337; passport_csrf_token=28c3d35a31f0845faa7fe6126eb12ce1; passport_csrf_token_default=28c3d35a31f0845faa7fe6126eb12ce1; sid_guard=4ef9467819e3058bcc72043c91be9811%7C1758762740%7C5184000%7CMon%2C+24-Nov-2025+01%3A12%3A20+GMT; uid_tt=6ef7e32b3aaee3eab9f9328f78ef4aae250446aa63a43588e55308a0579e1ed5; uid_tt_ss=6ef7e32b3aaee3eab9f9328f78ef4aae250446aa63a43588e55308a0579e1ed5; sid_tt=4ef9467819e3058bcc72043c91be9811; sessionid=4ef9467819e3058bcc72043c91be9811; sessionid_ss=4ef9467819e3058bcc72043c91be9811; sid_ucp_v1=1.0.0-KGZmNjBkZDNkYmQ0NDM4MjQ4ZGFiMjFkZmExNTc3M2ZjNTk3NGFhNDMKGQiRiMy6yrvm5WgQ9K3SxgYYnKAVOAFA6wcQAxoCbXkiIDRlZjk0Njc4MTllMzA1OGJjYzcyMDQzYzkxYmU5ODEx; ssid_ucp_v1=1.0.0-KGZmNjBkZDNkYmQ0NDM4MjQ4ZGFiMjFkZmExNTc3M2ZjNTk3NGFhNDMKGQiRiMy6yrvm5WgQ9K3SxgYYnKAVOAFA6wcQAxoCbXkiIDRlZjk0Njc4MTllMzA1OGJjYzcyMDQzYzkxYmU5ODEx; store-idc=alisg; store-country-code=vn; store-country-code-src=uid; cc-target-idc=alisg; tt-target-idc-sign=kSf_x44zGWOctlkylK3kWOLRYWqqhxhKicQew4x0CiS9g8ph7eEuizFiQ7cTt91PDSvuohUJ_y6CZAV3D1N0rwk_xteSIWFS_8UYHsHAz0bDoWtbyVPbQOLytjsWI3cB_fOlnOEWTsXg7ycMlA40P3VwDXO8J1LWznQynDg5Y600lSWoUQQ-IsycN2WpVn0VqKN3_FHlVhX6J9qxmeWdYyZSqM7IzNDkk_qNGdB1BhvfnOHODe2c_gcCN9miInB9EsvbF8nelOazUPu2mW_Xh0EU9wZvAKl2ajHkxmipF4fay72lGn0em9BvUOox7dbs16Ux2jMkbzXcQewtEQ7QDSCgkFGkdr6W80QPGwZIbB92gDDb1zrd4_mLRfjYtVMrhOQX4Qwc1UKUT-5_-mP7EOWDdUiYkqyTYFhm-34d9d8bIk5PD8teM_s3l9mWNFKsJ9R4OZqiBcTDqjQyUdJCGaYSmbXBIs5g2RGxyCZvTTZLM0Zy3pumYdeJKspV_DEr; odin_tt=a4811da4c042d46612b56de94d8e66cc649aca5a8bb267cb5aa1c278b4d401ed7436710fddb787edbd9de002b2385546; _clck=iic5tw%5E2%5Efzs%5E0%5E2094; ttwid=1|Ojh8Kgvqe0BVlSt_K7hOlIS9THiYl-WCAG5Kt94cDo8|1759304277|1ca00259e33e7ce0861911184f751a97c835177f3ec0ae188b4ad73097a9846e; _ga_F9J0QP63RB=GS2.1.s1759304245$o3$g1$t1759304277$j28$l0$h0; _clsk=9apu2n%5E1759304278180%5E4%5E1%5Ea.clarity.ms%2Fcollect; _uetsid=7d9847509e9911f097fcddf8c65e081d; _uetvid=aa88e46099ac11f0bf92e184d04057b9; store-country-sign=MEIEDDEmtQOFiU0doJo7EwQg_tjrLRPGnjyxCyqVzXl3KVQN4tW6HKHcTOguyGg3uEEEEHGk3h0r9jF3dyGajIn3wD8; msToken=nKnYqyh8sC7BIKqSOz5YRTJuBJZy68ZRrLFk5yr7o8wf1Q2ac5-DkB7rri0IrACbkLeORZ0SLjb7rc8gjKKkRSFruwBvttoRFnoQgbsOGN5xhteCXXL-gdQZuF1r",
+    "Referer": "https://www.capcut.com/"
+  },
+  "body": "{\"workspace_id\":\"7551999743350538293\"}",
+  "method": "POST"
+});

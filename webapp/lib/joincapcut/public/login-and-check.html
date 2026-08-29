@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapCut Login & Check - Giao diện đăng nhập và kiểm tra workspace</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+
+        .result-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .step {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .step h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .step.success {
+            border-left-color: #28a745;
+        }
+
+        .step.error {
+            border-left-color: #dc3545;
+        }
+
+        .step.loading {
+            border-left-color: #ffc107;
+        }
+
+        .data-display {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .workspace-info {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .workspace-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #28a745;
+        }
+
+        .workspace-item h5 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .workspace-item p {
+            color: #666;
+            margin: 4px 0;
+        }
+
+
+        .hidden {
+            display: none;
+        }
+
+        .status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .api-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .api-info h4 {
+            color: #1976d2;
+            margin-bottom: 8px;
+        }
+
+        .api-info p {
+            color: #666;
+            margin: 4px 0;
+        }
+
+        .cookie-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #e1e5e9;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.3) !important;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 CapCut Login & Check</h1>
+            <p>Đăng nhập và kiểm tra workspace với API tổng hợp</p>
+            <div style="margin-top: 15px;">
+                <a href="/" class="nav-link" style="background: rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 20px; text-decoration: none; font-size: 14px; font-weight: 500; transition: background 0.3s;">
+                    ← Quay lại trang chủ
+                </a>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="api-info">
+                <h4>📡 API Endpoint</h4>
+                <p><strong>POST</strong> <code>/api/login-and-check</code></p>
+                <p>Thực hiện đăng nhập và kiểm tra workspace trong một request duy nhất</p>
+            </div>
+
+            <div class="form-section">
+                <h3>📝 Thông tin đăng nhập</h3>
+                <form id="loginAndCheckForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" name="email" placeholder="8lf7r4x9mp@manhnl.dev" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Mật khẩu:</label>
+                            <input type="password" id="password" name="password" placeholder="Nhập mật khẩu" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" id="submitBtn">
+                        <span id="btnText">🚀 Đăng nhập và kiểm tra</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="result-section hidden" id="resultSection">
+                <h3>📊 Kết quả</h3>
+                <div id="stepsContainer"></div>
+                <div id="dataContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginAndCheckForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const resultSection = document.getElementById('resultSection');
+        const stepsContainer = document.getElementById('stepsContainer');
+        const dataContainer = document.getElementById('dataContainer');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(form);
+            const data = {
+                email: formData.get('email'),
+                password: formData.get('password')
+            };
+
+            // Reset UI
+            submitBtn.disabled = true;
+            resultSection.classList.remove('hidden');
+            stepsContainer.innerHTML = '';
+            dataContainer.innerHTML = '';
+
+            try {
+                // Gọi API login-and-check
+                addStep('🔐 Đang đăng nhập và kiểm tra workspace...', 'loading');
+                
+                const response = await fetch('/api/login-and-check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Request failed');
+                }
+
+                updateStep('✅ Đăng nhập và kiểm tra thành công!', 'success');
+
+                // Chỉ hiển thị thông tin workspace
+                displayWorkspaceData(result.workspace);
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStep(`❌ Lỗi: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+
+        function addStep(text, status = 'loading') {
+            const step = document.createElement('div');
+            step.className = `step ${status}`;
+            step.innerHTML = `
+                <h4>${text}</h4>
+                <span class="status ${status}">${getStatusText(status)}</span>
+            `;
+            stepsContainer.appendChild(step);
+            return step;
+        }
+
+        function updateStep(text, status) {
+            const lastStep = stepsContainer.lastElementChild;
+            if (lastStep) {
+                lastStep.className = `step ${status}`;
+                lastStep.innerHTML = `
+                    <h4>${text}</h4>
+                    <span class="status ${status}">${getStatusText(status)}</span>
+                `;
+            }
+        }
+
+        function getStatusText(status) {
+            switch(status) {
+                case 'success': return 'Thành công';
+                case 'error': return 'Lỗi';
+                case 'loading': return 'Đang xử lý...';
+                default: return '';
+            }
+        }
+
+
+        function displayWorkspaceData(workspaceData) {
+            const container = document.createElement('div');
+            
+            // Hiển thị thông tin workspace chi tiết
+            if (workspaceData.workspaceData && workspaceData.workspaceData.data && workspaceData.workspaceData.data.workspace_infos) {
+                const workspaceInfo = document.createElement('div');
+                workspaceInfo.className = 'workspace-info';
+                workspaceInfo.innerHTML = `
+                    <h3>📋 Chi tiết workspace</h3>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 14px;">
+                        <p><strong>🕐 Server Time:</strong> ${workspaceData.workspaceData.svr_time ? formatTimestamp(workspaceData.workspaceData.svr_time) : 'N/A'}</p>
+                        <p><strong>📊 Log ID:</strong> ${workspaceData.workspaceData.log_id || 'N/A'}</p>
+                        <p><strong>✅ Status:</strong> ${workspaceData.workspaceData.errmsg || 'N/A'}</p>
+                    </div>
+                `;
+
+                workspaceData.workspaceData.data.workspace_infos.forEach((workspace, index) => {
+                    const workspaceItem = document.createElement('div');
+                    workspaceItem.className = 'workspace-item';
+                    workspaceItem.innerHTML = `
+                        <h5>Workspace ${index + 1}: ${workspace.name}</h5>
+                        <p><strong>ID:</strong> ${workspace.workspace_id}</p>
+                        <p><strong>Space ID:</strong> ${workspace.space_id}</p>
+                        <p><strong>Vai trò:</strong> ${workspace.role}</p>
+                        <p><strong>Chủ sở hữu:</strong> ${workspace.owner_name} (${workspace.owner})</p>
+                        <p><strong>Nickname:</strong> ${workspace.caller_nickname}</p>
+                        <p><strong>Thành viên:</strong> ${workspace.member_cnt}/${workspace.member_limit}</p>
+                        <p><strong>Dung lượng:</strong> ${formatBytes(workspace.usage)}/${formatBytes(workspace.quota)}</p>
+                        <p><strong>Khu vực:</strong> ${workspace.region}</p>
+                        <p><strong>IDC:</strong> ${workspace.idc}</p>
+                        <p><strong>Space Host:</strong> ${workspace.space_host}</p>
+                        <p><strong>Trạng thái:</strong> ${workspace.status === 1 ? 'Hoạt động' : 'Không hoạt động'}</p>
+                        <p><strong>Loại workspace:</strong> ${workspace.workspace_type}</p>
+                        <p><strong>Cho phép mời:</strong> ${workspace.invite_permission === 1 ? 'Có' : 'Không'}</p>
+                        <p><strong>Yêu cầu phê duyệt:</strong> ${workspace.approval_required ? 'Có' : 'Không'}</p>
+                        <p><strong>Trạng thái VIP:</strong> ${workspace.team_vip_status === 1 ? 'Có VIP' : 'Không VIP'}</p>
+                        ${workspace.team_vip_status === 1 && workspace.team_vip_end ? `<p><strong>VIP hết hạn:</strong> ${formatTimestamp(workspace.team_vip_end)}</p>` : ''}
+                        <p><strong>Trạng thái cloud:</strong> ${workspace.cloud_status === 1 ? 'Hoạt động' : 'Không hoạt động'}</p>
+                    `;
+                    workspaceInfo.appendChild(workspaceItem);
+                });
+
+                container.appendChild(workspaceInfo);
+            } else {
+                container.innerHTML = `
+                    <div class="workspace-info">
+                        <h3>📋 Chi tiết workspace</h3>
+                        <p>Không có thông tin workspace hoặc dữ liệu không hợp lệ</p>
+                    </div>
+                `;
+            }
+
+            dataContainer.appendChild(container);
+        }
+
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Asia/Ho_Chi_Minh'
+            }) + ` (${timestamp})`;
+        }
+    </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
 import { startGmailCleanup } from './includes/services/gmailCleanup.js';
 import { startAutoRestockScheduler } from './includes/services/autoRestockService.js';
+import { startDriveBackupCron } from './includes/services/driveBackupService.js';
 
 import { config } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
@@ -88,6 +89,7 @@ const bootstrap = async () => {
   startAutoDepositWatcher(bot, config);
   startGmailCleanup(5, 5); // Check login và cleanup mỗi 5 phút
   startAutoRestockScheduler(bot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
+  startDriveBackupCron(); // Khởi động tự động sao lưu dữ liệu CSDL lên Google Drive
 
 };
 

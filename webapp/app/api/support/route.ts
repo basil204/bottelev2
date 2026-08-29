@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { sendMessage } from '@/lib/telegram';
+import { getTemplateFromDb, renderTemplate } from '@/lib/templateHelper';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
 export async function GET(request: Request) {
@@ -109,16 +110,19 @@ export async function GET(request: Request) {
             todayStart.setHours(0, 0, 0, 0);
 
             const filteredList = (conversations as any[]).filter(c => {
-                const isUnreplied = Number(c.unreplied_count) > 0 || (c.last_customer_message && (!c.last_admin_reply || c.last_admin_reply.trim() === '') && c.last_status !== 'completed');
+                const latestIsAdmin = Boolean(c.last_admin_reply && c.last_admin_reply.trim() !== '');
+                const isUnreplied = !latestIsAdmin && Boolean(c.last_customer_message) && c.last_status !== 'completed';
                 const lastTime = c.last_message_time ? new Date(c.last_message_time) : null;
                 const isToday = lastTime && lastTime >= todayStart;
 
-                if (isUnreplied) totalUnreplied++;
-                if (isToday) totalNewToday++;
+                if (isUnreplied) {
+                    totalUnreplied++;
+                    if (isToday) totalNewToday++;
+                }
 
                 if (filterTab === 'unreplied') return isUnreplied;
-                if (filterTab === 'unread' || filterTab === 'newest') return isUnreplied || isToday;
-                if (filterTab === 'replied') return !isUnreplied && c.last_admin_reply;
+                if (filterTab === 'unread' || filterTab === 'newest') return isUnreplied;
+                if (filterTab === 'replied') return latestIsAdmin || c.last_status === 'completed';
                 return true;
             });
 
@@ -210,7 +214,9 @@ export async function GET(request: Request) {
             LEFT JOIN orders o ON sr.order_id = o.id
             LEFT JOIN products p ON o.product_id = p.id
             ${whereClause}
-            ORDER BY sr.created_at DESC
+            ORDER BY 
+                (sr.status = 'completed') ASC,
+                sr.created_at ASC
         `, params);
 
         return NextResponse.json({ data: rows });
@@ -234,7 +240,18 @@ export async function POST(request: Request) {
 
             // Send message via Telegram bot
             try {
-                await sendMessage(telegramId, replyText);
+                // If replyText is raw user text, format with support template if available
+                let finalMsg = replyText;
+                if (!replyText.includes('PHẢN HỒI TỪ ADMIN') && !replyText.startsWith('✅')) {
+                    const templateStr = await getTemplateFromDb('msg_template_support');
+                    finalMsg = renderTemplate(templateStr, {
+                        ticket_id: requestId || 'SUPPORT',
+                        product_name: 'Hỗ trợ dịch vụ',
+                        reply_text: replyText,
+                        status: markCompleted ? 'Đã hoàn tất' : 'Đang hỗ trợ'
+                    });
+                }
+                await sendMessage(telegramId, finalMsg);
             } catch (e) {
                 console.error('Telegram notification error:', e);
             }
@@ -255,6 +272,14 @@ export async function POST(request: Request) {
                 );
             }
 
+            // Update all previous unanswered requests for this customer to indicate admin has responded
+            if (telegramId) {
+                await pool.query(
+                    'UPDATE support_requests SET admin_reply = COALESCE(admin_reply, ?), status = ? WHERE (telegram_id = ? OR user_id = ?) AND (admin_reply IS NULL OR admin_reply = "")',
+                    [replyText, updateStatus, telegramId, telegramId]
+                );
+            }
+
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
@@ -267,6 +292,37 @@ export async function POST(request: Request) {
             });
 
             return NextResponse.json({ success: true, message: 'Đã gửi tin nhắn phản hồi tới khách hàng thành công!' });
+        }
+
+        if (action === 'create_ticket') {
+            const { orderCode, productName, customerMessage, requestType } = body;
+            if (!telegramId) return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 });
+
+            const [uRows] = await pool.query<RowDataPacket[]>('SELECT id, username FROM users WHERE telegram_id = ?', [telegramId]);
+            const uid = uRows[0]?.id || null;
+
+            const [res] = await pool.query<ResultSetHeader>(
+                `INSERT INTO support_requests (user_id, telegram_id, order_code, product_name, request_type, customer_message, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, "processing", NOW())`,
+                [uid, telegramId, orderCode || null, productName || null, requestType || 'WARRANTY', customerMessage || null]
+            );
+
+            const templateStr = await getTemplateFromDb('msg_template_warranty_request');
+            const confirmMsg = renderTemplate(templateStr, {
+                order_code: orderCode || 'N/A',
+                product_name: productName || 'Sản phẩm bảo hành',
+                reason: customerMessage || 'Yêu cầu hỗ trợ/bảo hành',
+                time: new Date().toLocaleString('vi-VN'),
+                username: uRows[0]?.username || ''
+            });
+
+            try {
+                await sendMessage(telegramId, confirmMsg);
+            } catch (e) {
+                console.error('Error sending warranty request confirmation:', e);
+            }
+
+            return NextResponse.json({ success: true, id: res.insertId, message: 'Đã tạo yêu cầu bảo hành thành công!' });
         }
 
         if (action === 'mark_all_read' || action === 'mark_completed') {
@@ -291,7 +347,15 @@ export async function POST(request: Request) {
                 await pool.query('UPDATE orders SET note = ?, status = "completed" WHERE id = ?', [note, orderId]);
 
                 if (order.telegram_id) {
-                    const msg = `✅ SHOP ĐÃ BẢO HÀNH ĐƠN HÀNG #${order.invoice_code || orderId}\n\n📦 Dữ liệu tài khoản mới:\n\`${newAccountData}\`\n\n📝 Ghi chú: ${warrantyNote || 'Đổi mới bảo hành'}`;
+                    const templateStr = await getTemplateFromDb('msg_template_delivery');
+                    const msg = renderTemplate(templateStr, {
+                        order_code: order.invoice_code || `#${orderId}`,
+                        product_name: 'Đơn hàng bảo hành',
+                        data: newAccountData,
+                        note: warrantyNote || 'Đổi mới bảo hành thành công',
+                        price: new Intl.NumberFormat('vi-VN').format(order.price || 0),
+                        username: ''
+                    });
                     try {
                         await sendMessage(order.telegram_id, msg);
                     } catch (e) {

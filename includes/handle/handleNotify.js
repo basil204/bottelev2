@@ -1,5 +1,7 @@
 import { formatCurrency } from '../../utils/index.js';
 import { query } from '../database/index.js';
+import { t } from '../helpers/langHelper.js';
+import { getBotTemplate, renderBotTemplate } from '../helpers/templateHelper.js';
 
 // Helper function to escape Markdown special characters
 const escapeMarkdown = (text) => {
@@ -12,7 +14,7 @@ export const getAdminIds = async (configAdminIds = []) => {
   const ids = new Set(
     (Array.isArray(configAdminIds) ? configAdminIds : [configAdminIds])
       .map(Number)
-      .filter(Number.isFinite)
+      .filter((id) => Number.isFinite(id) && id > 0)
   );
 
   try {
@@ -26,23 +28,34 @@ export const getAdminIds = async (configAdminIds = []) => {
       }
       (Array.isArray(configuredIds) ? configuredIds : [configuredIds])
         .map(Number)
-        .filter(Number.isFinite)
+        .filter((id) => Number.isFinite(id) && id > 0)
         .forEach((id) => ids.add(id));
     }
   } catch (e) {
-    console.error('[getAdminIds] Error fetching from DB:', e);
+    console.error('[getAdminIds] Error fetching from settings:', e.message);
   }
 
   try {
     const accounts = await query(
-      'SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL'
+      'SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL AND telegram_id != 0'
     );
-    accounts.map((row) => Number(row.telegram_id)).filter(Number.isFinite).forEach((id) => ids.add(id));
+    if (Array.isArray(accounts)) {
+      accounts.map((row) => Number(row.telegram_id)).filter((id) => Number.isFinite(id) && id > 0).forEach((id) => ids.add(id));
+    }
   } catch (e) {
     if (e.code !== 'ER_NO_SUCH_TABLE') {
-      console.error('[getAdminIds] Error fetching admin_accounts:', e);
+      console.error('[getAdminIds] Error fetching admin_accounts:', e.message);
     }
   }
+
+  try {
+    const usersAdmin = await query(
+      "SELECT telegram_id FROM users WHERE (is_admin = 1 OR role = 'admin') AND telegram_id IS NOT NULL AND telegram_id != 0"
+    );
+    if (Array.isArray(usersAdmin)) {
+      usersAdmin.map((row) => Number(row.telegram_id)).filter((id) => Number.isFinite(id) && id > 0).forEach((id) => ids.add(id));
+    }
+  } catch (e) {}
 
   return [...ids];
 };
@@ -178,42 +191,51 @@ export const notifyUsersAboutProductStock = async (bot, productId, accountCount)
   }
 };
 
-// Thông báo cho admin khi có đơn hàng manual mới
-export const notifyAdminAboutNewManualOrder = async (bot, adminIds, order) => {
+// Thông báo cho admin khi có đơn hàng manual / order mới
+export const notifyAdminAboutNewManualOrder = async (bot, adminIdsInput, order) => {
   try {
-    if (!adminIds || !Array.isArray(adminIds) || adminIds.length === 0) {
-      console.log('[NOTIFY_ADMIN] Không có admin IDs');
+    const adminIds = await getAdminIds(adminIdsInput);
+    if (!adminIds || adminIds.length === 0) {
+      console.warn('[NOTIFY_ADMIN] ⚠️ Không có Telegram ID Admin nào để gửi thông báo đơn Order');
       return;
     }
 
-    const message = `📝 **ĐƠN HÀNG MỚI CẦN XỬ LÝ**\n\n` +
-      `🆔 Mã đơn: #${escapeMarkdown(order.id)}\n` +
-      `🎁 Sản phẩm: ${escapeMarkdown(order.product_name)}\n` +
-      `👤 User: ${escapeMarkdown(order.username || order.telegram_id)}\n` +
-      `📧 Email: ${escapeMarkdown(order.email || 'N/A')}\n` +
-      `📝 Note: ${escapeMarkdown(order.note || 'Không có')}\n` +
-      `💰 Giá: ${escapeMarkdown(formatCurrency(order.price))}\n` +
-      `🕐 ${escapeMarkdown(order.created_at)}\n\n` +
-      `👉 Vào menu Admin → Đơn hàng cần xử lý để xem chi tiết`;
+    const timeString = order.created_at || new Date().toLocaleString('vi-VN');
+    const orderCode = order.invoice_code || `#${order.id}`;
+    const inputContent = order.email || order.note || 'Không có';
+
+    const templateStr = await getBotTemplate('msg_template_new_order_admin');
+    const message = renderBotTemplate(templateStr, {
+      order_code: orderCode,
+      product_name: order.product_name || 'Sản phẩm Order',
+      price: formatCurrency(order.price),
+      input_data: inputContent,
+      username: order.username || 'n/a',
+      telegram_id: order.telegram_id || 'n/a',
+      time: timeString
+    });
 
     let successCount = 0;
     let failCount = 0;
 
-    // Gửi thông báo cho từng admin
     for (const adminId of adminIds) {
       try {
         await bot.sendMessage(adminId, message, { parse_mode: 'Markdown' });
         successCount++;
-
-        // Delay nhỏ để tránh rate limit
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
-        console.error(`[NOTIFY_ADMIN] Lỗi khi gửi thông báo cho admin ${adminId}:`, error.message);
-        failCount++;
+        try {
+          const plainMsg = `ĐƠN HÀNG ORDER MỚI CẦN XỬ LÝ!\n\nMã đơn: ${orderCode}\nSản phẩm: ${order.product_name}\nKhách hàng: ${userText}\nThông tin: ${inputContent}\nThanh toán: ${formatCurrency(order.price)}\nThời gian: ${timeString}`;
+          await bot.sendMessage(adminId, plainMsg);
+          successCount++;
+        } catch (e2) {
+          console.error(`[NOTIFY_ADMIN] Lỗi khi gửi thông báo cho admin ${adminId}:`, e2.message);
+          failCount++;
+        }
       }
     }
 
-    console.log(`[NOTIFY_ADMIN] ✅ Hoàn thành: ${successCount} thành công, ${failCount} thất bại`);
+    console.log(`[NOTIFY_ADMIN] ✅ Hoàn thành thông báo Admin: ${successCount} thành công, ${failCount} thất bại`);
 
   } catch (error) {
     console.error('[NOTIFY_ADMIN] ❌ Lỗi khi thông báo cho admin:', error);
@@ -221,25 +243,27 @@ export const notifyAdminAboutNewManualOrder = async (bot, adminIds, order) => {
 };
 
 // Thông báo cho admin khi mua hàng thành công
-export const notifyAdminAboutPurchase = async (bot, adminIds, purchaseInfo) => {
+export const notifyAdminAboutPurchase = async (bot, adminIdsInput, purchaseInfo) => {
   try {
-    if (!adminIds || !Array.isArray(adminIds) || adminIds.length === 0) {
-      console.log('[NOTIFY_ADMIN] Không có admin IDs');
+    const adminIds = await getAdminIds(adminIdsInput);
+    if (!adminIds || adminIds.length === 0) {
+      console.warn('[NOTIFY_ADMIN] ⚠️ Không có Telegram ID Admin nào');
       return;
     }
 
-    let message = `🛒 MUA HÀNG THÀNH CÔNG\n\n` +
-      `🆔 Mã đơn: #${purchaseInfo.orderId || 'N/A'}\n` +
-      `🎁 Sản phẩm: ${purchaseInfo.productName || 'N/A'}\n` +
-      `👤 User: ${purchaseInfo.username || purchaseInfo.telegramId}\n` +
-      `📧 ID: ${purchaseInfo.telegramId}\n` +
-      `📦 Số lượng: ${purchaseInfo.quantity}\n` +
-      `💰 Giá: ${formatCurrency(purchaseInfo.price)}\n` +
-      `💵 Số dư sau mua: ${formatCurrency(purchaseInfo.finalBalance)}`;
+    let message = t('admin_notify_purchase', 'vi', {
+      orderId: purchaseInfo.orderId || 'N/A',
+      productName: purchaseInfo.productName || 'N/A',
+      username: purchaseInfo.username || purchaseInfo.telegramId,
+      telegramId: purchaseInfo.telegramId,
+      quantity: purchaseInfo.quantity,
+      price: formatCurrency(purchaseInfo.price),
+      finalBalance: formatCurrency(purchaseInfo.finalBalance)
+    });
 
     // Nếu có thông tin tài khoản, hiển thị thêm
     if (purchaseInfo.accounts) {
-      message += `\n\n📋 CHI TIẾT TÀI KHOẢN:\n`;
+      message += t('admin_notify_purchase_accounts_header', 'vi');
       if (Array.isArray(purchaseInfo.accounts)) {
         const accountList = purchaseInfo.accounts.map(acc => {
           const user = acc.username || acc.email || '';
@@ -333,13 +357,13 @@ export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
 export const notifyAdminAboutIncomingTransfer = async (bot, adminIds, transaction) => {
   if (!Array.isArray(adminIds) || adminIds.length === 0) return false;
 
-  const message = `💸 CÓ TIỀN CHUYỂN VÀO TÀI KHOẢN\n\n` +
-    `🏦 Ngân hàng: ${transaction.bank || 'N/A'}\n` +
-    `💰 Số tiền: ${formatCurrency(transaction.amount)}\n` +
-    `📝 Nội dung: ${transaction.description || 'Không có nội dung'}\n` +
-    `🆔 Mã giao dịch: ${transaction.reference || 'N/A'}\n` +
-    `🕐 Thời gian: ${transaction.transDate || new Date().toLocaleString('vi-VN')}\n\n` +
-    `⚠️ Giao dịch này chưa được khớp với yêu cầu nạp tiền thành công.`;
+  const message = t('admin_notify_incoming_transfer', 'vi', {
+    bank: transaction.bank || 'N/A',
+    amount: formatCurrency(transaction.amount),
+    description: transaction.description || 'Không có nội dung',
+    reference: transaction.reference || 'N/A',
+    time: transaction.transDate || new Date().toLocaleString('vi-VN')
+  });
 
   let successCount = 0;
   for (const adminId of adminIds) {
@@ -370,12 +394,12 @@ export const notifyGroupAboutNewStock = async (bot, notificationChatId, productI
     }
     const product = productRows[0];
 
-    const message = `📦 **HÀNG VỀ KHO**\n\n` +
-      `🎁 Sản phẩm: ${product.name}\n` +
-      `💰 Giá: ${formatCurrency(product.price)}\n` +
-      `➕ Số lượng mới: +${accountCount} tài khoản\n` +
-      `📊 Tồn kho hiện tại: ${product.stock || 0} sản phẩm\n\n` +
-      `🔔 Sản phẩm đã có hàng, các bạn có thể mua ngay!`;
+    const message = t('new_stock_notify', 'vi', {
+      name: product.name,
+      price: formatCurrency(product.price),
+      quantity: accountCount,
+      stock: product.stock || 0
+    });
 
     try {
       await bot.sendMessage(notificationChatId, message, { parse_mode: 'Markdown' });

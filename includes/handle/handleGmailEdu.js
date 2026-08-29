@@ -17,6 +17,7 @@ import { createOrder } from '../controllers/orderController.js';
 import { notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
 import { createCallbackData, formatCurrency } from '../../utils/index.js';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
+import { t } from '../helpers/langHelper.js';
 
 // Cache key cho Gmail EDU quantity input
 const gmailEduCacheKey = (telegramId) => `gmail_edu_waiting_${telegramId}`;
@@ -103,7 +104,7 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
     // Nếu người dùng chọn nút Menu (bắt đầu bằng emoji hoặc từ khóa menu), hủy state chờ số lượng và nhường cho handler Menu
     if (
         text.startsWith('/') ||
-        /^(🛟|🛒|💰|💵|📆|🧰|🌐|👤|📜|❌|🔙|📁|📝|📦|🎁|📌)/.test(text) ||
+        /^(🛟|🛒|💰|💵|📆|🌐|👤|📜|❌|🔙|📁|📝|📦|🎁|📌)/.test(text) ||
         /Hỗ trợ|Bảo hành|Support|Warranty|Mua hàng|Nạp tiền|Deposit|Điểm danh|Check-in|Tiện ích|Utilities|Tài khoản|Lịch sử/i.test(text)
     ) {
         delCache(gmailEduCacheKey(telegramId));
@@ -417,11 +418,25 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         try { await bot.deleteMessage(chatId, creatingMsg.message_id); } catch (e) { }
 
         // Gửi kết quả
-        let resultMessage = L(lang,
-            `✅ **THANH TOÁN THÀNH CÔNG!**\n\n🎁 Sản phẩm: **Gmail EDU**\n📦 Số lượng: ${createdAccounts.length}\n💰 Giá: ${formatCurrency(actualPrice)}\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n\n⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`,
-            `✅ **PAYMENT SUCCESSFUL!**\n\n📧 Product: **Gmail EDU**\n📦 Quantity: ${createdAccounts.length}\n💰 Price: ${formatCurrency(actualPrice)}\n💵 New balance: ${formatCurrency(finalBalance)}\n\n⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`,
-            `✅ **支付成功！**\n\n📧 产品: **Gmail EDU**\n📦 数量: ${createdAccounts.length}\n💰 价格: ${formatCurrency(actualPrice)}\n💵 新余额: ${formatCurrency(finalBalance)}\n\n⚠️ **注意：** 账户将在首次登录后 ${deleteHours} 小时自动删除。`
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+        const invoiceCode = `EDU-${Date.now().toString().slice(-6)}`;
+        const noteMsg = L(lang,
+            `⚠️ **Lưu ý:** Tài khoản sẽ tự động xóa sau ${deleteHours} giờ kể từ khi bạn đăng nhập lần đầu.`,
+            `⚠️ **Note:** Account will be automatically deleted ${deleteHours} hour(s) after first login.`,
+            `⚠️ **注意：** 账户将在首次登录后 ${deleteHours} 小时自动删除。`
         );
+        const qtyLine = t('payment_success_qty', lang, { quantity: createdAccounts.length });
+
+        let resultMessage = t('payment_success', lang, {
+            invoiceCode: invoiceCode,
+            time: timeStr,
+            productName: 'Gmail EDU',
+            qtyLine: qtyLine,
+            price: formatCurrency(actualPrice),
+            finalBalance: formatCurrency(finalBalance),
+            accountInfo: noteMsg
+        });
 
         await bot.sendMessage(chatId, resultMessage, {
             parse_mode: 'Markdown',

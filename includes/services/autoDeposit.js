@@ -17,6 +17,7 @@ import { globalConfig } from '../listen.js';
 
 
 import { query } from '../database/index.js';
+import { t } from '../helpers/langHelper.js';
 
 const processedKey = (ref) => `tx_${ref}`;
 const qrKey = (telegramId) => `qr_${telegramId}`;
@@ -291,28 +292,20 @@ const processDepositTransaction = async (bot, txRaw, cached, user, promotion) =>
   });
 
   try {
-    const L = (l, vi, en, zh) => ({ en, zh }[l] || vi);
     const lang = user.language || 'vi';
 
-    let successMsg = L(lang,
-      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền nạp: \`+${formatCurrency(originalAmount)}\``,
-      `✅ **Deposit successful!**\n\n💰 Amount credited: \`+${formatCurrency(originalAmount)}\``,
-      `✅ **充值成功！**\n\n💰 充值金额: \`+${formatCurrency(originalAmount)}\``
-    );
+    const bonusLine = promotionResult.bonusAmount > 0
+      ? t('deposit_bonus_line', lang, {
+          percent: promotion?.bonus_percentage || 0,
+          bonus: formatCurrency(promotionResult.bonusAmount)
+        })
+      : '';
 
-    if (promotionResult.bonusAmount > 0) {
-      successMsg += L(lang,
-        `\n🎁 Khuyến mãi (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``,
-        `\n🎁 Promotion (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``,
-        `\n🎁 促销红利 (+${promotion?.bonus_percentage || 0}%): \`+${formatCurrency(promotionResult.bonusAmount)}\``
-      );
-    }
-
-    successMsg += L(lang,
-      `\n💳 Số dư mới: \`${formatCurrency(finalBalance)}\``,
-      `\n💳 New balance: \`${formatCurrency(finalBalance)}\``,
-      `\n💳 新余额: \`${formatCurrency(finalBalance)}\``
-    );
+    const successMsg = t('deposit_success_user', lang, {
+      amount: formatCurrency(originalAmount),
+      bonusLine,
+      finalBalance: formatCurrency(finalBalance)
+    });
 
     if (cached.messageId) {
       await bot.sendMessage(user.telegram_id, successMsg, { parse_mode: 'Markdown' });

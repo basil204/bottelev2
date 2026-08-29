@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
+import { sendMessage } from '@/lib/telegram';
+import { getTemplateFromDb, renderTemplate } from '@/lib/templateHelper';
 
 export async function GET(request: Request) {
     try {
@@ -147,6 +149,24 @@ export async function PATCH(request: Request) {
                 } catch (e) {
                     console.error('Error inserting balance log:', e);
                 }
+
+                try {
+                    const [uRows] = await pool.query<RowDataPacket[]>('SELECT telegram_id, username FROM users WHERE id = ?', [order.user_id]);
+                    const teleId = uRows[0]?.telegram_id;
+                    if (teleId) {
+                        const templateStr = await getTemplateFromDb('msg_template_order_refund');
+                        const msg = renderTemplate(templateStr, {
+                            order_code: order.invoice_code || `#${id}`,
+                            product_name: order.note || 'Đơn hàng đặt trước',
+                            amount: new Intl.NumberFormat('vi-VN').format(order.price),
+                            reason: 'Hủy đơn hàng đặt trước và hoàn tiền vào ví',
+                            username: uRows[0]?.username || ''
+                        });
+                        await sendMessage(teleId, msg);
+                    }
+                } catch (notifyErr) {
+                    console.error('Telegram refund notify error:', notifyErr);
+                }
             }
 
             await pool.query('UPDATE orders SET status = "cancelled" WHERE id = ?', [id]);
@@ -167,6 +187,40 @@ export async function PATCH(request: Request) {
 
         if (status) {
             await pool.query('UPDATE orders SET status = ?, completed_at = IF(? = "completed", NOW(), completed_at) WHERE id = ?', [status, status, id]);
+            
+            if (status === 'completed') {
+                try {
+                    const [rows] = await pool.query<RowDataPacket[]>(`
+                        SELECT o.*, u.telegram_id, u.username, COALESCE(p.name, o.note, 'Sản phẩm') as product_name
+                        FROM orders o
+                        LEFT JOIN users u ON o.user_id = u.id
+                        LEFT JOIN products p ON o.product_id = p.id
+                        WHERE o.id = ?
+                    `, [id]);
+
+                    if (rows.length > 0 && rows[0].telegram_id) {
+                        const order = rows[0];
+                        const orderCode = order.invoice_code || `#${order.id}`;
+                        const timeStr = order.completed_at ? new Date(order.completed_at).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN');
+                        
+                        const templateStr = await getTemplateFromDb('msg_template_delivery');
+                        const notificationMsg = renderTemplate(templateStr, {
+                            order_code: orderCode,
+                            product_name: order.product_name || 'Sản phẩm',
+                            data: order.email || 'Đã hoàn tất',
+                            note: 'Hoàn tất đơn hàng',
+                            price: new Intl.NumberFormat('vi-VN').format(order.price),
+                            username: order.username || '',
+                            time: timeStr
+                        });
+
+                        await sendMessage(order.telegram_id, notificationMsg);
+                    }
+                } catch (notifyErr) {
+                    console.error('Failed to send order completion Telegram notification:', notifyErr);
+                }
+            }
+
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'UPDATE',
@@ -177,18 +231,43 @@ export async function PATCH(request: Request) {
                 userAgent,
                 request
             });
-            return NextResponse.json({ success: true, message: 'Cập nhật trạng thái thành công' });
+            return NextResponse.json({ success: true, message: 'Đã hoàn thành đơn hàng và thông báo tới khách hàng qua Telegram!' });
         }
 
         if (warrantyData) {
-            // Append new warranty account info into orders.email or note
-            const [orderRows] = await pool.query<RowDataPacket[]>('SELECT email FROM orders WHERE id = ?', [id]);
-            const currentEmail = orderRows[0]?.email || '';
-            const updatedEmail = currentEmail ? `${currentEmail}\n[BẢO HÀNH ${new Date().toLocaleDateString('vi-VN')}]: ${warrantyData.trim()}` : warrantyData.trim();
+            const [orderRows] = await pool.query<RowDataPacket[]>(`
+                SELECT o.*, u.telegram_id, COALESCE(p.name, o.note, 'Sản phẩm') as product_name 
+                FROM orders o 
+                LEFT JOIN users u ON o.user_id = u.id 
+                LEFT JOIN products p ON o.product_id = p.id
+                WHERE o.id = ?
+            `, [id]);
+            const order = orderRows[0];
+            const currentEmail = order?.email || '';
+            const updatedEmail = currentEmail ? `${currentEmail}\n[BÀN GIAO/BẢO HÀNH ${new Date().toLocaleDateString('vi-VN')}]: ${warrantyData.trim()}` : warrantyData.trim();
 
-            await pool.query('UPDATE orders SET email = ?, note = COALESCE(CONCAT(COALESCE(note, ""), " | Bảo hành: ", ?), ?) WHERE id = ?', [
-                updatedEmail, warrantyReason || 'Đổi tài khoản mới', warrantyReason || 'Bảo hành tài khoản mới', id
+            await pool.query('UPDATE orders SET email = ?, status = "completed", completed_at = NOW(), note = COALESCE(CONCAT(COALESCE(note, ""), " | Giao hàng: ", ?), ?) WHERE id = ?', [
+                updatedEmail, warrantyReason || 'Bàn giao tài khoản', warrantyReason || 'Bàn giao tài khoản', id
             ]);
+
+            if (order && order.telegram_id) {
+                const orderCode = order.invoice_code || `#${id}`;
+                const templateStr = await getTemplateFromDb('msg_template_delivery');
+                const msg = renderTemplate(templateStr, {
+                    order_code: orderCode,
+                    product_name: order.product_name || 'Sản phẩm',
+                    data: warrantyData.trim(),
+                    note: warrantyReason || 'Giao hàng / Bảo hành thành công',
+                    price: new Intl.NumberFormat('vi-VN').format(order.price || 0),
+                    username: order.username || ''
+                });
+
+                try {
+                    await sendMessage(order.telegram_id, msg);
+                } catch (e) {
+                    console.error('Telegram send warranty error:', e);
+                }
+            }
 
             await logAdminAction({
                 adminName: adminName || 'System',
@@ -201,7 +280,7 @@ export async function PATCH(request: Request) {
                 request
             });
 
-            return NextResponse.json({ success: true, message: 'Đã thực hiện bảo hành thành công' });
+            return NextResponse.json({ success: true, message: 'Đã hoàn tất đơn hàng và gửi dữ liệu tới khách hàng qua Telegram!' });
         }
 
         return NextResponse.json({ error: 'No valid action provided' }, { status: 400 });

@@ -74,7 +74,8 @@ export const t = (key, lang = 'vi', params = {}) => {
     let str = dict[key] || defaultMessages[targetLang]?.[key] || defaultMessages['vi']?.[key] || key;
 
     for (const [k, v] of Object.entries(params)) {
-        str = str.replace(new RegExp(`{${k}}`, 'g'), v);
+        const valStr = v !== undefined && v !== null ? String(v) : '';
+        str = str.split(`{${k}}`).join(valStr);
     }
     return str;
 };

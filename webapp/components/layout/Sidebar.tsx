@@ -7,8 +7,8 @@ import clsx from 'clsx';
 import {
   BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
   Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
-  Bell, Target, Settings, Code2, Layers, Globe, Link as LinkIcon,
-  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X
+  Bell, Target, Settings, Code2, Layers, Globe, Languages, Link as LinkIcon,
+  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -56,6 +56,8 @@ export function Sidebar() {
       label: 'CẤU HÌNH & TÙY BIẾN',
       items: [
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
+        { name: 'TẠO TK CAPCUT', href: '/capcut', icon: Video },
+        { name: 'NGÔN NGỮ & LỜI NHẮN', href: '/settings/translations', icon: Languages },
         { name: 'API KEY USER', href: '/user-api-keys', icon: Key },
       ],
     },

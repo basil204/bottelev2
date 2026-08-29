@@ -1,9 +1,9 @@
 # Chinese language file
 welcome=欢迎来到商店机器人。
 menu_title=主菜单
-btn_deposit=➕ 充值
-btn_buy=🛒 购买产品
-btn_history=🧾 购买记录
+btn_deposit=充值
+btn_buy=购买产品
+btn_history=购买记录
 admin_only=此命令仅限管理员使用。
-insufficient=❌ 余额不足。
+insufficient=余额不足。
 deposit_note=转账备注: NAP_%TELEGRAM_ID%

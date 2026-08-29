@@ -2,7 +2,7 @@ import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserI
 import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
 import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
-import { showCapCutMenu, startCapCutFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
+import { showCapCutMenu, startCapCutFlow, startCapCutBuyFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
 import { startDownloadFlow, handleDownloadInput, handleDownloadSelection } from './handle/handleDownload.js';
 import { handleCheckLiveCommand } from './handle/handleCheckLive.js';
 import { startLocketFlow, handleLocketInput } from './handle/handleLocket.js';
@@ -330,11 +330,36 @@ export const registerListeners = (bot, config) => {
     const { t, isMatchButton } = await import('./helpers/langHelper.js');
     const userLang = user?.language || 'vi';
 
-    // Xử lý nút Huỷ (ưu tiên cao)
-    if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消' || isMatchButton(text, 'cancel', userLang)) {
-      const { cancelUploadState } = await import('./handle/handleDeposit.js');
-      // Clear ALL waiting states
+    // Helper kiểm tra xem tin nhắn gửi lên có phải là Nút Bấm Menu / Lệnh điều hướng hay không
+    const isNavMenuButton = (txt) => {
+      const cleanTxt = txt.trim();
+      return (
+        cleanTxt.startsWith('/') ||
+        cleanTxt === '❌ Huỷ' || cleanTxt === '❌ Hủy' || cleanTxt === '❌ Cancel' || cleanTxt === '❌ 取消' || isMatchButton(cleanTxt, 'cancel', userLang) ||
+        cleanTxt === '➕ Nạp tiền' || cleanTxt === 'Nạp tiền' || cleanTxt === '➕ Deposit' || cleanTxt === 'Deposit' || cleanTxt === '➕ 充值' || cleanTxt === '充值' || isMatchButton(cleanTxt, 'btn_deposit', userLang) || isMatchButton(cleanTxt, 'deposit', userLang) ||
+        cleanTxt === '🛒 Mua hàng' || cleanTxt === 'Mua hàng' || cleanTxt === '🛒 Mua sản phẩm' || cleanTxt === 'Mua sản phẩm' || cleanTxt === '🛒 Mua tài khoản' || cleanTxt === 'Mua tài khoản' || cleanTxt === '🛒 Buy Products' || cleanTxt === 'Buy Products' || cleanTxt === '🛒 Buy' || cleanTxt === '🛒 购买产品' || cleanTxt === '购买产品' || isMatchButton(cleanTxt, 'btn_buy_menu', userLang) || isMatchButton(cleanTxt, 'buy_product', userLang) || isMatchButton(cleanTxt, 'product_list', userLang) || isMatchButton(cleanTxt, 'btn_buy_accounts', userLang) ||
+        cleanTxt === '📆 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === '📆 Check-in' || cleanTxt === 'Check-in' || cleanTxt === '📆 签到' || cleanTxt === '签到' || isMatchButton(cleanTxt, 'btn_checkin', userLang) ||
+        cleanTxt === '🛟 Hỗ trợ / Bảo hành' || cleanTxt === 'Hỗ trợ / Bảo hành' || cleanTxt === '🛟 Support / Warranty' || cleanTxt === 'Support / Warranty' || cleanTxt === '🛟 客服 / 保修' || cleanTxt === '客服 / 保修' || isMatchButton(cleanTxt, 'btn_support', userLang) ||
+        cleanTxt === 'Tiện ích' || cleanTxt === 'Utilities' || cleanTxt === '工具箱' || isMatchButton(cleanTxt, 'btn_utilities', userLang) ||
+        cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '🌐 语言' || cleanTxt === '语言' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
+        cleanTxt === '🧾 Lịch sử mua' || cleanTxt === 'Lịch sử mua' || cleanTxt === '🧾 History' || cleanTxt === 'History' || cleanTxt === '🧾 购买记录' || cleanTxt === '购买记录' || isMatchButton(cleanTxt, 'btn_order_history', userLang) ||
+        cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '↩️ 主菜单' || cleanTxt === '主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
+        cleanTxt === '📧 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '📧 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || isMatchButton(cleanTxt, 'btn_buy_gmail_edu', userLang) ||
+        cleanTxt === '🎬 CapCut Workspace' || cleanTxt === 'CapCut Workspace' ||
+        cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
+        cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
+        cleanTxt === '🔐 Locket' || cleanTxt === 'Locket' || isMatchButton(cleanTxt, 'btn_locket', userLang) ||
+        cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组'
+      );
+    };
+
+    // Nếu người dùng bấm bất kỳ Nút Menu nào -> Tự động xoá tất cả trạng thái chờ trước đó và xử lý Menu ngay
+    if (isNavMenuButton(text)) {
       const { delCache } = await import('../lib/cache/index.js');
+      const { manualOrderState, waitingForProductQuantity, waitingForCouponState } = await import('./handle/handleBuy.js');
+      manualOrderState?.delete(String(msg.from.id));
+      waitingForProductQuantity?.delete(String(msg.from.id));
+      waitingForCouponState?.delete(String(msg.from.id));
       delCache(`waiting_usdt_amount_${msg.from.id}`);
       delCache(`chatgpt_waiting_${msg.from.id}`);
       delCache(`gmail_edu_waiting_${msg.from.id}`);
@@ -345,148 +370,73 @@ export const registerListeners = (bot, config) => {
       delCache(`waiting_payment_proof_${msg.from.id}`);
       delCache(`download_all_waiting_${msg.from.id}`);
       delCache(`locket_lookup_waiting_${msg.from.id}`);
-      return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
-    }
-
-    const handledLocket = await handleLocketInput(bot, msg);
-    if (handledLocket) return;
-
-    const handledDownload = await handleDownloadInput(bot, msg, config);
-    if (handledDownload) return;
-
-    const handledCapCut = await handleCapCutInput(bot, msg, config);
-    if (handledCapCut) return;
-
-    // Check USDT amount input (new step for Bybit flow)
-    const { handleUsdtAmountInput, handleTrc20AmountInput, handleTrc20HashInput } = await import('./handle/handleDeposit.js');
-    const handledUsdt = await handleUsdtAmountInput(bot, msg, user, config);
-    if (handledUsdt) return;
-
-    // Check TRC20 amount input
-    const handledTrc20Amount = await handleTrc20AmountInput(bot, msg, user);
-    if (handledTrc20Amount) return;
-
-    // Check TRC20 hash input
-    const handledTrc20Hash = await handleTrc20HashInput(bot, msg, user);
-    if (handledTrc20Hash) return;
-
-    // Check Coupon Input
-    const { handleCouponInput, waitingForCouponState } = await import('./handle/handleBuy.js');
-    if (waitingForCouponState.has(String(msg.from.id))) {
-      const handledCoupon = await handleCouponInput(bot, msg, msg.from.id);
-      if (handledCoupon) return;
-    }
-
-    // Kiểm tra input số lượng cho sản phẩm trước (ưu tiên cao nhất)
-    const handledProduct = await handleProductQuantityInput(bot, msg, text, config);
-    if (handledProduct) return; // Đã xử lý input số lượng sản phẩm
-
-    // Kiểm tra input số lượng Gmail EDU
-    const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
-    if (handledGmailEdu) return; // Đã xử lý input số lượng Gmail EDU
-
-    // Kiểm tra manual order input (email/note)
-    const handledManual = await handleManualOrderInput(bot, msg, user.telegram_id, config.ADMIN_IDS);
-    if (handledManual) return; // Đã xử lý manual order input
-
-    // Check Support Request State Input
-    const supportState = getCache(`waiting_support_request_${msg.from.id}`);
-    if (supportState) {
       delCache(`waiting_support_request_${msg.from.id}`);
-      try {
-        await query(
-          'INSERT INTO support_requests (user_id, telegram_id, request_type, status, customer_message, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-          [user.id, msg.from.id, 'SUPPORT', 'processing', text]
-        );
-        return bot.sendMessage(
-          msg.chat.id,
-          t('msg_support_success', userLang)
-        );
-      } catch (e) {
-        console.error('[SUPPORT] Error saving support request:', e);
-        return bot.sendMessage(msg.chat.id, '❌ Có lỗi khi gửi yêu cầu. Vui lòng thử lại sau.');
+
+      if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消' || isMatchButton(text, 'cancel', userLang)) {
+        const { cancelUploadState } = await import('./handle/handleDeposit.js');
+        return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
       }
-    }
 
-    if (isMatchButton(text, 'btn_deposit', userLang) || isMatchButton(text, 'deposit', userLang) || text === '➕ Nạp tiền' || text === 'Nạp tiền' || text === '➕ Deposit' || text === 'Deposit' || text === '➕ 充值' || text === '充值') return startDepositFlow(bot, msg, user, config);
-    if (isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Buy Products' || text === 'Buy Products' || text === '🛒 购买产品' || text === '购买产品') return sendCategoryList(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_utilities', userLang) || text === '🧰 Tiện ích' || text === 'Tiện ích') return sendUtilityMenu(bot, msg.chat.id, user);
-    if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
-    if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
-    if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket' || text === 'Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
-    if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
-    if (text === '🎬 CapCut Workspace' || text === 'CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
-    if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === 'Lịch sử mua' || text === '🧾 History' || text === 'History' || text === '🧾 购买记录' || text === '购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+      if (isMatchButton(text, 'btn_deposit', userLang) || isMatchButton(text, 'deposit', userLang) || text === '➕ Nạp tiền' || text === 'Nạp tiền' || text === '➕ Deposit' || text === 'Deposit' || text === '➕ 充值' || text === '充值') return startDepositFlow(bot, msg, user, config);
+      if (isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Buy Products' || text === 'Buy Products' || text === '🛒 购买产品' || text === '购买产品') return sendCategoryList(bot, msg.chat.id, user);
+      if (isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
+      if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
+      if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+      if (isMatchButton(text, 'btn_utilities', userLang) || text === 'Tiện ích' || text === 'Utilities' || text === '工具箱') return sendUtilityMenu(bot, msg.chat.id, user);
+      if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
+      if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
+      if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket' || text === 'Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
+      if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+      if (text === '🎬 CapCut Workspace' || text === 'CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
+      if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === 'Lịch sử mua' || text === '🧾 History' || text === 'History' || text === '🧾 购买记录' || text === '购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
 
-    // Xử lý nút Điểm danh
-    if (isMatchButton(text, 'btn_checkin', userLang) || text === '📆 Điểm danh' || text === '/checkin') {
-      const checkinModule = await import('../modules/commands/checkin.js');
-      return checkinModule.default.handler(bot, msg);
-    }
+      if (isMatchButton(text, 'btn_checkin', userLang) || text === '📆 Điểm danh' || text === 'Điểm danh' || text === '/checkin') {
+        const checkinModule = await import('../modules/commands/checkin.js');
+        return checkinModule.default.handler(bot, msg);
+      }
 
-    // Xử lý nút Hỗ trợ / Bảo hành
-    if (isMatchButton(text, 'btn_support', userLang) || text === '🛟 Hỗ trợ / Bảo hành' || text === '/support') {
-      setCache(`waiting_support_request_${msg.from.id}`, true, 10 * 60 * 1000);
-      return bot.sendMessage(
-        msg.chat.id,
-        t('msg_support_guide', userLang)
-      );
-    }
+      if (isMatchButton(text, 'btn_support', userLang) || text === '🛟 Hỗ trợ / Bảo hành' || text === 'Hỗ trợ / Bảo hành' || text === '/support') {
+        setCache(`waiting_support_request_${msg.from.id}`, true, 10 * 60 * 1000);
+        return bot.sendMessage(msg.chat.id, t('msg_support_guide', userLang));
+      }
 
-    // Xử lý nút đổi ngôn ngữ
-    if (isMatchButton(text, 'btn_change_language', userLang) || text === '🌐 Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
-      const { t } = await import('./helpers/langHelper.js');
-      const { createCallbackData } = await import('../utils/index.js');
-      await bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'change_lang', lang: 'vi' }) },
-              { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) },
-              { text: '🇨🇳 中文', callback_data: createCallbackData({ action: 'change_lang', lang: 'zh' }) }
+      if (isMatchButton(text, 'btn_change_language', userLang) || text === '🌐 Ngôn ngữ' || text === 'Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
+        const { t } = await import('./helpers/langHelper.js');
+        const { createCallbackData } = await import('../utils/index.js');
+        return bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'change_lang', lang: 'vi' }) },
+                { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) },
+                { text: '🇨🇳 中文', callback_data: createCallbackData({ action: 'change_lang', lang: 'zh' }) }
+              ]
             ]
-          ]
-        }
-      });
-      return;
-    }
-
-    // Xử lý nút Nhóm
-    if (text === '👥 Nhóm' || text === '👥 Group' || text === '👥 群组') {
-      const { t } = await import('./helpers/langHelper.js');
-      const lang = user.language || 'vi';
-
-      // Lấy link nhóm từ settings hoặc config
-      let groupLink = config.TELEGRAM_GROUP_LINK || '';
-      try {
-        const rows = await query("SELECT `value` FROM settings WHERE `key` = 'telegram_group_link'");
-        if (rows && rows[0]?.value) {
-          groupLink = rows[0].value;
-        }
-      } catch (e) {
-        console.error('[GROUP_LINK] Error fetching group link:', e);
+          }
+        });
       }
 
-      if (!groupLink) {
-        const noLinkMsgs = { en: '❌ Support group link not configured yet.', zh: '❌ 支持群组链接尚未配置。' };
-        const noLinkMsg = noLinkMsgs[lang] || '❌ Link nhóm hỗ trợ chưa được cấu hình.';
-        return bot.sendMessage(msg.chat.id, noLinkMsg);
-      }
+      if (text === '👥 Nhóm' || text === '👥 Group' || text === '👥 群组') {
+        const { t } = await import('./helpers/langHelper.js');
+        const lang = user.language || 'vi';
+        let groupLink = config.TELEGRAM_GROUP_LINK || '';
+        try {
+          const rows = await query("SELECT `value` FROM settings WHERE `key` = 'telegram_group_link'");
+          if (rows && rows[0]?.value) groupLink = rows[0].value;
+        } catch (e) {}
 
-      const groupMsg = t('join_group_msg', lang);
-      await bot.sendMessage(msg.chat.id, groupMsg, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: { en: '👥 Join Group', zh: '👥 加入群组' }[lang] || '👥 Tham gia nhóm', url: groupLink }]
-          ]
+        if (!groupLink) {
+          const noLinkMsg = lang === 'en' ? '❌ Support group link not configured yet.' : '❌ Link nhóm hỗ trợ chưa được cấu hình.';
+          return bot.sendMessage(msg.chat.id, noLinkMsg);
         }
-      });
-      return;
+
+        const groupMsg = t('join_group_msg', lang);
+        return bot.sendMessage(msg.chat.id, groupMsg, {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '👥 Tham gia nhóm', url: groupLink }]] }
+        });
+      }
     }
 
     // Check if it's Admin approving deposit
@@ -555,10 +505,16 @@ export const registerListeners = (bot, config) => {
           'INSERT INTO support_requests (user_id, telegram_id, request_type, status, customer_message, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
           [user.id, msg.from.id, 'SUPPORT', 'processing', text]
         );
-        const { t } = await import('./helpers/langHelper.js');
-        const userLang = user?.language || 'vi';
-        const receivedMsg = t('msg_support_received', userLang) || '💬 Shop đã nhận được tin nhắn của bạn. Admin sẽ phản hồi trong giây lát!';
-        return bot.sendMessage(msg.chat.id, receivedMsg);
+        const { getBotTemplate, renderBotTemplate } = await import('./helpers/templateHelper.js');
+        const templateStr = await getBotTemplate('msg_support_received');
+        const receivedMsg = renderBotTemplate(templateStr, {
+          customer_name: user?.first_name || user?.username || 'Khách hàng',
+          username: user?.username || '',
+          telegram_id: msg.from.id,
+          message_text: text,
+          time: new Date().toLocaleString('vi-VN')
+        });
+        return bot.sendMessage(msg.chat.id, receivedMsg, { parse_mode: 'Markdown' });
       } catch (e) {
         console.error('[CHAT] Error saving customer message:', e);
       }
@@ -676,6 +632,8 @@ export const registerListeners = (bot, config) => {
           return handleDownloadSelection(bot, query, 'download_all');
         case 'dlc':
           return handleDownloadSelection(bot, query, 'download_cancel');
+        case 'capcut_buy_start':
+          return startCapCutBuyFlow(bot, chatId, query.from.id);
         case 'capcut_start':
           return startCapCutFlow(bot, chatId, query.from.id);
         case 'apply_coupon_prompt':

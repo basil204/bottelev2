@@ -21,6 +21,7 @@ interface Product {
   low_stock_threshold: number;
   sold_count: number;
   type: 'stock' | 'order';
+  require_email?: boolean | number;
   delivery_type?: string;
   min_quantity?: number;
   priority: number;
@@ -307,6 +308,7 @@ export default function ProductsPage() {
       cost_price: 0,
       category_id: categories.length > 0 ? categories[0].id : null,
       is_active: 1,
+      require_email: 0,
       show_sold_count: 0,
       delivery_type: 'Dữ liệu kho (Giao từng dòng hàng)',
       min_quantity: 1,
@@ -324,6 +326,8 @@ export default function ProductsPage() {
   const openEditModal = (product: Product) => {
     setEditingProduct({
       ...product,
+      type: product.type || 'stock',
+      require_email: product.require_email || 0,
       emoji: product.emoji || '',
       custom_emoji_id: product.custom_emoji_id || ''
     });
@@ -679,6 +683,11 @@ export default function ProductsPage() {
                                     ID: {p.custom_emoji_id}
                                   </span>
                                 )}
+                                {Boolean(p.require_email) && (
+                                  <span className="text-[9px] font-bold bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 rounded-md" title="Yêu cầu nhập email khi mua">
+                                    📧 Cần Email
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[10px] font-semibold text-zinc-400">ID: {p.id}</div>
                             </div>
@@ -692,20 +701,34 @@ export default function ProductsPage() {
 
                         {/* Kho / Tồn */}
                         <td className="px-4 py-4 text-center whitespace-nowrap">
-                          <span
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                              Number(p.stock) === 0
-                                ? 'bg-rose-100 text-rose-600'
-                                : 'bg-teal-100 text-teal-700'
-                            }`}
-                          >
-                            {p.stock}
-                          </span>
+                          {(p.type === 'order' || (p.delivery_type && p.delivery_type.includes('Nhập tay'))) ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200" title="Sản phẩm bán Order - Không cần nhập kho tài khoản">
+                              Order (∞)
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                                Number(p.stock) === 0
+                                  ? 'bg-rose-100 text-rose-600'
+                                  : 'bg-teal-100 text-teal-700'
+                              }`}
+                            >
+                              {p.stock}
+                            </span>
+                          )}
                         </td>
 
                         {/* Loại */}
                         <td className="px-4 py-4 whitespace-nowrap text-zinc-500 font-medium">
-                          Kho hàng (Item)
+                          {(p.type === 'order' || (p.delivery_type && p.delivery_type.includes('Nhập tay'))) ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              🛒 Hàng Order (Nhập tay)
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              📦 Hàng Sẵn
+                            </span>
+                          )}
                         </td>
 
                         {/* Trạng thái */}
@@ -887,8 +910,8 @@ export default function ProductsPage() {
 
 
 
-                {/* Price, Cost Price, Category Grid */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Price, Cost Price, Category & Type Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
                       GIÁ BÁN (₫) <span className="text-orange-600">*</span>
@@ -915,6 +938,20 @@ export default function ProductsPage() {
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                      LOẠI HÀNG
+                    </label>
+                    <select
+                      value={editingProduct?.type || 'stock'}
+                      onChange={(e) => setEditingProduct(prev => ({ ...prev!, type: e.target.value as 'stock' | 'order' }))}
+                      className="h-11 w-full rounded-2xl border border-orange-500 bg-white px-3 text-xs font-bold text-zinc-900 focus:border-orange-600 outline-none"
+                    >
+                      <option value="stock">📦 Hàng có sẵn (Stock)</option>
+                      <option value="order">🛒 Hàng Order / Bán Order</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
                       DANH MỤC
                     </label>
                     <select
@@ -930,7 +967,7 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Checkboxes */}
-                <div className="flex items-center gap-6 pt-1">
+                <div className="flex flex-wrap items-center gap-6 pt-1">
                   <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer">
                     <input
                       type="checkbox"
@@ -939,6 +976,16 @@ export default function ProductsPage() {
                       className="h-4 w-4 rounded accent-orange-600"
                     />
                     <span>Đang hoạt động (Active)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-xs font-bold text-sky-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingProduct?.require_email ?? 0)}
+                      onChange={(e) => setEditingProduct(prev => ({ ...prev!, require_email: e.target.checked ? 1 : 0 }))}
+                      className="h-4 w-4 rounded accent-sky-600"
+                    />
+                    <span>📧 Yêu cầu nhập Email khi mua</span>
                   </label>
 
                   <label className="flex items-center gap-2 text-xs font-medium text-zinc-700 cursor-pointer">
@@ -1147,7 +1194,15 @@ export default function ProductsPage() {
                   </label>
                   <select
                     value={editingProduct?.delivery_type || 'Kho có cấu trúc (Định dạng tài khoản)'}
-                    onChange={(e) => setEditingProduct(prev => ({ ...prev!, delivery_type: e.target.value }))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const isManual = val === 'Nhập tay (Hỏi đáp, giao thủ công)';
+                      setEditingProduct(prev => ({
+                        ...prev!,
+                        delivery_type: val,
+                        type: isManual ? 'order' : prev?.type || 'stock'
+                      }));
+                    }}
                     className="h-11 w-full rounded-2xl border border-orange-500 bg-white px-4 text-xs font-bold text-zinc-900 focus:border-orange-600 outline-none"
                   >
                     <option value="Kho có cấu trúc (Định dạng tài khoản)">Kho có cấu trúc (Định dạng tài khoản)</option>

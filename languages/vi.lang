@@ -1,10 +1,9 @@
 # Vietnamese language file
 welcome=Chào mừng bạn đến bot bán hàng.
 menu_title=Menu chính
-btn_deposit=➕ Nạp tiền
-btn_buy=🛒 Mua sản phẩm
-btn_history=🧾 Lịch sử mua
+btn_deposit=Nạp tiền
+btn_buy=Mua sản phẩm
+btn_history=Lịch sử mua
 admin_only=Lệnh này chỉ dành cho admin.
-insufficient=❌ Số dư không đủ.
+insufficient=Số dư không đủ.
 deposit_note=Nội dung chuyển khoản: NAP_%TELEGRAM_ID%
-

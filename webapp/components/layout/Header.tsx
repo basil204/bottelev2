@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { LanguageSwitcher } from "../LanguageSwitcher";
+import { NotificationBell } from "./NotificationBell";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { LogOut, User, ChevronDown, Command } from "lucide-react";
 
@@ -45,6 +46,7 @@ export function Header() {
             
             {/* Header Actions */}
             <div className="flex items-center gap-2.5">
+                <NotificationBell />
                 <LanguageSwitcher />
                 
                 {/* User Dropdown */}

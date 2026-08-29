@@ -50,10 +50,17 @@ export function formatReplyMarkup(replyMarkup) {
     };
 
     // 1. Xử lý Reply Keyboards (Nút bấm bàn phím dưới khung chat - KeyboardButton)
+    // Loại bỏ icon_custom_emoji_id để không bị hiển thị icon mặc định kép ở đầu nút
     if (newMarkup.keyboard && Array.isArray(newMarkup.keyboard)) {
         newMarkup.keyboard = newMarkup.keyboard.map(row => {
             if (!Array.isArray(row)) return row;
-            return row.map(processBtn);
+            return row.map(btn => {
+                const processed = processBtn(btn);
+                if (processed && typeof processed === 'object') {
+                    delete processed.icon_custom_emoji_id;
+                }
+                return processed;
+            });
         });
     }
 

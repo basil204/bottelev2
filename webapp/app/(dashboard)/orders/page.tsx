@@ -115,6 +115,8 @@ export default function OrdersPage() {
             });
 
             if (res.ok) {
+                const data = await res.json();
+                alert(data.message || 'Cập nhật trạng thái thành công!');
                 fetchOrders();
                 if (selectedOrder && selectedOrder.id === orderId) {
                     setSelectedOrder(prev => prev ? { ...prev, status: newStatus as any } : null);
@@ -227,7 +229,9 @@ export default function OrdersPage() {
 
     const formatTime = (dateStr: string) => {
         if (!dateStr) return '-';
-        const d = new Date(dateStr);
+        const safeIso = dateStr.includes(' ') ? dateStr.replace(' ', 'T') : dateStr;
+        const d = new Date(safeIso);
+        if (isNaN(d.getTime())) return dateStr;
         const hours = String(d.getHours()).padStart(2, '0');
         const minutes = String(d.getMinutes()).padStart(2, '0');
         const seconds = String(d.getSeconds()).padStart(2, '0');

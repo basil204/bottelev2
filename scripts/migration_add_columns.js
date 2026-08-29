@@ -91,16 +91,32 @@ async function migrate() {
             console.log("Fixed products.type column.");
         }
 
-        // Check categories table
+        // Check categories table & columns
         console.log("Checking categories table...");
         await connection.query(`
             CREATE TABLE IF NOT EXISTS categories (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE,
                 priority INT DEFAULT 0,
+                emoji VARCHAR(50) DEFAULT NULL,
+                custom_emoji_id VARCHAR(100) DEFAULT NULL,
+                is_active TINYINT(1) DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        const [catCols] = await connection.query("SHOW COLUMNS FROM categories");
+        if (!catCols.some(c => c.Field === 'is_active')) {
+            console.log("Adding column 'is_active' to categories...");
+            await connection.query("ALTER TABLE categories ADD COLUMN is_active TINYINT(1) DEFAULT 1");
+        }
+        if (!catCols.some(c => c.Field === 'emoji')) {
+            console.log("Adding column 'emoji' to categories...");
+            await connection.query("ALTER TABLE categories ADD COLUMN emoji VARCHAR(50) DEFAULT NULL");
+        }
+        if (!catCols.some(c => c.Field === 'custom_emoji_id')) {
+            console.log("Adding column 'custom_emoji_id' to categories...");
+            await connection.query("ALTER TABLE categories ADD COLUMN custom_emoji_id VARCHAR(100) DEFAULT NULL");
+        }
         console.log("Categories table checked/created.");
 
         // Check products.category_id column
@@ -221,11 +237,13 @@ async function migrate() {
             console.log("Failed to update payment_status ENUM:", e.message);
         }
 
-        // 4. Products Columns (Code & Check Live)
+        // 4. Products Columns (Code, Check Live, Is Active, Require Email)
         console.log("Checking products columns for new features...");
         const [prodCols] = await connection.query("SHOW COLUMNS FROM products");
         const hasProdCode = prodCols.some(c => c.Field === 'code');
         const hasCheckLive = prodCols.some(c => c.Field === 'check_live');
+        const hasIsActive = prodCols.some(c => c.Field === 'is_active');
+        const hasRequireEmail = prodCols.some(c => c.Field === 'require_email');
 
         if (!hasProdCode) {
             console.log("Adding column 'code' to products...");
@@ -234,6 +252,14 @@ async function migrate() {
         if (!hasCheckLive) {
             console.log("Adding column 'check_live' to products...");
             await connection.query("ALTER TABLE products ADD COLUMN check_live TINYINT(1) DEFAULT 0");
+        }
+        if (!hasIsActive) {
+            console.log("Adding column 'is_active' to products...");
+            await connection.query("ALTER TABLE products ADD COLUMN is_active TINYINT(1) DEFAULT 1");
+        }
+        if (!hasRequireEmail) {
+            console.log("Adding column 'require_email' to products...");
+            await connection.query("ALTER TABLE products ADD COLUMN require_email TINYINT(1) DEFAULT 0");
         }
 
         // 5. Add index for stored_accounts sold_to_user_id
@@ -284,6 +310,10 @@ async function migrate() {
     } catch (error) {
         console.error('Migration failed:', error);
     }
+}
+
+if (process.argv[1] && process.argv[1].includes('migration_add_columns.js')) {
+    migrate();
 }
 
 export default migrate;

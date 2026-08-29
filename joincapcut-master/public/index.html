@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CapCut Auto Join Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 CapCut Auto Join</h1>
+            <p>Đăng nhập và join workspace tự động</p>
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <a href="test_proxy_features.html" target="_blank" class="nav-link">
+                    🧪 Test Proxy Features
+                </a>
+               
+               
+                <a href="/login-and-check" class="nav-link">
+                    🔐 Workspace Checker
+                </a>
+            </div>
+        </div>
+        
+        <div class="alert-warning" style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-bottom: 20px; color: #856404;">
+            <h4 style="margin: 0 0 8px 0; font-size: 16px;">⚠️ Lưu ý quan trọng:</h4>
+            <p style="margin: 0 0 8px 0; font-size: 14px;">• Proxy là bắt buộc để tránh bị chặn IP và đảm bảo tỷ lệ thành công cao</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;">• Tối đa 5 tài khoản mỗi lần để đảm bảo hiệu suất tối ưu</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;">• Mỗi tài khoản sẽ được xử lý cách nhau 5 giây để tránh rate limit</p>
+            <p style="margin: 0; font-size: 14px;">• 🆓 Có thể lấy proxy free từ fineproxy.org và kiểm tra live tự động</p>
+        </div>
+        
+        <form id="joinForm">
+            <div class="form-group">
+                <label for="inputMode">📝 Chế độ nhập</label>
+                <select id="inputMode" name="inputMode" onchange="toggleInputMode()">
+                    <option value="single">Đơn lẻ</option>
+                    <option value="batch">Hàng loạt</option>
+                </select>
+            </div>
+            
+            <div id="singleMode">
+                <div class="form-group">
+                    <label for="email">📧 Email</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">🔒 Password</label>
+                    <input type="password" id="password" name="password">
+                </div>
+            </div>
+            
+            <div id="batchMode" style="display: none;">
+                <div class="form-group">
+                    <label for="accounts">👥 Danh sách tài khoản</label>
+                    <textarea id="accounts" name="accounts" placeholder="email1:password1&#10;email2:password2&#10;email3:password3&#10;email4:password4&#10;email5:password5" rows="5" oninput="updateAccountCounter()"></textarea>
+                    <small class="help-text">Mỗi dòng một tài khoản, format: email:password (Tối đa 5 tài khoản mỗi lần)</small>
+                    <div id="accountCounter" style="margin-top: 5px; font-size: 12px; color: #6c757d;"></div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="inviteLink">🔗 Invite Link</label>
+                <input type="url" id="inviteLink" name="inviteLink" placeholder="https://www.capcut.com/team-invite/... hoặc https://www.capcut.com/sv2/..." required>
+                <small class="help-text">Hỗ trợ cả team-invite và sv2 links (tự động convert)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="proxyMode">🌐 Chế độ Proxy <span style="color: #dc3545;">*</span></label>
+                <select id="proxyMode" name="proxyMode" onchange="toggleProxyMode()" required>
+                    <option value="">-- Chọn chế độ proxy (bắt buộc) --</option>
+                    <option value="single">Proxy đơn lẻ</option>
+                    <option value="batch">Danh sách proxy</option>
+                </select>
+                <small class="help-text">⚠️ Proxy là bắt buộc để tránh bị chặn IP và tăng tỷ lệ thành công</small>
+            </div>
+            
+            <div id="singleProxyMode" style="display: none;">
+                <div class="form-group">
+                    <label for="proxyUrl">🌐 Proxy <span style="color: #dc3545;">*</span></label>
+                    <input type="text" id="proxyUrl" name="proxyUrl" placeholder="ip:port:username:password hoặc http://proxy:port" required>
+                    <small class="help-text">Format: ip:port:username:password hoặc http://proxy:port</small>
+                </div>
+            </div>
+            
+            <div id="batchProxyMode" style="display: none;">
+                <div class="form-group">
+                    <label for="proxies">🌐 Danh sách Proxy <span style="color: #dc3545;">*</span></label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button type="button" id="getFreeProxiesBtn" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 14px;">
+                            🆓 Lấy Proxy Free
+                        </button>
+                        <button type="button" id="checkProxiesBtn" class="btn-secondary" style="flex: 1; padding: 8px; font-size: 14px;">
+                            ✅ Kiểm Tra Live
+                        </button>
+                    </div>
+                    <textarea id="proxies" name="proxies" placeholder="ip1:port1:user1:pass1&#10;ip2:port2:user2:pass2&#10;ip3:port3:user3:pass3" rows="5" required></textarea>
+                    <small class="help-text">Mỗi dòng một proxy, format: ip:port:username:password</small>
+                    <div id="proxyStatus" style="margin-top: 5px; font-size: 12px;"></div>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" id="submitBtn">
+                🚀 Bắt đầu
+            </button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p id="loadingText">Đang xử lý...</p>
+            <div id="progressInfo" style="margin-top: 10px; font-size: 12px; color: #6c757d;"></div>
+        </div>
+        
+        <div class="result" id="result"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

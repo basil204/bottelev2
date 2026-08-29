@@ -18,7 +18,6 @@ backups/
 *.sql
 scratch/
 webapp/public/uploads/
-joincapcut-master/
 webapp/app/joincapcut-master/
 
 # Next.js

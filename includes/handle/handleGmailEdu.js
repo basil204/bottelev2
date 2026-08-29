@@ -205,8 +205,8 @@ export const handleGmailEduQuantityInput = async (bot, msg, config) => {
  * Mua Gmail EDU
  */
 export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi', customPassword = null, config = null) => {
-    const chatId = msg.chat.id;
-    const telegramId = msg.from.id;
+    const chatId = msg?.chat?.id || msg?.chat_id;
+    const telegramId = user?.telegram_id || msg?.from?.id;
 
     try {
         // Kiểm tra tính năng có bật không
@@ -225,7 +225,7 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
         const totalPrice = pricePerGmail * quantity;
 
         // Lấy lại số dư mới nhất
-        const currentUser = await getUserByTelegram(telegramId);
+        const currentUser = (telegramId ? await getUserByTelegram(telegramId) : null) || user;
         if (!currentUser) {
             const errorMsg = L(lang,
                 '❌ Vui lòng /start để tạo tài khoản.',
@@ -402,8 +402,8 @@ export const handleBuyGmailEdu = async (bot, msg, user, quantity = 1, lang = 'vi
                 await notifyAdminAboutPurchase(bot, adminIds, {
                     orderId: orderId,
                     productName: `Gmail EDU`,
-                    username: user.username,
-                    telegramId: user.telegram_id,
+                    username: currentUser?.username || user?.username,
+                    telegramId: currentUser?.telegram_id || user?.telegram_id || telegramId,
                     quantity: createdAccounts.length,
                     price: actualPrice,
                     finalBalance: finalBalance,

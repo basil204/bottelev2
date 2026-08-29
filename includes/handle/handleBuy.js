@@ -1075,7 +1075,8 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     const purchaseInfo = getCache(purchaseKey);
 
     if (!purchaseInfo) {
-      return false;
+      const { completeGmailEduPurchaseAfterDeposit } = await import('./handleGmailEdu.js');
+      return await completeGmailEduPurchaseAfterDeposit(bot, telegramId);
     }
 
     delCache(purchaseKey);

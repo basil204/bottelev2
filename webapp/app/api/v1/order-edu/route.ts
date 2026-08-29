@@ -32,7 +32,7 @@ export async function POST(request: Request) {
             }, { status: 401 });
         }
 
-        // Validate API Key
+        // Validate API Keya
         const cleanApiKey = String(apiKey).trim();
         const [keyRows] = await pool.query<RowDataPacket[]>(`
             SELECT k.id as key_id, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
@@ -85,8 +85,8 @@ export async function POST(request: Request) {
         }
 
         const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
-        const defaultDomain = (body.domain && String(body.domain).trim()) 
-            ? String(body.domain).trim() 
+        const defaultDomain = (body.domain && String(body.domain).trim())
+            ? String(body.domain).trim()
             : (settingsMap.gmail_edu_domain || 'suafpoly.app');
 
         const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 50);
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
             await pool.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
                 keyInfo.user_id, -actualTotalCost, `buy_gmail_edu_api_${createdAccounts.length}_items`
             ]);
-        } catch (e) {}
+        } catch (e) { }
 
         // Update API Key last_used_at
         await pool.query('UPDATE user_api_keys SET last_used_at = NOW() WHERE id = ?', [keyInfo.key_id]);
@@ -175,7 +175,7 @@ export async function POST(request: Request) {
 
         try {
             await pool.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
-        } catch (e) {}
+        } catch (e) { }
 
         const newBalance = currentBalance - actualTotalCost;
 

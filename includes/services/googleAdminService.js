@@ -87,7 +87,7 @@ export const initializeAuth = async () => {
 };
 
 /** 
- * Lấy Admin Directory Service a
+ * Lấy Admin Directory Service aỗi 
  */
 export const getAdminService = async () => {
     if (adminService) return adminService;

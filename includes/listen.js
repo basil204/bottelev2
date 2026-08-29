@@ -711,10 +711,17 @@ export const registerListeners = (bot, config) => {
             return;
           }
 
+        case 'gmail_edu_info':
+          {
+            const { showGmailEduInfo } = await import('./handle/handleGmailEdu.js');
+            await showGmailEduInfo(bot, chatId, user);
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
         case 'gmail_pw_auto':
           {
             const { handleBuyGmailEdu } = await import('./handle/handleGmailEdu.js');
-            await handleBuyGmailEdu(bot, query.message, user, data.qty || 1, user.language || 'vi', null, config);
+            await handleBuyGmailEdu(bot, { chat: { id: chatId }, from: query.from }, user, data.qty || 1, user.language || 'vi', null, config);
             await bot.answerCallbackQuery(query.id);
             return;
           }
@@ -968,39 +975,7 @@ export const registerListeners = (bot, config) => {
           }
           return;
 
-        // Gmail password options
-        case 'gmail_pw_auto':
-          {
-            // Mua Gmail với password tự động
-            await handleBuyGmailEdu(bot, { chat: { id: chatId }, from: query.from }, user, data.qty, user.language || 'vi', null);
-          }
-          return;
 
-        case 'gmail_pw_custom':
-          {
-            // Lưu state chờ input password
-            const { setCache } = await import('../lib/cache/index.js');
-            const gmailEduCacheKey = (telegramId) => `gmail_edu_waiting_${telegramId}`;
-
-            setCache(gmailEduCacheKey(query.from.id), {
-              waiting: true,
-              waitingPassword: true,
-              quantity: data.qty,
-              lang: user.language || 'vi'
-            }, 10 * 60 * 1000);
-
-            const message = (user.language === 'en')
-              ? '✏️ Please enter your desired password (at least 8 characters):'
-              : '✏️ Vui lòng nhập mật khẩu bạn muốn đặt (ít nhất 8 ký tự):';
-            await bot.sendMessage(chatId, message);
-          }
-          return;
-
-        case 'gmail_pw_cancel':
-          {
-            await bot.sendMessage(chatId, '❌ Đã huỷ mua Gmail EDU.');
-          }
-          return;
 
         case 'admin_delete_promotion':
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;

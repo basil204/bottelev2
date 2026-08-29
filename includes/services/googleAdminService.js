@@ -71,7 +71,7 @@ export const initializeAuth = async () => {
                         const currentToken = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
                         currentToken.refresh_token = tokens.refresh_token;
                         fs.writeFileSync(tokenPath, JSON.stringify(currentToken, null, 2));
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             });
         } else {
@@ -86,8 +86,8 @@ export const initializeAuth = async () => {
     }
 };
 
-/**
- * Lấy Admin Directory Service
+/** 
+ * Lấy Admin Directory Service a
  */
 export const getAdminService = async () => {
     if (adminService) return adminService;

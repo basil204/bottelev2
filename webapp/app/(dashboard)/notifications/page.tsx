@@ -146,7 +146,7 @@ export default function NotificationsPage() {
     const [loadingSavedTpls, setLoadingSavedTpls] = useState(false);
     const [tplSearchQuery, setTplSearchQuery] = useState('');
     const [tplCategoryFilter, setTplCategoryFilter] = useState<'all' | 'product' | 'general' | 'maintenance'>('all');
-    
+
     // Save Template Modal State
     const [isSaveTplModalOpen, setIsSaveTplModalOpen] = useState(false);
     const [saveTplTitle, setSaveTplTitle] = useState('');
@@ -286,7 +286,7 @@ export default function NotificationsPage() {
                 if (data.announcement) setAnnouncementText(data.announcement);
                 if (data.active !== undefined) setIsAnnouncementActive(Boolean(data.active));
             })
-            .catch(() => {});
+            .catch(() => { });
     };
 
     const handleSaveAnnouncement = async () => {
@@ -561,7 +561,7 @@ export default function NotificationsPage() {
         if (tpl.inline_keyboard) {
             let parsedKb = tpl.inline_keyboard;
             if (typeof parsedKb === 'string') {
-                try { parsedKb = JSON.parse(parsedKb); } catch (e) {}
+                try { parsedKb = JSON.parse(parsedKb); } catch (e) { }
             }
             if (Array.isArray(parsedKb) && parsedKb.length > 0) {
                 setInlineRows(parsedKb);
@@ -1462,18 +1462,16 @@ export default function NotificationsPage() {
                                     <button
                                         type="button"
                                         onClick={() => setChatTabFilter('all')}
-                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${
-                                            chatTabFilter === 'all' ? 'bg-white text-zinc-900 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
-                                        }`}
+                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${chatTabFilter === 'all' ? 'bg-white text-zinc-900 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                            }`}
                                     >
                                         Tất cả
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setChatTabFilter('unreplied')}
-                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${
-                                            chatTabFilter === 'unreplied' ? 'bg-white text-red-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
-                                        }`}
+                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${chatTabFilter === 'unreplied' ? 'bg-white text-red-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                            }`}
                                     >
                                         <span>Chưa rep</span>
                                         {chatStats.unreplied > 0 && (
@@ -1485,9 +1483,8 @@ export default function NotificationsPage() {
                                     <button
                                         type="button"
                                         onClick={() => setChatTabFilter('unread')}
-                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${
-                                            chatTabFilter === 'unread' ? 'bg-white text-orange-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
-                                        }`}
+                                        className={`py-1 rounded-lg transition text-center flex items-center justify-center gap-1 cursor-pointer ${chatTabFilter === 'unread' ? 'bg-white text-orange-600 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                            }`}
                                     >
                                         <span>Mới nhất</span>
                                         {chatStats.newToday > 0 && (
@@ -1499,9 +1496,8 @@ export default function NotificationsPage() {
                                     <button
                                         type="button"
                                         onClick={() => setChatTabFilter('replied')}
-                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${
-                                            chatTabFilter === 'replied' ? 'bg-white text-emerald-700 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
-                                        }`}
+                                        className={`py-1 rounded-lg transition text-center cursor-pointer ${chatTabFilter === 'replied' ? 'bg-white text-emerald-700 shadow-2xs font-extrabold' : 'text-zinc-600 hover:text-zinc-900'
+                                            }`}
                                     >
                                         Đã xong
                                     </button>
@@ -1562,19 +1558,17 @@ export default function NotificationsPage() {
                                                     setSelectedChatUser(u);
                                                     fetchUserChatHistory(u);
                                                 }}
-                                                className={`w-full text-left p-3 rounded-2xl transition cursor-pointer relative ${
-                                                    isSelected
+                                                className={`w-full text-left p-3 rounded-2xl transition cursor-pointer relative ${isSelected
                                                         ? 'bg-orange-50 border border-orange-200 shadow-2xs'
                                                         : 'hover:bg-zinc-50 border border-transparent'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="flex items-center gap-2 min-w-0">
-                                                        <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                                                            isUnreplied
+                                                        <div className={`h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${isUnreplied
                                                                 ? 'bg-red-50 text-red-600 border border-red-200 ring-2 ring-red-400/30'
                                                                 : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
-                                                        }`}>
+                                                            }`}>
                                                             {u.name ? u.name.slice(0, 1).toUpperCase() : 'U'}
                                                         </div>
                                                         <div className="min-w-0">
@@ -1700,11 +1694,10 @@ export default function NotificationsPage() {
                                                         className={`flex flex-col ${isAdmin ? 'items-end' : 'items-start'} space-y-1`}
                                                     >
                                                         <div
-                                                            className={`max-w-[78%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs whitespace-pre-wrap break-words ${
-                                                                isAdmin
+                                                            className={`max-w-[78%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs whitespace-pre-wrap break-words ${isAdmin
                                                                     ? 'bg-orange-600 text-white rounded-br-xs'
                                                                     : 'bg-white border border-zinc-200/80 text-zinc-900 rounded-bl-xs'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {m.text}
                                                         </div>
@@ -1846,353 +1839,353 @@ export default function NotificationsPage() {
                                             </h2>
                                             <p className="text-[11px] text-zinc-400">Soạn nội dung và chọn kiểu gửi phù hợp</p>
                                         </div>
-                                         <div className="flex items-center gap-2">
-                                             <button type="button" onClick={handleOpenSaveTplModal} className="rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 px-3 py-1 text-[11px] font-extrabold text-orange-700 transition cursor-pointer">💾 LƯU MẪU</button>
-                                             <button type="button" onClick={() => setBroadcastMsg('')} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-bold text-zinc-700 hover:bg-zinc-100 cursor-pointer">ĐẶT LẠI</button>
-                                         </div>
-                                     </div>
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={handleOpenSaveTplModal} className="rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 px-3 py-1 text-[11px] font-extrabold text-orange-700 transition cursor-pointer">💾 LƯU MẪU</button>
+                                            <button type="button" onClick={() => setBroadcastMsg('')} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-bold text-zinc-700 hover:bg-zinc-100 cursor-pointer">ĐẶT LẠI</button>
+                                        </div>
+                                    </div>
 
-                                     <div className="grid grid-cols-2 gap-3 text-xs">
-                                         <div className="space-y-1">
-                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN MẪU</label>
-                                             <input type="text" value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500" />
-                                         </div>
-                                         <div className="space-y-1">
-                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">KIỂU GỬI</label>
-                                             <select value={sendType} onChange={e => setSendType(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500">
-                                                 <option value="Kèm nút xem shop">Kèm nút xem shop</option>
-                                                 <option value="Chỉ tin nhắn">Chỉ tin nhắn</option>
-                                                 <option value="Gửi kèm ảnh">Gửi kèm ảnh</option>
-                                             </select>
-                                         </div>
-                                     </div>
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
+                                        <div className="space-y-1">
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN MẪU</label>
+                                            <input type="text" value={templateName} onChange={e => setTemplateName(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">KIỂU GỬI</label>
+                                            <select value={sendType} onChange={e => setSendType(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500">
+                                                <option value="Kèm nút xem shop">Kèm nút xem shop</option>
+                                                <option value="Chỉ tin nhắn">Chỉ tin nhắn</option>
+                                                <option value="Gửi kèm ảnh">Gửi kèm ảnh</option>
+                                            </select>
+                                        </div>
+                                    </div>
 
-                                     <div className="space-y-1.5 text-xs">
-                                         <div className="flex items-center justify-between">
-                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NỘI DUNG</label>
-                                             <div className="flex items-center gap-1 flex-wrap text-[10px]">
-                                                 <span className="text-zinc-400">✨ Hiệu ứng:</span>
-                                                 <button type="button" onClick={() => insertEffectChip('{effect:fire}')} className="px-2 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 font-bold">🔥 Lửa</button>
-                                                 <button type="button" onClick={() => insertEffectChip('{effect:party}')} className="px-2 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 font-bold">🎉 Pháo hoa</button>
-                                                 <button type="button" onClick={() => insertEffectChip('{effect:heart}')} className="px-2 py-0.5 rounded bg-pink-50 border border-pink-200 text-pink-700 font-bold">❤️ Tim</button>
-                                                 <button type="button" onClick={() => insertEffectChip('{effect:like}')} className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 font-bold">👍 Like</button>
-                                             </div>
-                                         </div>
-                                         <textarea rows={6} value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500 transition leading-relaxed" />
-                                         <p className="text-[10px] text-zinc-400 italic">Hỗ trợ thẻ hiệu ứng toàn màn hình: &#123;effect:fire&#125;, &#123;effect:party&#125; (tự động gửi trong chat riêng).</p>
-                                     </div>
+                                    <div className="space-y-1.5 text-xs">
+                                        <div className="flex items-center justify-between">
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NỘI DUNG</label>
+                                            <div className="flex items-center gap-1 flex-wrap text-[10px]">
+                                                <span className="text-zinc-400">✨ Hiệu ứng:</span>
+                                                <button type="button" onClick={() => insertEffectChip('{effect:fire}')} className="px-2 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 font-bold">🔥 Lửa</button>
+                                                <button type="button" onClick={() => insertEffectChip('{effect:party}')} className="px-2 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 font-bold">🎉 Pháo hoa</button>
+                                                <button type="button" onClick={() => insertEffectChip('{effect:heart}')} className="px-2 py-0.5 rounded bg-pink-50 border border-pink-200 text-pink-700 font-bold">❤️ Tim</button>
+                                                <button type="button" onClick={() => insertEffectChip('{effect:like}')} className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-700 font-bold">👍 Like</button>
+                                            </div>
+                                        </div>
+                                        <textarea rows={6} value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500 transition leading-relaxed" />
+                                        <p className="text-[10px] text-zinc-400 italic">Hỗ trợ thẻ hiệu ứng toàn màn hình: &#123;effect:fire&#125;, &#123;effect:party&#125; (tự động gửi trong chat riêng).</p>
+                                    </div>
 
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                         <div className="space-y-1">
-                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">EMOJI ĐẦU DÒNG</label>
-                                             <input type="text" value={bulletEmoji} onChange={e => setBulletEmoji(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500" />
-                                         </div>
-                                         <div className="space-y-1">
-                                             <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ẢNH ĐÍNH KÈM (TẢI LÊN HOẶC DÁN URL)</label>
-                                             <div className="flex items-center gap-2">
-                                                 <label className="flex items-center gap-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white px-3 py-2 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition shrink-0">
-                                                     <Upload className="h-3.5 w-3.5" />
-                                                     <span>{uploadingBroadcastImage ? 'Đang tải...' : 'Chọn ảnh'}</span>
-                                                     <input
-                                                         type="file"
-                                                         accept="image/*"
-                                                         onChange={handleBroadcastImageUpload}
-                                                         disabled={uploadingBroadcastImage}
-                                                         className="hidden"
-                                                     />
-                                                 </label>
-                                                 <input
-                                                     type="text"
-                                                     value={broadcastImage}
-                                                     onChange={e => setBroadcastImage(e.target.value)}
-                                                     placeholder="URL ảnh (https://...)"
-                                                     className="w-full rounded-xl border border-zinc-200 bg-white p-2 text-xs text-zinc-900 outline-none focus:border-orange-500 font-mono"
-                                                 />
-                                                 {broadcastImage && (
-                                                     <button
-                                                         type="button"
-                                                         onClick={() => setBroadcastImage('')}
-                                                         className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition shrink-0"
-                                                         title="Xóa ảnh"
-                                                     >
-                                                         ✕
-                                                     </button>
-                                                 )}
-                                             </div>
-                                         </div>
-                                     </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                        <div className="space-y-1">
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">EMOJI ĐẦU DÒNG</label>
+                                            <input type="text" value={bulletEmoji} onChange={e => setBulletEmoji(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ẢNH ĐÍNH KÈM (TẢI LÊN HOẶC DÁN URL)</label>
+                                            <div className="flex items-center gap-2">
+                                                <label className="flex items-center gap-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-900 text-white px-3 py-2 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition shrink-0">
+                                                    <Upload className="h-3.5 w-3.5" />
+                                                    <span>{uploadingBroadcastImage ? 'Đang tải...' : 'Chọn ảnh'}</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleBroadcastImageUpload}
+                                                        disabled={uploadingBroadcastImage}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={broadcastImage}
+                                                    onChange={e => setBroadcastImage(e.target.value)}
+                                                    placeholder="URL ảnh (https://...)"
+                                                    className="w-full rounded-xl border border-zinc-200 bg-white p-2 text-xs text-zinc-900 outline-none focus:border-orange-500 font-mono"
+                                                />
+                                                {broadcastImage && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setBroadcastImage('')}
+                                                        className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition shrink-0"
+                                                        title="Xóa ảnh"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                     <div className="space-y-1 text-xs">
-                                         <label className="font-extrabold uppercase text-zinc-700 text-[11px]">CUSTOM_EMOJIS</label>
-                                         <textarea rows={2} value={customEmojisJson} onChange={e => setCustomEmojisJson(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 outline-none focus:border-orange-500 text-[11px]" />
-                                     </div>
+                                    <div className="space-y-1 text-xs">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">CUSTOM_EMOJIS</label>
+                                        <textarea rows={2} value={customEmojisJson} onChange={e => setCustomEmojisJson(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 outline-none focus:border-orange-500 text-[11px]" />
+                                    </div>
 
-                                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-4 text-xs">
-                                         <div className="flex items-center justify-between border-b border-zinc-200/60 pb-2">
-                                             <div className="flex items-center gap-2">
-                                                 <Layers className="h-4 w-4 text-orange-600" />
-                                                 <span className="font-extrabold uppercase text-zinc-800 text-[11px]">BÀN PHÍM NÚT BẤM INLINE</span>
-                                             </div>
-                                             <div className="flex items-center gap-2">
-                                                 <button
-                                                     type="button"
-                                                     onClick={handleAddRow}
-                                                     className="rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 text-[10px] font-extrabold text-orange-700 transition flex items-center gap-1 cursor-pointer"
-                                                 >
-                                                     <Plus className="h-3 w-3" />
-                                                     <span>THÊM DÒNG</span>
-                                                 </button>
-                                                 <button
-                                                     type="button"
-                                                     onClick={handleOpenJsonModal}
-                                                     className="rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 px-3 py-1.5 text-[10px] font-bold text-zinc-700 transition cursor-pointer"
-                                                 >
-                                                     SỬA JSON
-                                                 </button>
-                                             </div>
-                                         </div>
+                                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-4 text-xs">
+                                        <div className="flex items-center justify-between border-b border-zinc-200/60 pb-2">
+                                            <div className="flex items-center gap-2">
+                                                <Layers className="h-4 w-4 text-orange-600" />
+                                                <span className="font-extrabold uppercase text-zinc-800 text-[11px]">BÀN PHÍM NÚT BẤM INLINE</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddRow}
+                                                    className="rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 text-[10px] font-extrabold text-orange-700 transition flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    <Plus className="h-3 w-3" />
+                                                    <span>THÊM DÒNG</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleOpenJsonModal}
+                                                    className="rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 px-3 py-1.5 text-[10px] font-bold text-zinc-700 transition cursor-pointer"
+                                                >
+                                                    SỬA JSON
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                         <div className="space-y-3">
-                                             {inlineRows.map((row, rIdx) => (
-                                                 <div key={rIdx} className="rounded-xl border border-zinc-200 bg-white p-3.5 space-y-3 shadow-2xs">
-                                                     <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                                                         <span className="font-extrabold text-[10px] uppercase text-zinc-500">
-                                                             DÒNG {rIdx + 1} ({row.length}/4 NÚT)
-                                                         </span>
+                                        <div className="space-y-3">
+                                            {inlineRows.map((row, rIdx) => (
+                                                <div key={rIdx} className="rounded-xl border border-zinc-200 bg-white p-3.5 space-y-3 shadow-2xs">
+                                                    <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                                                        <span className="font-extrabold text-[10px] uppercase text-zinc-500">
+                                                            DÒNG {rIdx + 1} ({row.length}/4 NÚT)
+                                                        </span>
 
-                                                         <div className="flex items-center gap-2">
-                                                             {row.length < 4 && (
-                                                                 <button
-                                                                     type="button"
-                                                                     onClick={() => handleAddButtonInRow(rIdx)}
-                                                                     className="px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                                                 >
-                                                                     <Plus className="h-3 w-3" />
-                                                                     <span>Thêm Nút Cùng Dòng</span>
-                                                                 </button>
-                                                             )}
-                                                             <button
-                                                                 type="button"
-                                                                 onClick={() => handleDeleteRow(rIdx)}
-                                                                 className="px-2 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold transition cursor-pointer"
-                                                                 title="Xóa Dòng"
-                                                             >
-                                                                 <Trash2 className="h-3 w-3" />
-                                                             </button>
-                                                         </div>
-                                                     </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {row.length < 4 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAddButtonInRow(rIdx)}
+                                                                    className="px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                                                >
+                                                                    <Plus className="h-3 w-3" />
+                                                                    <span>Thêm Nút Cùng Dòng</span>
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteRow(rIdx)}
+                                                                className="px-2 py-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold transition cursor-pointer"
+                                                                title="Xóa Dòng"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
-                                                     <div className="space-y-3">
-                                                         {row.map((btn, bIdx) => (
-                                                             <div key={btn.id || bIdx} className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80 space-y-2">
-                                                                 <div className="flex items-center justify-between gap-2">
-                                                                     <span className="text-[10px] font-bold text-zinc-600">NÚT #{bIdx + 1}</span>
-                                                                     <button
-                                                                         type="button"
-                                                                         onClick={() => handleDeleteButton(rIdx, bIdx)}
-                                                                         className="text-red-500 hover:text-red-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                                                                     >
-                                                                         <Trash2 className="h-3.5 w-3.5" />
-                                                                         <span>Xóa Nút</span>
-                                                                     </button>
-                                                                 </div>
+                                                    <div className="space-y-3">
+                                                        {row.map((btn, bIdx) => (
+                                                            <div key={btn.id || bIdx} className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/80 space-y-2">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-zinc-600">NÚT #{bIdx + 1}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteButton(rIdx, bIdx)}
+                                                                        className="text-red-500 hover:text-red-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                        <span>Xóa Nút</span>
+                                                                    </button>
+                                                                </div>
 
-                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                                     <div>
-                                                                         <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">NHÃN HIỂN THỊ NÚT</label>
-                                                                         <input
-                                                                             type="text"
-                                                                             value={btn.text}
-                                                                             onChange={(e) => handleUpdateButton(rIdx, bIdx, { text: e.target.value })}
-                                                                             placeholder="Ví dụ: 🛒 Mua CapCut Pro hoặc {5375135722514685501} Xem sản phẩm"
-                                                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-semibold text-zinc-900 text-xs outline-none focus:border-orange-500"
-                                                                         />
-                                                                     </div>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">NHÃN HIỂN THỊ NÚT</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={btn.text}
+                                                                            onChange={(e) => handleUpdateButton(rIdx, bIdx, { text: e.target.value })}
+                                                                            placeholder="Ví dụ: 🛒 Mua CapCut Pro hoặc {5375135722514685501} Xem sản phẩm"
+                                                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-semibold text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                                                        />
+                                                                    </div>
 
-                                                                     <div>
-                                                                         <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">LOẠI HÀNH ĐỘNG</label>
-                                                                         <select
-                                                                             value={btn.type}
-                                                                             onChange={(e) => handleUpdateButton(rIdx, bIdx, { type: e.target.value as any })}
-                                                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-bold text-zinc-900 text-xs outline-none focus:border-orange-500"
-                                                                         >
-                                                                             <option value="product">🛒 Gắn Sản Phẩm Shop (Tự động mở mua)</option>
-                                                                             <option value="url">🔗 Link Liên Kết URL (http:// / https://)</option>
-                                                                             <option value="callback">⚡ Lệnh Bot / Callback Data (start:shop)</option>
-                                                                         </select>
-                                                                     </div>
-                                                                 </div>
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">LOẠI HÀNH ĐỘNG</label>
+                                                                        <select
+                                                                            value={btn.type}
+                                                                            onChange={(e) => handleUpdateButton(rIdx, bIdx, { type: e.target.value as any })}
+                                                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-bold text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                                                        >
+                                                                            <option value="product">🛒 Gắn Sản Phẩm Shop (Tự động mở mua)</option>
+                                                                            <option value="url">🔗 Link Liên Kết URL (http:// / https://)</option>
+                                                                            <option value="callback">⚡ Lệnh Bot / Callback Data (start:shop)</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
 
-                                                                 {btn.type === 'product' && (
-                                                                     <div>
-                                                                         <label className="text-[10px] font-bold uppercase text-orange-600 block mb-1">CHỌN SẢN PHẨM CẦN BÁN</label>
-                                                                         <select
-                                                                             value={btn.productId || ''}
-                                                                             onChange={(e) => handleUpdateButton(rIdx, bIdx, { productId: Number(e.target.value) })}
-                                                                             className="w-full rounded-xl border border-orange-200 bg-orange-50/40 p-2 font-bold text-zinc-900 text-xs outline-none focus:border-orange-500"
-                                                                         >
-                                                                             <option value="">-- Chọn Sản Phẩm Trong Kho --</option>
-                                                                             {products.map((p) => (
-                                                                                 <option key={p.id} value={p.id}>
-                                                                                     {p.name} - ({p.price ? p.price.toLocaleString('vi-VN') : '0'} đ)
-                                                                                 </option>
-                                                                             ))}
-                                                                         </select>
-                                                                     </div>
-                                                                 )}
+                                                                {btn.type === 'product' && (
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold uppercase text-orange-600 block mb-1">CHỌN SẢN PHẨM CẦN BÁN</label>
+                                                                        <select
+                                                                            value={btn.productId || ''}
+                                                                            onChange={(e) => handleUpdateButton(rIdx, bIdx, { productId: Number(e.target.value) })}
+                                                                            className="w-full rounded-xl border border-orange-200 bg-orange-50/40 p-2 font-bold text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                                                        >
+                                                                            <option value="">-- Chọn Sản Phẩm Trong Kho --</option>
+                                                                            {products.map((p) => (
+                                                                                <option key={p.id} value={p.id}>
+                                                                                    {p.name} - ({p.price ? p.price.toLocaleString('vi-VN') : '0'} đ)
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                )}
 
-                                                                 {btn.type === 'url' && (
-                                                                     <div>
-                                                                         <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">ĐƯỜNG DẪN TRANG WEB (URL)</label>
-                                                                         <input
-                                                                             type="text"
-                                                                             value={btn.url || ''}
-                                                                             onChange={(e) => handleUpdateButton(rIdx, bIdx, { url: e.target.value })}
-                                                                             placeholder="https://t.me/your_channel hoặc https://lienmanhgroup.io.vn"
-                                                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500"
-                                                                         />
-                                                                     </div>
-                                                                 )}
+                                                                {btn.type === 'url' && (
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">ĐƯỜNG DẪN TRANG WEB (URL)</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={btn.url || ''}
+                                                                            onChange={(e) => handleUpdateButton(rIdx, bIdx, { url: e.target.value })}
+                                                                            placeholder="https://t.me/your_channel hoặc https://lienmanhgroup.io.vn"
+                                                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                                                        />
+                                                                    </div>
+                                                                )}
 
-                                                                 {btn.type === 'callback' && (
-                                                                     <div>
-                                                                         <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">MÃ LỆNH BOT / CALLBACK DATA</label>
-                                                                         <input
-                                                                             type="text"
-                                                                             value={btn.callbackData || ''}
-                                                                             onChange={(e) => handleUpdateButton(rIdx, bIdx, { callbackData: e.target.value })}
-                                                                             placeholder="start:shop hoặc buy_1"
-                                                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500"
-                                                                         />
-                                                                     </div>
-                                                                 )}
-                                                             </div>
-                                                         ))}
-                                                     </div>
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
+                                                                {btn.type === 'callback' && (
+                                                                    <div>
+                                                                        <label className="text-[10px] font-bold uppercase text-zinc-500 block mb-1">MÃ LỆNH BOT / CALLBACK DATA</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={btn.callbackData || ''}
+                                                                            onChange={(e) => handleUpdateButton(rIdx, bIdx, { callbackData: e.target.value })}
+                                                                            placeholder="start:shop hoặc buy_1"
+                                                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
 
-                                     <button onClick={handleSendManualBroadcast} disabled={sendingBroadcast} className="w-full rounded-xl bg-orange-600 hover:bg-orange-700 text-white py-3.5 font-extrabold uppercase transition active:scale-95 shadow-xs flex items-center justify-center gap-2">
-                                         <Send className="h-4 w-4" /><span>{sendingBroadcast ? 'ĐANG GỬI...' : '🚀 GỬI THÔNG BÁO NGAY'}</span>
-                                     </button>
-                                 </div>
+                                    <button onClick={handleSendManualBroadcast} disabled={sendingBroadcast} className="w-full rounded-xl bg-orange-600 hover:bg-orange-700 text-white py-3.5 font-extrabold uppercase transition active:scale-95 shadow-xs flex items-center justify-center gap-2">
+                                        <Send className="h-4 w-4" /><span>{sendingBroadcast ? 'ĐANG GỬI...' : '🚀 GỬI THÔNG BÁO NGAY'}</span>
+                                    </button>
+                                </div>
 
-                                 <div className="lg:col-span-4 space-y-4">
-                                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3 shadow-2xs">
-                                         <div className="font-extrabold text-xs uppercase text-zinc-800 flex items-center justify-between border-b border-zinc-100 pb-2">
-                                             <div className="flex items-center gap-1.5">
-                                                 <FileText className="h-4 w-4 text-orange-600" />
-                                                 <span>MẪU THÔNG BÁO KHẢ DỤNG</span>
-                                             </div>
-                                             <span className="text-[10px] bg-orange-100 text-orange-800 font-extrabold px-2 py-0.5 rounded-full">
-                                                 {savedTemplates.length} Mẫu
-                                             </span>
-                                         </div>
+                                <div className="lg:col-span-4 space-y-4">
+                                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3 shadow-2xs">
+                                        <div className="font-extrabold text-xs uppercase text-zinc-800 flex items-center justify-between border-b border-zinc-100 pb-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <FileText className="h-4 w-4 text-orange-600" />
+                                                <span>MẪU THÔNG BÁO KHẢ DỤNG</span>
+                                            </div>
+                                            <span className="text-[10px] bg-orange-100 text-orange-800 font-extrabold px-2 py-0.5 rounded-full">
+                                                {savedTemplates.length} Mẫu
+                                            </span>
+                                        </div>
 
-                                         <div className="space-y-2">
-                                             <div className="relative">
-                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                                                 <input
-                                                     type="text"
-                                                     value={tplSearchQuery}
-                                                     onChange={(e) => setTplSearchQuery(e.target.value)}
-                                                     placeholder="Tìm kiếm mẫu thông báo..."
-                                                     className="w-full rounded-xl border border-zinc-200 bg-white pl-8 pr-3 py-1.5 text-xs font-medium outline-none focus:border-orange-500"
-                                                 />
-                                             </div>
+                                        <div className="space-y-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                                                <input
+                                                    type="text"
+                                                    value={tplSearchQuery}
+                                                    onChange={(e) => setTplSearchQuery(e.target.value)}
+                                                    placeholder="Tìm kiếm mẫu thông báo..."
+                                                    className="w-full rounded-xl border border-zinc-200 bg-white pl-8 pr-3 py-1.5 text-xs font-medium outline-none focus:border-orange-500"
+                                                />
+                                            </div>
 
-                                             <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px]">
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setTplCategoryFilter('all')}
-                                                     className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'all' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                                                 >
-                                                     Tất cả
-                                                 </button>
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setTplCategoryFilter('product')}
-                                                     className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'product' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                                                 >
-                                                     🛒 Sản phẩm
-                                                 </button>
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setTplCategoryFilter('general')}
-                                                     className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'general' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                                                 >
-                                                     💬 Tin tức
-                                                 </button>
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setTplCategoryFilter('maintenance')}
-                                                     className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'maintenance' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                                                 >
-                                                     ⚠️ Bảo trì
-                                                 </button>
-                                             </div>
-                                         </div>
+                                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px]">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTplCategoryFilter('all')}
+                                                    className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'all' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                                                >
+                                                    Tất cả
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTplCategoryFilter('product')}
+                                                    className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'product' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                                                >
+                                                    🛒 Sản phẩm
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTplCategoryFilter('general')}
+                                                    className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'general' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                                                >
+                                                    💬 Tin tức
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTplCategoryFilter('maintenance')}
+                                                    className={`px-2 py-1 rounded-lg font-bold shrink-0 transition ${tplCategoryFilter === 'maintenance' ? 'bg-orange-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                                                >
+                                                    ⚠️ Bảo trì
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                                             {loadingSavedTpls ? (
-                                                 <div className="py-6 text-center text-zinc-400 font-bold text-xs">Đang tải danh sách mẫu...</div>
-                                             ) : savedTemplates.filter(t => {
-                                                 const matchCategory = tplCategoryFilter === 'all' || t.category === tplCategoryFilter;
-                                                 const matchSearch = !tplSearchQuery.trim() ||
-                                                     t.title.toLowerCase().includes(tplSearchQuery.toLowerCase()) ||
-                                                     t.message.toLowerCase().includes(tplSearchQuery.toLowerCase());
-                                                 return matchCategory && matchSearch;
-                                             }).length === 0 ? (
-                                                 <div className="py-6 text-center text-zinc-400 font-medium text-xs">Chưa có mẫu nào thuộc danh mục này.</div>
-                                             ) : (
-                                                 savedTemplates
-                                                     .filter(t => {
-                                                         const matchCategory = tplCategoryFilter === 'all' || t.category === tplCategoryFilter;
-                                                         const matchSearch = !tplSearchQuery.trim() ||
-                                                             t.title.toLowerCase().includes(tplSearchQuery.toLowerCase()) ||
-                                                             t.message.toLowerCase().includes(tplSearchQuery.toLowerCase());
-                                                         return matchCategory && matchSearch;
-                                                     })
-                                                     .map((tpl) => (
-                                                         <div
-                                                             key={tpl.id}
-                                                             onClick={() => handleSelectTemplate(tpl)}
-                                                             className="p-3 rounded-xl border border-zinc-200 hover:border-orange-300 bg-white hover:bg-orange-50/40 space-y-1.5 cursor-pointer transition shadow-2xs group"
-                                                         >
-                                                             <div className="flex items-center justify-between">
-                                                                 <span className="font-extrabold text-xs text-zinc-900 group-hover:text-orange-700">
-                                                                     {tpl.title}
-                                                                 </span>
-                                                                 <div className="flex items-center gap-1.5">
-                                                                     {tpl.category === 'product' && (
-                                                                         <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">SẢN PHẨM</span>
-                                                                     )}
-                                                                     {tpl.category === 'maintenance' && (
-                                                                         <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">BẢO TRÌ</span>
-                                                                     )}
-                                                                     {tpl.category === 'general' && (
-                                                                         <span className="bg-blue-100 text-blue-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">TIN TỨC</span>
-                                                                     )}
-                                                                     <button
-                                                                         type="button"
-                                                                         onClick={(e) => handleDeleteTemplate(e, tpl.id)}
-                                                                         className="text-zinc-400 hover:text-red-600 p-0.5 rounded transition"
-                                                                         title="Xóa mẫu này"
-                                                                     >
-                                                                         <Trash2 className="h-3.5 w-3.5" />
-                                                                     </button>
-                                                                 </div>
-                                                             </div>
-                                                             <p className="text-[11px] text-zinc-500 font-mono line-clamp-2 leading-tight">
-                                                                 {tpl.message}
-                                                             </p>
-                                                         </div>
-                                                     ))
-                                             )}
-                                         </div>
-                                     </div>
+                                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                                            {loadingSavedTpls ? (
+                                                <div className="py-6 text-center text-zinc-400 font-bold text-xs">Đang tải danh sách mẫu...</div>
+                                            ) : savedTemplates.filter(t => {
+                                                const matchCategory = tplCategoryFilter === 'all' || t.category === tplCategoryFilter;
+                                                const matchSearch = !tplSearchQuery.trim() ||
+                                                    t.title.toLowerCase().includes(tplSearchQuery.toLowerCase()) ||
+                                                    t.message.toLowerCase().includes(tplSearchQuery.toLowerCase());
+                                                return matchCategory && matchSearch;
+                                            }).length === 0 ? (
+                                                <div className="py-6 text-center text-zinc-400 font-medium text-xs">Chưa có mẫu nào thuộc danh mục này.</div>
+                                            ) : (
+                                                savedTemplates
+                                                    .filter(t => {
+                                                        const matchCategory = tplCategoryFilter === 'all' || t.category === tplCategoryFilter;
+                                                        const matchSearch = !tplSearchQuery.trim() ||
+                                                            t.title.toLowerCase().includes(tplSearchQuery.toLowerCase()) ||
+                                                            t.message.toLowerCase().includes(tplSearchQuery.toLowerCase());
+                                                        return matchCategory && matchSearch;
+                                                    })
+                                                    .map((tpl) => (
+                                                        <div
+                                                            key={tpl.id}
+                                                            onClick={() => handleSelectTemplate(tpl)}
+                                                            className="p-3 rounded-xl border border-zinc-200 hover:border-orange-300 bg-white hover:bg-orange-50/40 space-y-1.5 cursor-pointer transition shadow-2xs group"
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="font-extrabold text-xs text-zinc-900 group-hover:text-orange-700">
+                                                                    {tpl.title}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {tpl.category === 'product' && (
+                                                                        <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">SẢN PHẨM</span>
+                                                                    )}
+                                                                    {tpl.category === 'maintenance' && (
+                                                                        <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">BẢO TRÌ</span>
+                                                                    )}
+                                                                    {tpl.category === 'general' && (
+                                                                        <span className="bg-blue-100 text-blue-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">TIN TỨC</span>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleDeleteTemplate(e, tpl.id)}
+                                                                        className="text-zinc-400 hover:text-red-600 p-0.5 rounded transition"
+                                                                        title="Xóa mẫu này"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[11px] text-zinc-500 font-mono line-clamp-2 leading-tight">
+                                                                {tpl.message}
+                                                            </p>
+                                                        </div>
+                                                    ))
+                                            )}
+                                        </div>
+                                    </div>
 
                                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3 shadow-2xs">
                                         <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
@@ -3011,11 +3004,10 @@ export default function NotificationsPage() {
                                 <button
                                     key={cat.key}
                                     onClick={() => setTemplateCategoryFilter(cat.key as any)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 border ${
-                                        isActive
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 border ${isActive
                                             ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
                                             : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
-                                    }`}
+                                        }`}
                                 >
                                     <Icon className="h-3.5 w-3.5" />
                                     <span>{cat.label}</span>
@@ -3046,11 +3038,10 @@ export default function NotificationsPage() {
                                             <div
                                                 key={tpl.key}
                                                 onClick={() => setSelectedTemplateKey(tpl.key)}
-                                                className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 space-y-2 ${
-                                                    isSelected
+                                                className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 space-y-2 ${isSelected
                                                         ? 'bg-orange-50/70 border-orange-500 shadow-md ring-2 ring-orange-500/20'
                                                         : 'bg-white border-zinc-200 hover:border-orange-300 hover:bg-zinc-50/50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="font-extrabold text-sm text-zinc-900 flex items-center gap-2">
@@ -3531,7 +3522,7 @@ export default function NotificationsPage() {
                 document.body
             )}
 
-            {/* MODAL 5: LƯU MẪU THÔNG BÁO MỚI */}
+            {/* MODAL 5: LƯU MẪU THÔNG BÁO MỚI oke*/}
             {isSaveTplModalOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 space-y-4 shadow-2xl border border-zinc-200">

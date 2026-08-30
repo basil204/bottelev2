@@ -319,8 +319,172 @@ async function initAccountStorageTables() {
       console.error('[DB] Error initializing chatgpt_accounts table:', e);
     }
 
+    // Initialize Seller Manager tables
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_wallets (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          type ENUM('CASH', 'BANK', 'EWALLET') DEFAULT 'BANK',
+          account_number VARCHAR(100) NULL,
+          balance DECIMAL(15, 2) DEFAULT 0,
+          icon VARCHAR(50) DEFAULT 'Wallet',
+          is_default TINYINT(1) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_account_types (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          code VARCHAR(50) NOT NULL UNIQUE,
+          icon VARCHAR(50) DEFAULT 'Folder',
+          description TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_products (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          account_type_id INT NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          default_cost_price DECIMAL(15, 2) DEFAULT 0,
+          default_selling_price DECIMAL(15, 2) DEFAULT 0,
+          description TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (account_type_id) REFERENCES seller_account_types(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_customers (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50) NULL,
+          email VARCHAR(255) NULL,
+          notes TEXT NULL,
+          debt_amount DECIMAL(15, 2) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          order_number VARCHAR(50) NOT NULL UNIQUE,
+          customer_id INT NULL,
+          wallet_id INT NULL,
+          status ENUM('COMPLETED', 'PENDING', 'CANCELLED') DEFAULT 'COMPLETED',
+          payment_status ENUM('PAID', 'UNPAID', 'PARTIAL') DEFAULT 'PAID',
+          total_cost DECIMAL(15, 2) DEFAULT 0,
+          total_amount DECIMAL(15, 2) DEFAULT 0,
+          total_profit DECIMAL(15, 2) DEFAULT 0,
+          notes TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (customer_id) REFERENCES seller_customers(id) ON DELETE SET NULL,
+          FOREIGN KEY (wallet_id) REFERENCES seller_wallets(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_inventory (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          product_id INT NOT NULL,
+          credentials TEXT NOT NULL,
+          cost_price DECIMAL(15, 2) DEFAULT 0,
+          selling_price DECIMAL(15, 2) DEFAULT 0,
+          status ENUM('AVAILABLE', 'SOLD', 'ERROR', 'RESERVED') DEFAULT 'AVAILABLE',
+          order_id INT NULL,
+          note TEXT NULL,
+          sold_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (product_id) REFERENCES seller_products(id) ON DELETE CASCADE,
+          FOREIGN KEY (order_id) REFERENCES seller_orders(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_order_items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          order_id INT NOT NULL,
+          product_id INT NOT NULL,
+          quantity INT NOT NULL,
+          unit_cost DECIMAL(15, 2) DEFAULT 0,
+          unit_price DECIMAL(15, 2) DEFAULT 0,
+          subtotal DECIMAL(15, 2) DEFAULT 0,
+          profit DECIMAL(15, 2) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (order_id) REFERENCES seller_orders(id) ON DELETE CASCADE,
+          FOREIGN KEY (product_id) REFERENCES seller_products(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS seller_transactions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          wallet_id INT NOT NULL,
+          order_id INT NULL,
+          type ENUM('INCOME', 'EXPENSE', 'TRANSFER') NOT NULL,
+          category VARCHAR(100) NOT NULL,
+          amount DECIMAL(15, 2) NOT NULL,
+          description TEXT NULL,
+          reference VARCHAR(100) NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (wallet_id) REFERENCES seller_wallets(id) ON DELETE CASCADE,
+          FOREIGN KEY (order_id) REFERENCES seller_orders(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      // Seed initial data if seller_wallets empty
+      const [wCheck] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as cnt FROM seller_wallets');
+      if (wCheck[0]?.cnt === 0) {
+        await pool.query(`
+          INSERT INTO seller_wallets (name, type, account_number, balance, is_default) VALUES
+          ('Tiền mặt', 'CASH', NULL, 2000000, 1),
+          ('Ngân hàng (Vietcombank)', 'BANK', '9988776655', 8500000, 0),
+          ('Ví MoMo', 'EWALLET', '0987654321', 1200000, 0)
+        `);
+
+        await pool.query(`
+          INSERT INTO seller_account_types (name, code, icon, description) VALUES
+          ('Gmail', 'GMAIL', 'Mail', 'Gmail cổ, 2FA, khôi phục'),
+          ('ChatGPT', 'CHATGPT', 'Bot', 'OpenAI / ChatGPT Plus'),
+          ('Domain & Hosting', 'HOSTING', 'Globe', 'Domain, VPS, Web hosting'),
+          ('Tài khoản Game', 'GAME', 'Gamepad2', 'Steam, Riot, Netflix')
+        `);
+
+        await pool.query(`
+          INSERT INTO seller_products (account_type_id, name, default_cost_price, default_selling_price, description) VALUES
+          (2, 'ChatGPT Plus 1 Tháng (Dùng riêng)', 150000, 280000, 'Gói nâng cấp 20$/tháng'),
+          (1, 'Gmail Cổ 2020 (Bao đổi 2FA)', 15000, 35000, 'Gmail tạo 2020'),
+          (4, 'Netflix Premium 4K (Profile riêng)', 40000, 75000, 'Xem mượt 4K UHD')
+        `);
+
+        await pool.query(`
+          INSERT INTO seller_inventory (product_id, credentials, cost_price, selling_price, status, note) VALUES
+          (1, 'gpt_user1@gmail.com|Pass1234!|JBSWY3DPEHPK3PXP|recovery1@gmail.com', 150000, 280000, 'AVAILABLE', 'Import mẫu'),
+          (1, 'gpt_user2@gmail.com|Pass1234!|JBSWY3DPEHPK3PYY|recovery2@gmail.com', 150000, 280000, 'AVAILABLE', 'Import mẫu'),
+          (2, 'gmail2020_1@gmail.com|Pass99!|2FA1|rec1@gmail.com', 15000, 35000, 'AVAILABLE', 'Import mẫu'),
+          (2, 'gmail2020_2@gmail.com|Pass99!|2FA2|rec2@gmail.com', 15000, 35000, 'AVAILABLE', 'Import mẫu')
+        `);
+
+        await pool.query(`
+          INSERT INTO seller_customers (name, phone, email, notes, debt_amount) VALUES
+          ('Nguyễn Văn Minh', '0901234567', 'minh.nguyen@gmail.com', 'Khách sỉ mua ChatGPT', 0),
+          ('Trần Thị Thu', '0912345678', 'thutran@yahoo.com', 'Mua Netflix & Gmail', 150000)
+        `);
+      }
+
+      console.log('[DB] Seller Manager tables initialized successfully');
+    } catch (e: any) {
+      console.error('[DB] Error initializing Seller Manager tables:', e?.message || e);
+    }
+
     console.log('[DB] Account storage tables initialized');
     await runPendingMigrations(pool);
+
   } catch (error) {
     console.error('[DB] Error initializing account storage tables:', error);
   }

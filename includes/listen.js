@@ -1071,10 +1071,12 @@ export const registerListeners = (bot, config) => {
           return;
 
         default:
-          return;
+          break;
       }
     } catch (err) {
-      // Error handling without logging
+      console.error('[CALLBACK_QUERY_ERROR]', err);
+    } finally {
+      await bot.answerCallbackQuery(query.id).catch(() => {});
     }
   });
 };

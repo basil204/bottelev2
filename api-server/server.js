@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
@@ -9,6 +11,9 @@ import { sendCanvaInviteApi, inviteMemberApi, batchInvite, getTeamInfo, getInvit
 
 const app = express();
 const PORT = process.env.PORT || 1568;
+
+// Bật trust proxy để hỗ trợ Nginx, Cloudflare, Load Balancer (tránh lỗi ERR_ERL_UNEXPECTED_X_FORWARDED_FOR)
+app.set('trust proxy', 1);
 
 // TỰ ĐỘNG CẬP NHẬT CẤU TRÚC VÀ BẢNG SQL CÒN THIẾU
 async function initDatabase() {
@@ -160,12 +165,13 @@ app.use(express.json({ limit: '10kb' })); // Anti payload bomb
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // 3. RATE LIMITING
-// Global API Rate Limit: Max 100 requests / 15 phút / IP
+// Global API Rate Limit: Max 200 requests / 15 phút / IP
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { success: false, error: 'Quá nhiều yêu cầu từ IP của bạn. Vui lòng thử lại sau 15 phút.' }
 });
 app.use('/api/', globalLimiter);
@@ -176,6 +182,7 @@ const buyLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { success: false, error: 'Tốc độ đặt hàng quá nhanh. Vui lòng đợi 30 giây trước khi đặt lại.' }
 });
 
@@ -1216,10 +1223,57 @@ const swaggerSpec = {
   }
 };
 
-// Mount Swagger UI Endpoints
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/swagger', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get('/swagger.json', (req, res) => res.json(swaggerSpec));
+// ============================================================================
+// J. SWAGGER UI SECURITY & AUTHENTICATION MIDDLEWARE
+// ============================================================================
+const swaggerAuthMiddleware = (req, res, next) => {
+  const isEnabled = process.env.ENABLE_SWAGGER !== 'false' && process.env.SWAGGER_ENABLED !== 'false';
+  if (!isEnabled) {
+    return res.status(404).json({
+      success: false,
+      error: 'Tài liệu Swagger API hiện đang bị vô hiệu hóa hoặc ẩn bởi quản trị viên.'
+    });
+  }
+
+  const authRequired = process.env.SWAGGER_AUTH_REQUIRED === 'true' || !!process.env.SWAGGER_USER || !!process.env.SWAGGER_PASS;
+  if (!authRequired) {
+    return next();
+  }
+
+  const expectedUser = process.env.SWAGGER_USER || 'admin';
+  const expectedPass = process.env.SWAGGER_PASS || 'admin123';
+
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Swagger API Tester - Enter Admin Credentials"');
+    return res.status(401).send('Yêu cầu xác thực tài khoản và mật khẩu để truy cập Swagger API.');
+  }
+
+  try {
+    const base64Credentials = authHeader.split(' ')[1];
+    const credentials = Buffer.from(base64Credentials, 'base64').toString('utf8');
+    const separatorIdx = credentials.indexOf(':');
+    if (separatorIdx === -1) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Swagger API Tester - Enter Admin Credentials"');
+      return res.status(401).send('Định dạng xác thực Basic Auth không hợp lệ.');
+    }
+
+    const user = credentials.substring(0, separatorIdx);
+    const pass = credentials.substring(separatorIdx + 1);
+
+    if (user === expectedUser && pass === expectedPass) {
+      return next();
+    }
+  } catch (_) {}
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Swagger API Tester - Enter Admin Credentials"');
+  return res.status(401).send('Tài khoản hoặc mật khẩu Swagger không chính xác.');
+};
+
+// Mount Swagger UI Endpoints (Bảo vệ bằng Basic Auth hoặc Ẩn theo cấu hình .env)
+app.use('/docs', swaggerAuthMiddleware, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/swagger', swaggerAuthMiddleware, swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/swagger.json', swaggerAuthMiddleware, (req, res) => res.json(swaggerSpec));
 
 // 404 Fallback JSON Handler
 app.use((req, res) => {
@@ -1236,11 +1290,18 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
+  const isEnabled = process.env.ENABLE_SWAGGER !== 'false' && process.env.SWAGGER_ENABLED !== 'false';
+  const authRequired = process.env.SWAGGER_AUTH_REQUIRED === 'true' || !!process.env.SWAGGER_USER || !!process.env.SWAGGER_PASS;
+  const swaggerStatus = !isEnabled ? '🚫 [ẨN / TẮT]' : (authRequired ? '🔒 [Yêu cầu Mật khẩu / Basic Auth]' : '🔓 [Công khai]');
+
   console.log(`================================================================`);
   console.log(`🛡️  ULTRA-SECURE Standalone API Server running on port ${PORT}`);
   console.log(`🔒 Security Layers: Helmet, Rate-Limit, ACID Transactions (FOR UPDATE)`);
   console.log(`🌐 Base URL: http://localhost:${PORT}`);
-  console.log(`📖 Swagger API Test UI: http://localhost:${PORT}/docs`);
+  console.log(`📖 Swagger API Test UI: http://localhost:${PORT}/docs ${swaggerStatus}`);
   console.log(`📖 Swagger Spec JSON:  http://localhost:${PORT}/swagger.json`);
+  if (isEnabled && authRequired) {
+    console.log(`🔑 Swagger Auth: User: ${process.env.SWAGGER_USER || 'admin'} | Pass: ${process.env.SWAGGER_PASS ? '******' : 'admin123'}`);
+  }
   console.log(`================================================================`);
 });

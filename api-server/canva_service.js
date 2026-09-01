@@ -28,6 +28,20 @@ export const ROLE_NAME_MAP = {
   A: 'Quản trị viên đội'
 };
 
+const STEALTH_LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-blink-features=AutomationControlled',
+  '--disable-features=IsolateOrigins,site-per-process',
+  '--disable-infobars',
+  '--window-size=1366,850',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--no-first-run',
+  '--no-service-autorun',
+  '--password-store=basic'
+];
+
 /**
  * Format Cookie cho Playwright Context
  */
@@ -42,7 +56,7 @@ export function formatCookiesForPlaywright(cookiesList) {
     const cookieObj = {
       name: c.name,
       value: c.value,
-      domain: c.domain.startsWith('.') ? c.domain : c.domain,
+      domain: c.domain && c.domain.startsWith('.') ? c.domain : (c.domain || '.canva.com'),
       path: c.path || '/',
       httpOnly: !!c.httpOnly,
       secure: typeof c.secure === 'boolean' ? c.secure : true,
@@ -55,6 +69,99 @@ export function formatCookiesForPlaywright(cookiesList) {
 
     return cookieObj;
   });
+}
+
+/**
+ * Setup Stealth Browser Page (Bypass Cloudflare & Headless Detection on Linux/VPS)
+ */
+async function setupStealthPage(context, cookies, localStorage) {
+  if (Array.isArray(cookies) && cookies.length > 0) {
+    await context.addCookies(cookies);
+  }
+  const page = await context.newPage();
+
+  // Inject anti-detect scripts
+  await page.addInitScript(() => {
+    // 1. Hide navigator.webdriver
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    delete navigator.__proto__.webdriver;
+
+    // 2. Mock chrome object
+    window.chrome = {
+      runtime: {},
+      loadTimes: function () {},
+      csi: function () {},
+      app: {}
+    };
+
+    // 3. Mock languages & plugins
+    Object.defineProperty(navigator, 'languages', { get: () => ['vi-VN', 'vi', 'en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [
+        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+        { name: 'Native Client', filename: 'internal-nacl-plugin' }
+      ]
+    });
+
+    // 4. Mock notification permissions
+    const originalQuery = window.navigator.permissions?.query;
+    if (originalQuery) {
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery(parameters)
+      );
+    }
+  });
+
+  // Inject LocalStorage if present
+  if (localStorage && typeof localStorage === 'object') {
+    await page.addInitScript((storage) => {
+      try {
+        if (storage) {
+          for (const [key, value] of Object.entries(storage)) {
+            window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+          }
+        }
+      } catch (_) {}
+    }, localStorage);
+  }
+
+  return page;
+}
+
+/**
+ * Tự động phát hiện và vượt qua màn hình Cloudflare Challenge / "Chờ một chút..." trên Server
+ */
+async function handleCloudflareChallenge(page) {
+  try {
+    let title = await page.title().catch(() => '');
+    if (title.includes('Chờ một chút') || title.includes('Just a moment') || title.includes('Attention Required') || title.includes('Cloudflare')) {
+      console.log(`[CANVA_STEALTH] 🛡️ Phát hiện màn hình Cloudflare ("${title}"), đang tự động giải quyết...`);
+
+      // Thử bấm Turnstile checkbox nếu có iframe
+      try {
+        const frames = page.frames();
+        for (const frame of frames) {
+          const box = frame.locator('input[type="checkbox"], .ctp-checkbox-label, #challenge-stage input, #cf-stage input');
+          if (await box.isVisible({ timeout: 2500 })) {
+            console.log('[CANVA_STEALTH] 👉 Đang bấm Cloudflare Turnstile Checkbox...');
+            await box.click({ force: true }).catch(() => {});
+            break;
+          }
+        }
+      } catch (_) {}
+
+      // Chờ cho đến khi tiêu đề không còn là "Chờ một chút..." (tối đa 20s)
+      await page.waitForFunction(() => {
+        const t = document.title || '';
+        return !t.includes('Chờ một chút') && !t.includes('Just a moment') && !t.includes('Attention Required') && !t.includes('Cloudflare');
+      }, { timeout: 20000 }).catch(() => {});
+
+      await page.waitForTimeout(3000);
+    }
+  } catch (_) {}
 }
 
 /**
@@ -87,6 +194,12 @@ export async function getCanvaSession(teamId = null) {
         } catch (_) {}
       }
 
+      // Hỗ trợ nếu cookie được bọc dạng { url, savedAt, cookies: [...] }
+      if (cookies && !Array.isArray(cookies) && Array.isArray(cookies.cookies)) {
+        if (!localStorage && cookies.localStorage) localStorage = cookies.localStorage;
+        cookies = cookies.cookies;
+      }
+
       if (Array.isArray(cookies) && cookies.length > 0) {
         return {
           teamId: row.team_id,
@@ -102,13 +215,23 @@ export async function getCanvaSession(teamId = null) {
     const rows = await query('SELECT saved_at, cookies, local_storage FROM canva_sessions WHERE id = 1');
     if (rows && rows.length > 0) {
       const row = rows[0];
-      return {
-        teamId: 1,
-        teamName: 'Đội Canva #1',
-        savedAt: row.saved_at,
-        cookies: typeof row.cookies === 'string' ? JSON.parse(row.cookies) : row.cookies,
-        localStorage: row.local_storage ? (typeof row.local_storage === 'string' ? JSON.parse(row.local_storage) : row.local_storage) : null
-      };
+      let cookies = typeof row.cookies === 'string' ? JSON.parse(row.cookies) : row.cookies;
+      let localStorage = row.local_storage ? (typeof row.local_storage === 'string' ? JSON.parse(row.local_storage) : row.local_storage) : null;
+
+      if (cookies && !Array.isArray(cookies) && Array.isArray(cookies.cookies)) {
+        if (!localStorage && cookies.localStorage) localStorage = cookies.localStorage;
+        cookies = cookies.cookies;
+      }
+
+      if (Array.isArray(cookies) && cookies.length > 0) {
+        return {
+          teamId: 1,
+          teamName: 'Đội Canva #1',
+          savedAt: row.saved_at,
+          cookies: cookies,
+          localStorage: localStorage
+        };
+      }
     }
 
     return null;
@@ -122,8 +245,24 @@ export async function getCanvaSession(teamId = null) {
  * Helper to save/update Canva session in MySQL DB
  */
 export async function saveCanvaSession(cookies, localStorage = {}, teamId = 1) {
-  const cookiesJson = JSON.stringify(cookies || []);
-  const localStorageJson = JSON.stringify(localStorage || {});
+  let finalCookies = cookies;
+  let finalStorage = localStorage || {};
+
+  if (typeof cookies === 'string') {
+    try {
+      finalCookies = JSON.parse(cookies);
+    } catch (_) {}
+  }
+
+  if (finalCookies && !Array.isArray(finalCookies) && Array.isArray(finalCookies.cookies)) {
+    if (finalCookies.localStorage && Object.keys(finalStorage).length === 0) {
+      finalStorage = finalCookies.localStorage;
+    }
+    finalCookies = finalCookies.cookies;
+  }
+
+  const cookiesJson = JSON.stringify(finalCookies || []);
+  const localStorageJson = JSON.stringify(finalStorage || {});
 
   // 1. Cập nhật bảng canva_sessions
   await execute(
@@ -165,16 +304,12 @@ export async function getTeamInfo(teamId = null) {
       browser = await chromium.launch({
         headless: true,
         channel: 'chrome',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled'
-        ]
+        args: STEALTH_LAUNCH_ARGS
       });
     } catch {
       browser = await chromium.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+        args: STEALTH_LAUNCH_ARGS
       });
     }
 
@@ -186,23 +321,13 @@ export async function getTeamInfo(teamId = null) {
       ignoreHTTPSErrors: true
     });
 
-    await context.addCookies(cookies);
-    const page = await context.newPage();
+    const page = await setupStealthPage(context, cookies, sessionData.localStorage);
 
-    if (sessionData.localStorage) {
-      await page.addInitScript((storage) => {
-        try {
-          if (storage) {
-            for (const [key, value] of Object.entries(storage)) {
-              window.localStorage.setItem(key, value);
-            }
-          }
-        } catch (_) {}
-      }, sessionData.localStorage);
-    }
-
-    await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 35000 });
+    await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(2000);
+
+    // Xử lý màn hình Cloudflare Challenge nếu gặp
+    await handleCloudflareChallenge(page);
 
     const currentUrl = page.url();
     if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
@@ -216,10 +341,10 @@ export async function getTeamInfo(teamId = null) {
     let memberCount = 'Không xác định';
     let numericMembers = null;
     try {
-      const headerElem = await page.waitForSelector('h1[aria-label*="Thành viên"], h1[aria-label*="Member"], h1:has-text("Thành viên")', { timeout: 6000 });
+      const headerElem = await page.waitForSelector('h1[aria-label*="Thành viên"], h1[aria-label*="Member"], h1:has-text("Thành viên")', { timeout: 10000 });
       if (headerElem) {
         const headerText = await headerElem.innerText();
-        const match = headerText.match(/\((\d+)\)/);
+        const match = headerText.match(/\((\d+)\)/) || headerText.match(/(\d+)/);
         if (match) {
           memberCount = match[1];
           numericMembers = parseInt(match[1], 10);
@@ -269,9 +394,9 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
     email = params.email;
     role = params.role || defaultRole;
     headless = params.headless !== undefined ? params.headless : defaultHeadless;
-    teamId = params.teamId || null;
-    userId = params.userId || null;
-    telegramId = params.telegramId || null;
+    teamId = params.teamId || params.team_id || null;
+    userId = params.userId || params.user_id || null;
+    telegramId = params.telegramId || params.telegram_id || null;
   } else {
     email = params;
     role = defaultRole;
@@ -310,17 +435,12 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       browser = await chromium.launch({
         headless: headless,
         channel: 'chrome',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
-          '--start-maximized'
-        ]
+        args: STEALTH_LAUNCH_ARGS
       });
     } catch (err) {
       browser = await chromium.launch({
         headless: headless,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+        args: STEALTH_LAUNCH_ARGS
       });
     }
 
@@ -332,24 +452,14 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       ignoreHTTPSErrors: true
     });
 
-    await context.addCookies(cookies);
-    const page = await context.newPage();
-
-    if (sessionData.localStorage) {
-      await page.addInitScript((storage) => {
-        try {
-          if (storage) {
-            for (const [key, value] of Object.entries(storage)) {
-              window.localStorage.setItem(key, value);
-            }
-          }
-        } catch (_) {}
-      }, sessionData.localStorage);
-    }
+    const page = await setupStealthPage(context, cookies, sessionData.localStorage);
 
     // 1. Mở Settings People
     await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.waitForTimeout(2500);
+
+    // 2. Xử lý Cloudflare Challenge "Chờ một chút..." nếu xuất hiện trên VPS/Server
+    await handleCloudflareChallenge(page);
 
     // Kiểm tra chuyển hướng đăng nhập
     const currentUrl = page.url();
@@ -373,11 +483,11 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       }
     } catch (_) {}
 
-    // 2. Lấy số lượng thành viên
+    // 3. Lấy số lượng thành viên
     let memberCount = 'Không xác định';
     let numericMembers = null;
     try {
-      const headerElem = await page.waitForSelector('h1[aria-label*="Thành viên"], h1[aria-label*="Member"], h1:has-text("Thành viên")', { timeout: 6000 });
+      const headerElem = await page.waitForSelector('h1[aria-label*="Thành viên"], h1[aria-label*="Member"], h1:has-text("Thành viên")', { timeout: 8000 });
       if (headerElem) {
         const headerText = await headerElem.innerText();
         const match = headerText.match(/\((\d+)\)/) || headerText.match(/(\d+)/);
@@ -390,27 +500,52 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       }
     } catch (_) {}
 
-    // 3. Bấm "Mời thành viên"
-    const inviteBtn = page.locator('button:has-text("Mời thành viên"), button:has-text("Invite members"), button:has-text("Thêm thành viên"), button:has-text("Invite people"), button[aria-label*="Mời" i], button[aria-label*="Invite" i]').first();
-    try {
-      await inviteBtn.waitFor({ state: 'visible', timeout: 12000 });
-    } catch (btnErr) {
-      const pageUrlNow = page.url();
-      const pageTitle = await page.title().catch(() => '');
-      await page.screenshot({ path: path.join(__dirname, 'canva_error_debug.png') }).catch(() => {});
-      await browser.close();
-      return {
-        success: false,
-        email: targetEmail,
-        role: roleName,
-        roleCode: roleCode,
-        error: `Không tìm thấy nút 'Mời thành viên' (URL: ${pageUrlNow}, Title: ${pageTitle}). Có thể tài khoản không phải Admin/Owner của đội hoặc cookies hết hạn.`
-      };
+    // 4. Bấm "Mời thành viên" (Đa dạng bộ chọn và tự động thử lại nếu cần)
+    const inviteSelectors = [
+      'button:has-text("Mời thành viên")',
+      'button:has-text("Invite members")',
+      'button:has-text("Thêm thành viên")',
+      'button:has-text("Invite people")',
+      'button:has-text("Mời người")',
+      'button[aria-label*="Mời" i]',
+      'button[aria-label*="Invite" i]',
+      'button[data-testid*="invite" i]',
+      'a:has-text("Mời thành viên")',
+      'a:has-text("Invite members")'
+    ];
+
+    let inviteBtn = null;
+    for (const sel of inviteSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 1500 }).catch(() => false)) {
+        inviteBtn = el;
+        break;
+      }
     }
+
+    if (!inviteBtn) {
+      inviteBtn = page.locator(inviteSelectors.join(', ')).first();
+      try {
+        await inviteBtn.waitFor({ state: 'visible', timeout: 15000 });
+      } catch (btnErr) {
+        const pageUrlNow = page.url();
+        const pageTitle = await page.title().catch(() => '');
+        await page.screenshot({ path: path.join(__dirname, 'canva_error_debug.png') }).catch(() => {});
+        await browser.close();
+        return {
+          success: false,
+          email: targetEmail,
+          role: roleName,
+          roleCode: roleCode,
+          error: `Không tìm thấy nút 'Mời thành viên' (URL: ${pageUrlNow}, Title: ${pageTitle}). Có thể tài khoản không phải Admin/Owner của đội hoặc cookies hết hạn.`
+        };
+      }
+    }
+
     await inviteBtn.click();
     await page.waitForTimeout(1200);
 
-    // 4. Điền email
+    // 5. Điền email
     const emailInput = page.locator('input[placeholder*="email" i], input[aria-label*="email" i], input[type="text"][inputmode="email"], input[type="email"]').first();
     await emailInput.waitFor({ state: 'visible', timeout: 10000 });
     await emailInput.click();
@@ -418,7 +553,7 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
     await emailInput.fill(targetEmail);
     await page.waitForTimeout(500);
 
-    // 5. Chọn vai trò
+    // 6. Chọn vai trò
     if (normalizedRole === 'designer' || normalizedRole === 'admin') {
       try {
         const roleBtn = page.locator('button[aria-label*="vai trò" i], button[role="combobox"]').first();
@@ -437,13 +572,13 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       await page.waitForTimeout(500);
     }
 
-    // 6. Lắng nghe API Response và bấm Confirm
+    // 7. Lắng nghe API Response và bấm Confirm
     const responsePromise = page.waitForResponse(
       resp => resp.url().includes('/_ajax/invitation/') && resp.status() === 200,
-      { timeout: 30000 }
+      { timeout: 35000 }
     );
 
-    const confirmBtn = page.locator('button:has-text("Xác nhận và mời"), button:has-text("Confirm and invite"), button:has-text("Gửi lời mời")').first();
+    const confirmBtn = page.locator('button:has-text("Xác nhận và mời"), button:has-text("Confirm and invite"), button:has-text("Gửi lời mời"), button:has-text("Gửi")').first();
     await confirmBtn.waitFor({ state: 'visible', timeout: 15000 });
     await confirmBtn.click();
 
@@ -469,9 +604,9 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       teamName = (firstItem.L && firstItem.L.A) || null;
     }
 
-    // 7. Ghi nhận kết quả mời vào MySQL Database (Bảng canva_tasks & canva_invites)
+    // 8. Ghi nhận kết quả mời vào MySQL Database (Bảng canva_tasks & canva_invites)
     try {
-      // 7.1 Ghi vào canva_tasks theo schema.sql
+      // 8.1 Ghi vào canva_tasks theo schema.sql
       await execute(
         `INSERT INTO canva_tasks (user_id, telegram_id, team_id, email, role, invite_link, invite_token, team_name, status, step_status, created_at, completed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', 'success', NOW(), NOW())`,
@@ -487,7 +622,7 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
         ]
       );
 
-      // 7.2 Ghi vào canva_invites
+      // 8.2 Ghi vào canva_invites
       await execute(
         `INSERT INTO canva_invites (email, role, role_code, member_count, invite_link, invite_token, team_name, response_json, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
@@ -503,7 +638,7 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
         ]
       );
 
-      // 7.3 Cập nhật canva_teams
+      // 8.3 Cập nhật canva_teams
       if (sessionData.teamId && numericMembers !== null) {
         await execute(
           'UPDATE canva_teams SET current_members = ?, last_checked_at = NOW() WHERE id = ?',

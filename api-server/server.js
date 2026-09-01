@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import pool, { query, execute } from './db.js';
+import { sendCanvaInviteApi, inviteMemberApi, batchInvite, getTeamInfo, getInviteHistory, getCanvaSession, saveCanvaSession, ROLE_NAME_MAP } from './canva_service.js';
 
 const app = express();
 const PORT = process.env.PORT || 1568;
@@ -106,6 +107,32 @@ async function initDatabase() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY unique_key_lang (msg_key, lang)
       )
+    `);
+
+    // 8. Khởi tạo Bảng canva_sessions
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS canva_sessions (
+        id INT PRIMARY KEY,
+        saved_at DATETIME NOT NULL,
+        cookies JSON NOT NULL,
+        local_storage JSON NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 9. Khởi tạo Bảng canva_invites (Lưu lịch sử và Link mời vào Database)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS canva_invites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        role VARCHAR(100) NULL,
+        role_code VARCHAR(10) NULL,
+        member_count VARCHAR(100) NULL,
+        invite_link TEXT NULL,
+        invite_token VARCHAR(255) NULL,
+        team_name VARCHAR(255) NULL,
+        response_json LONGTEXT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     console.log('[API_SERVER] Cập nhật CSDL tự động hoàn tất.');
@@ -779,7 +806,148 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('orde
 });
 
 // ============================================================================
-// H. SWAGGER UI & OPENAPI 3.0 TEST API ENDPOINTS
+// H. CANVA PRO / BRAND AUTOMATION ENDPOINTS
+// ============================================================================
+
+// POST /api/canva/session - Lưu / cập nhật session Canva vào CSDL
+app.post('/api/canva/session', async (req, res) => {
+  try {
+    const { cookies, localStorage } = req.body;
+    if (!cookies) {
+      return res.status(400).json({ success: false, error: 'Thiếu trường cookies.' });
+    }
+
+    let parsedCookies = cookies;
+    if (typeof cookies === 'string') {
+      try {
+        parsedCookies = JSON.parse(cookies);
+      } catch {
+        return res.status(400).json({ success: false, error: 'Định dạng cookies JSON không hợp lệ.' });
+      }
+    }
+
+    if (!Array.isArray(parsedCookies) || parsedCookies.length === 0) {
+      return res.status(400).json({ success: false, error: 'Cookies phải là một mảng và không được để trống.' });
+    }
+
+    let parsedStorage = localStorage;
+    if (typeof localStorage === 'string') {
+      try {
+        parsedStorage = JSON.parse(localStorage);
+      } catch {
+        parsedStorage = {};
+      }
+    }
+
+    const result = await saveCanvaSession(parsedCookies, parsedStorage || {});
+    return res.json({
+      success: true,
+      message: 'Đã lưu session Canva vào CSDL thành công.',
+      cookieCount: parsedCookies.length,
+      savedAt: result.savedAt
+    });
+  } catch (err) {
+    console.error('[CANVA_SAVE_SESSION_ERR]', err);
+    res.status(500).json({ success: false, error: err.message || 'Lỗi khi lưu session Canva.' });
+  }
+});
+
+// GET /api/canva/session - Kiểm tra trạng thái session Canva trong CSDL
+app.get('/api/canva/session', async (req, res) => {
+  try {
+    const session = await getCanvaSession();
+    if (!session) {
+      return res.json({
+        success: true,
+        hasSession: false,
+        message: 'Chưa có session Canva nào được lưu trong CSDL.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      hasSession: true,
+      savedAt: session.savedAt,
+      cookieCount: Array.isArray(session.cookies) ? session.cookies.length : 0,
+      hasLocalStorage: !!session.localStorage
+    });
+  } catch (err) {
+    console.error('[CANVA_GET_SESSION_API_ERR]', err);
+    res.status(500).json({ success: false, error: err.message || 'Lỗi khi kiểm tra session Canva.' });
+  }
+});
+
+// GET /api/canva/team-info - Kiểm tra trạng thái & lấy số lượng thành viên team Canva
+app.get('/api/canva/team-info', async (req, res) => {
+  try {
+    const info = await getTeamInfo();
+    return res.json({
+      success: info.valid,
+      ...info
+    });
+  } catch (err) {
+    console.error('[CANVA_TEAM_INFO_ERR]', err);
+    res.status(500).json({ success: false, error: err.message || 'Lỗi kiểm tra team Canva.' });
+  }
+});
+
+// POST /api/canva/invite - Gửi lời mời Canva Pro / Brand qua Playwright
+app.post('/api/canva/invite', async (req, res) => {
+  const { email, role = 'designer', headless = true, team_id, teamId } = req.body;
+  if (!email || !String(email).trim()) {
+    return res.status(400).json({ success: false, error: 'Thiếu trường email.' });
+  }
+
+  console.log(`[CANVA] Đang gửi lời mời API tới: ${email} (Vai trò: ${role}, Headless: ${headless}, TeamID: ${team_id || teamId || 'Default'})`);
+  try {
+    const result = await sendCanvaInviteApi({
+      email,
+      role,
+      headless,
+      teamId: team_id || teamId || null
+    });
+    if (result.success) {
+      console.log(`[CANVA] Mời thành công: ${email} | Link: ${result.inviteLink || 'N/A'}`);
+      res.json(result);
+    } else {
+      console.error(`[CANVA] Mời thất bại: ${result.error}`);
+      res.status(400).json(result);
+    }
+  } catch (err) {
+    console.error(`[CANVA LỖI]:`, err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/canva/batch-invite - Mời hàng loạt email Canva
+app.post('/api/canva/batch-invite', async (req, res) => {
+  const { emails, role = 'designer', delayMs = 1000 } = req.body;
+  if (!Array.isArray(emails) || emails.length === 0) {
+    return res.status(400).json({ success: false, error: 'Thiếu danh sách emails (mảng email).' });
+  }
+
+  try {
+    const result = await batchInvite(emails, role, delayMs);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[CANVA_BATCH_INVITE_ERR]', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/canva/history - Lấy lịch sử các lời mời đã gửi từ Database
+app.get('/api/canva/history', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const history = await getInviteHistory(limit);
+    res.json({ success: true, total: history.length, data: history });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// I. SWAGGER UI & OPENAPI 3.0 TEST API ENDPOINTS
 // ============================================================================
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -941,6 +1109,107 @@ const swaggerSpec = {
         ],
         responses: {
           200: { description: 'Danh sách lịch sử đơn hàng' }
+        }
+      }
+    },
+    '/api/canva/session': {
+      get: {
+        summary: 'Kiểm tra trạng thái Canva session trong CSDL',
+        tags: ['Canva Automation'],
+        responses: {
+          200: { description: 'Trạng thái session hiện tại' }
+        }
+      },
+      post: {
+        summary: 'Lưu / Cập nhật Canva session (cookies & localStorage) vào CSDL',
+        tags: ['Canva Automation'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['cookies'],
+                properties: {
+                  cookies: { type: 'array', items: { type: 'object' }, description: 'Mảng cookies Canva' },
+                  localStorage: { type: 'object', description: 'Dữ liệu localStorage (tùy chọn)' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Lưu session thành công' },
+          400: { description: 'Dữ liệu session không hợp lệ' }
+        }
+      }
+    },
+    '/api/canva/invite': {
+      post: {
+        summary: 'Gửi lời mời Canva Pro / Brand đội tự động',
+        tags: ['Canva Automation'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', example: 'member@gmail.com', description: 'Email cần mời vào đội' },
+                  role: { type: 'string', enum: ['designer', 'member', 'admin'], default: 'designer', description: 'Vai trò thành viên' },
+                  headless: { type: 'boolean', default: true, description: 'Chạy ngầm browser hay hiện UI' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Mời thành công và trả về Invite Link' },
+          400: { description: 'Mời thất bại hoặc thiếu email' }
+        }
+      }
+    },
+    '/api/canva/team-info': {
+      get: {
+        summary: 'Kiểm tra trạng thái kết nối & số lượng thành viên Canva Team',
+        tags: ['Canva Automation'],
+        responses: {
+          200: { description: 'Thông tin Canva Team' }
+        }
+      }
+    },
+    '/api/canva/batch-invite': {
+      post: {
+        summary: 'Mời hàng loạt email vào Canva Team',
+        tags: ['Canva Automation'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['emails'],
+                properties: {
+                  emails: { type: 'array', items: { type: 'string' }, description: 'Danh sách email cần mời' },
+                  role: { type: 'string', enum: ['designer', 'member', 'admin', 'C', 'B', 'A'], default: 'designer' },
+                  delayMs: { type: 'integer', default: 1000, description: 'Độ trễ giữa mỗi lời mời (ms)' }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: { description: 'Kết quả mời hàng loạt' }
+        }
+      }
+    },
+    '/api/canva/history': {
+      get: {
+        summary: 'Xem lịch sử các lời mời Canva đã gửi',
+        tags: ['Canva Automation'],
+        responses: {
+          200: { description: 'Danh sách lịch sử lời mời' }
         }
       }
     }

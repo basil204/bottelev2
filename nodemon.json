@@ -1,0 +1,26 @@
+{
+  "watch": [
+    "main.js",
+    "config.js",
+    "includes/",
+    "modules/",
+    "utils/",
+    "lib/"
+  ],
+  "ext": "js,mjs,json",
+  "ignore": [
+    "api-server/*",
+    "webapp/*",
+    "email-edu-web/*",
+    "backups/*",
+    "database/*",
+    "*.png",
+    "*.jpg",
+    "*.log",
+    "*.tmp",
+    "*.txt",
+    "canva_error_debug.png",
+    "node_modules/*"
+  ],
+  "delay": 1000
+}

@@ -9,6 +9,7 @@ import { startGmailCleanup } from './includes/services/gmailCleanup.js';
 import { startAutoRestockScheduler } from './includes/services/autoRestockService.js';
 import { startDriveBackupCron } from './includes/services/driveBackupService.js';
 import { startNetflixQueueWorker } from './includes/services/netflixQueueService.js';
+import { startCanvaQueueWorker } from './includes/services/canvaQueueService.js';
 
 import { config } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
@@ -80,6 +81,7 @@ const bootstrap = async () => {
     { command: 'menu', description: 'Mở menu chính' },
     { command: 'info', description: 'Xem tài khoản và số dư' },
     { command: 'netflix', description: 'Tự động nhận Netflix 30 ngày' },
+    { command: 'canva', description: 'Tự động mời Canva Pro' },
     { command: 'gmail', description: 'Mua Gmail EDU' },
     { command: 'buymail', description: 'Mua Gmail EDU nhanh theo số lượng' },
     { command: 'history', description: 'Lịch sử mua hôm nay' },
@@ -93,6 +95,7 @@ const bootstrap = async () => {
   startAutoRestockScheduler(bot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
   startDriveBackupCron(); // Khởi động tự động sao lưu dữ liệu CSDL lên Google Drive
   startNetflixQueueWorker(bot, config); // Khởi động hàng chờ Auto Netflix 30 Days
+  startCanvaQueueWorker(bot, config); // Khởi động hàng chờ Auto Canva Pro Invite
 
 };
 

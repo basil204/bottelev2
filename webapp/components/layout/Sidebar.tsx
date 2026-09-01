@@ -8,7 +8,7 @@ import {
   BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
   Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
   Bell, Target, Settings, Code2, Layers, Globe, Languages, Link as LinkIcon,
-  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film
+  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film, Palette
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -58,6 +58,7 @@ export function Sidebar() {
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
         { name: 'QUẢN LÝ /START', href: '/start-menu', icon: MessageSquare },
         { name: 'AUTO NETFLIX 30D', href: '/netflix', icon: Film },
+        { name: 'AUTO CANVA PRO', href: '/canva', icon: Palette },
         { name: 'TẠO TK CAPCUT', href: '/capcut', icon: Video },
         { name: 'NGÔN NGỮ & LỜI NHẮN', href: '/settings/translations', icon: Languages },
         { name: 'API KEY USER', href: '/user-api-keys', icon: Key },

@@ -5,8 +5,8 @@ import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from
 import { showCapCutMenu, startCapCutFlow, startCapCutBuyFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
 import { startDownloadFlow, handleDownloadInput, handleDownloadSelection } from './handle/handleDownload.js';
 import { handleCheckLiveCommand } from './handle/handleCheckLive.js';
-import { startLocketFlow, handleLocketInput } from './handle/handleLocket.js';
 import { showNetflixMenu, startNetflixFlow, handleNetflixEmailInput } from './handle/handleNetflix.js';
+import { showCanvaMenu, startCanvaFlow, handleCanvaRoleSelect, handleCanvaEmailInput } from './handle/handleCanva.js';
 
 import {
   adminMenu,
@@ -259,6 +259,11 @@ export const registerListeners = (bot, config) => {
     await showNetflixMenu(bot, msg.chat.id, msg.from.id);
   });
 
+  bot.onText(/^\/canva/i, async (msg) => {
+    await ensureUser(bot, msg);
+    await showCanvaMenu(bot, msg.chat.id, msg.from.id);
+  });
+
   // Command /buymail gmail <số lượng> để mua Gmail nhanh
   bot.onText(/^\/buymail\s+gmail(?:\s+(\d+))?/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
@@ -324,6 +329,7 @@ export const registerListeners = (bot, config) => {
         cleanTxt === '📧 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '📧 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || isMatchButton(cleanTxt, 'btn_buy_gmail_edu', userLang) ||
         cleanTxt === '🎬 CapCut Workspace' || cleanTxt === 'CapCut Workspace' ||
         cleanTxt === '🎬 Netflix 30 Ngày' || cleanTxt === 'Netflix 30 Ngày' || cleanTxt === '🎬 Netflix' || cleanTxt === 'Netflix' ||
+        cleanTxt === '🎨 Mời Canva Pro' || cleanTxt === 'Mời Canva Pro' || cleanTxt === '🎨 Canva Pro' || cleanTxt === 'Canva Pro' || cleanTxt === '🎨 Canva' || cleanTxt === 'Canva' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
         cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
         cleanTxt === '🔐 Locket' || cleanTxt === 'Locket' || isMatchButton(cleanTxt, 'btn_locket', userLang) ||
@@ -343,6 +349,7 @@ export const registerListeners = (bot, config) => {
       delCache(`gmail_edu_waiting_${msg.from.id}`);
       delCache(`capcut_flow_${msg.from.id}`);
       delCache(`netflix_flow_${msg.from.id}`);
+      delCache(`canva_flow_${msg.from.id}`);
       delCache(`waiting_trc20_amount_${msg.from.id}`);
       delCache(`waiting_trc20_hash_${msg.from.id}`);
       delCache(`trc20_amount_${msg.from.id}`);
@@ -362,6 +369,7 @@ export const registerListeners = (bot, config) => {
       if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
       if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
       if (text === '🎬 Netflix 30 Ngày' || text === 'Netflix 30 Ngày' || text === '🎬 Netflix' || text === 'Netflix') return showNetflixMenu(bot, msg.chat.id, msg.from.id);
+      if (text === '🎨 Mời Canva Pro' || text === 'Mời Canva Pro' || text === '🎨 Canva Pro' || text === 'Canva Pro' || text === '🎨 Canva' || text === 'Canva') return showCanvaMenu(bot, msg.chat.id, msg.from.id);
       if (isMatchButton(text, 'btn_utilities', userLang) || text === 'Tiện ích' || text === 'Utilities' || text === '工具箱') return sendUtilityMenu(bot, msg.chat.id, user);
       if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
       if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
@@ -480,6 +488,10 @@ export const registerListeners = (bot, config) => {
     // Kiểm tra input email Netflix 30 Days
     const handledNetflix = await handleNetflixEmailInput(bot, msg, config);
     if (handledNetflix) return;
+
+    // Kiểm tra input email Canva Pro
+    const handledCanva = await handleCanvaEmailInput(bot, msg, config);
+    if (handledCanva) return;
 
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     const handledDeposit = await handleDepositAmount(bot, msg, user, config);
@@ -1040,6 +1052,18 @@ export const registerListeners = (bot, config) => {
             }
           } catch (e) { console.error(e); }
           return;
+
+        case 'netflix_info':
+          return showNetflixMenu(bot, chatId, query.from.id);
+        case 'netflix_start':
+          return startNetflixFlow(bot, chatId, query.from.id);
+
+        case 'canva_info':
+          return showCanvaMenu(bot, chatId, query.from.id);
+        case 'canva_start':
+          return startCanvaFlow(bot, chatId, query.from.id);
+        case 'canva_role':
+          return handleCanvaRoleSelect(bot, chatId, query.from.id, data.role, query.message?.message_id);
 
         default:
           break;

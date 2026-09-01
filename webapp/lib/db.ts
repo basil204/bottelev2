@@ -512,6 +512,66 @@ async function initAccountStorageTables() {
       console.error('[DB] Error initializing Seller Manager tables:', e?.message || e);
     }
 
+    // Canva Teams & Tasks tables
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS canva_teams (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          cookies TEXT NOT NULL,
+          local_storage TEXT NULL,
+          member_limit INT DEFAULT 500,
+          current_members INT DEFAULT 0,
+          role VARCHAR(50) DEFAULT 'member',
+          status ENUM('active', 'full', 'expired', 'disabled') DEFAULT 'active',
+          proxy VARCHAR(255) NULL,
+          last_checked_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_canva_team_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS canva_tasks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          telegram_id VARCHAR(64) NULL,
+          team_id INT NULL,
+          email VARCHAR(255) NOT NULL,
+          role VARCHAR(50) DEFAULT 'member',
+          price DECIMAL(15, 2) DEFAULT 0,
+          proxy_used VARCHAR(255) NULL,
+          invite_link TEXT NULL,
+          invite_token VARCHAR(255) NULL,
+          team_name VARCHAR(255) NULL,
+          status ENUM('pending', 'running', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+          step_status VARCHAR(255) NULL,
+          error_message TEXT NULL,
+          screenshot_path VARCHAR(255) NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          started_at TIMESTAMP NULL,
+          completed_at TIMESTAMP NULL,
+          INDEX idx_canva_task_status (status),
+          INDEX idx_canva_task_tg (telegram_id),
+          INDEX idx_canva_task_team (team_id),
+          INDEX idx_canva_task_created_at (created_at),
+          FOREIGN KEY (team_id) REFERENCES canva_teams(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_enabled', 'true')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_price', '15000')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_headless', 'true')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_concurrency', '1')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_default_role', 'member')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('canva_proxies', '')");
+
+      console.log('[DB] Canva Pro tables initialized successfully');
+    } catch (e: any) {
+      console.error('[DB] Error initializing Canva tables:', e?.message || e);
+    }
+
     console.log('[DB] Account storage tables initialized');
     await runPendingMigrations(pool);
 

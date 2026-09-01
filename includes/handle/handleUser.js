@@ -149,12 +149,13 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
         [{ text: t('btn_buy_accounts', lang), callback_data: createCallbackData({ action: 'list_categories' }) }],
         [{ text: t('btn_buy_gmail_edu', lang), callback_data: createCallbackData({ action: 'gmail_edu_info' }) }],
         [{ text: '🎬 Nhận Netflix 30 Ngày', callback_data: createCallbackData({ action: 'netflix_info' }) }],
+        [{ text: '🎨 Mời Canva Pro (Auto)', callback_data: createCallbackData({ action: 'canva_info' }) }],
         [{ text: t('btn_order_history', lang), callback_data: createCallbackData({ action: 'order_history' }) }]
       ],
       keyboard: [
         [{ text: t('btn_buy_accounts', lang) }],
         [{ text: t('btn_buy_gmail_edu', lang) }, { text: '🎬 Netflix 30 Ngày' }],
-        [{ text: t('btn_order_history', lang) }],
+        [{ text: '🎨 Mời Canva Pro' }, { text: t('btn_order_history', lang) }],
         [{ text: t('btn_main_menu', lang) }]
       ],
       resize_keyboard: true
@@ -169,12 +170,13 @@ export const sendUtilityMenu = async (bot, chatId, user = null) => {
   return sendTrackedMenu(bot, chatId, t('utility_menu_title', lang), {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎬 Nhận Netflix 30 Ngày (Auto)', callback_data: createCallbackData({ action: 'netflix_info' }) }]
+        [{ text: '🎬 Nhận Netflix 30 Ngày (Auto)', callback_data: createCallbackData({ action: 'netflix_info' }) }],
+        [{ text: '🎨 Mời Canva Pro (Auto)', callback_data: createCallbackData({ action: 'canva_info' }) }]
       ],
       keyboard: [
         [{ text: t('btn_check_live', lang) }, { text: t('btn_download_all', lang) }],
         [{ text: t('btn_locket', lang) }, { text: '🎬 Netflix 30 Ngày' }],
-        [{ text: t('btn_main_menu', lang) }]
+        [{ text: '🎨 Mời Canva Pro' }, { text: t('btn_main_menu', lang) }]
       ],
       resize_keyboard: true
     }

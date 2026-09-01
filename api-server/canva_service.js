@@ -29,10 +29,9 @@ export const ROLE_NAME_MAP = {
 };
 
 const STEALTH_LAUNCH_ARGS = [
+  '--disable-blink-features=AutomationControlled',
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-blink-features=AutomationControlled',
-  '--disable-features=IsolateOrigins,site-per-process',
   '--disable-infobars',
   '--window-size=1366,850',
   '--disable-dev-shm-usage',
@@ -43,11 +42,14 @@ const STEALTH_LAUNCH_ARGS = [
 ];
 
 /**
- * Format Cookie cho Playwright Context
+ * Format Cookie cho Playwright Context (Tự động lọc bỏ cookie Cloudflare cũ để tránh bị chặn Turnstile)
  */
 export function formatCookiesForPlaywright(cookiesList) {
   if (!Array.isArray(cookiesList)) return [];
-  return cookiesList.map(c => {
+  // Lọc bỏ __cf_bm, _cfuvid, cf_clearance vì các cookie này bị gắn chặt với TLS fingerprint của trình duyệt cũ
+  const validCookies = cookiesList.filter(c => c && c.name && !['__cf_bm', '_cfuvid', 'cf_clearance'].includes(c.name));
+
+  return validCookies.map(c => {
     let sameSite = 'None';
     if (c.sameSite === 'strict' || c.sameSite === 'Strict') sameSite = 'Strict';
     else if (c.sameSite === 'lax' || c.sameSite === 'Lax') sameSite = 'Lax';
@@ -74,19 +76,16 @@ export function formatCookiesForPlaywright(cookiesList) {
 /**
  * Setup Stealth Browser Page (Bypass Cloudflare & Headless Detection on Linux/VPS)
  */
-async function setupStealthPage(context, cookies, localStorage) {
-  if (Array.isArray(cookies) && cookies.length > 0) {
-    await context.addCookies(cookies);
-  }
-  const page = await context.newPage();
-
-  // Inject anti-detect scripts
-  await page.addInitScript(() => {
-    // 1. Hide navigator.webdriver
+async function setupStealthPage(context, localStorage) {
+  // Inject anti-detect scripts ở cấp độ context trước khi bất kỳ page nào load
+  await context.addInitScript(() => {
+    // 1. Hide navigator.webdriver hoàn toàn
+    try {
+      delete Object.getPrototypeOf(navigator).webdriver;
+    } catch (_) {}
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    delete navigator.__proto__.webdriver;
 
-    // 2. Mock chrome object
+    // 2. Mock chrome object giống trình duyệt thật
     window.chrome = {
       runtime: {},
       loadTimes: function () {},
@@ -115,6 +114,8 @@ async function setupStealthPage(context, cookies, localStorage) {
     }
   });
 
+  const page = await context.newPage();
+
   // Inject LocalStorage if present
   if (localStorage && typeof localStorage === 'object') {
     await page.addInitScript((storage) => {
@@ -136,30 +137,122 @@ async function setupStealthPage(context, cookies, localStorage) {
  */
 async function handleCloudflareChallenge(page) {
   try {
-    let title = await page.title().catch(() => '');
-    if (title.includes('Chờ một chút') || title.includes('Just a moment') || title.includes('Attention Required') || title.includes('Cloudflare')) {
-      console.log(`[CANVA_STEALTH] 🛡️ Phát hiện màn hình Cloudflare ("${title}"), đang tự động giải quyết...`);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const title = await page.title().catch(() => '');
+      const hasCf = title.includes('Chờ một chút') || 
+                    title.includes('Just a moment') || 
+                    title.includes('Attention Required') || 
+                    title.includes('Cloudflare') ||
+                    (await page.locator('text="We\'ll have you designing again soon", text="Đang xác minh", text="Verifying"').first().isVisible().catch(() => false));
 
-      // Thử bấm Turnstile checkbox nếu có iframe
+      if (!hasCf) {
+        break;
+      }
+
+      console.log(`[CANVA_STEALTH] 🛡️ Phát hiện màn hình Cloudflare ("${title}"), đang giải quyết (Lần ${attempt + 1}/10)...`);
+
+      // Di chuyển chuột nhẹ tạo hành vi người dùng thật
+      try {
+        await page.mouse.move(100 + Math.random() * 200, 200 + Math.random() * 200);
+      } catch (_) {}
+
+      // 1. Thử tìm và click vào checkbox trong Turnstile iframe
       try {
         const frames = page.frames();
         for (const frame of frames) {
-          const box = frame.locator('input[type="checkbox"], .ctp-checkbox-label, #challenge-stage input, #cf-stage input');
-          if (await box.isVisible({ timeout: 2500 })) {
-            console.log('[CANVA_STEALTH] 👉 Đang bấm Cloudflare Turnstile Checkbox...');
-            await box.click({ force: true }).catch(() => {});
+          const checkbox = frame.locator('input[type="checkbox"], .ctp-checkbox-label, #challenge-stage input, #cf-stage input, .cf-turnstile-wrapper, div[role="checkbox"]');
+          if (await checkbox.isVisible({ timeout: 1500 }).catch(() => false)) {
+            console.log('[CANVA_STEALTH] 👉 Bấm Turnstile checkbox bên trong iframe...');
+            await checkbox.click({ force: true }).catch(() => {});
+            await page.waitForTimeout(2000);
             break;
           }
         }
       } catch (_) {}
 
-      // Chờ cho đến khi tiêu đề không còn là "Chờ một chút..." (tối đa 20s)
-      await page.waitForFunction(() => {
-        const t = document.title || '';
-        return !t.includes('Chờ một chút') && !t.includes('Just a moment') && !t.includes('Attention Required') && !t.includes('Cloudflare');
-      }, { timeout: 20000 }).catch(() => {});
+      // 2. Thử click trực tiếp vào vị trí widget Cloudflare
+      try {
+        const cfWidget = page.locator('iframe[src*="cloudflare"], iframe[src*="turnstile"], iframe[title*="Cloudflare"], div[id*="turnstile"]').first();
+        if (await cfWidget.isVisible({ timeout: 1500 }).catch(() => false)) {
+          const box = await cfWidget.boundingBox();
+          if (box) {
+            console.log('[CANVA_STEALTH] 👉 Click tọa độ widget Cloudflare Turnstile...');
+            await page.mouse.click(box.x + Math.min(box.width / 2, 35), box.y + box.height / 2);
+          }
+        }
+      } catch (_) {}
 
+      await page.waitForTimeout(2500);
+    }
+  } catch (_) {}
+}
+
+/**
+ * Điều hướng an toàn vào trang Settings People của Canva:
+ * 1. Mở https://www.canva.com và chờ trang load hoàn tất
+ * 2. Nạp Cookies và LocalStorage vào phiên làm việc
+ * 3. F5 / Reload lại trang chủ Canva để phiên đăng nhập được kích hoạt và chờ thành công
+ * 4. Sau khi đăng nhập thành công trên trang chủ mới điều hướng vào https://www.canva.com/settings/people
+ */
+async function navigateToCanvaPeoplePage(context, page, cookies, localStorage) {
+  // Bước 1: Mở trang chủ canva.com và chờ trang load hoàn tất
+  console.log('[CANVA_STEALTH] 🌐 Bước 1: Đang truy cập https://www.canva.com (chờ load xong)...');
+  await page.goto('https://www.canva.com', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(2000);
+
+  // Xử lý Cloudflare Challenge trên trang chủ nếu có
+  await handleCloudflareChallenge(page);
+
+  // Bước 2: Nạp Cookies và LocalStorage vào phiên làm việc sau khi đã load canva.com
+  console.log('[CANVA_STEALTH] 🍪 Bước 2: Đang nạp Cookies và LocalStorage vào phiên...');
+  if (Array.isArray(cookies) && cookies.length > 0) {
+    await context.addCookies(cookies);
+  }
+
+  if (localStorage && typeof localStorage === 'object') {
+    await page.evaluate((storage) => {
+      try {
+        for (const [key, value] of Object.entries(storage)) {
+          window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        }
+      } catch (_) {}
+    }, localStorage);
+  }
+
+  await page.waitForTimeout(1000);
+
+  // Bước 3: Reload (F5) lại trang chủ Canva để phiên đăng nhập có hiệu lực và chờ xác thực thành công
+  console.log('[CANVA_STEALTH] 🔄 Bước 3: Đang Reload lại trang chủ Canva để kích hoạt phiên đăng nhập...');
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(2500);
+
+  // Xử lý Cloudflare sau khi reload trang chủ nếu có
+  await handleCloudflareChallenge(page);
+
+  // Chờ trang chủ nhận diện trạng thái đã đăng nhập (header / nav / profile)
+  try {
+    await page.waitForSelector('nav, header, button[aria-label*="tài khoản" i], button[aria-label*="account" i], button[aria-label*="cài đặt" i], a[href*="settings"]', { timeout: 8000 });
+    console.log('[CANVA_STEALTH] ✅ Phiên đăng nhập đã được kích hoạt thành công trên trang chủ Canva.');
+  } catch (_) {
+    console.log('[CANVA_STEALTH] ⏳ Đã nạp phiên xong, tiếp tục chuyển trang...');
+  }
+
+  // Bước 4: Chuyển hướng vào trang quản lý thành viên /settings/people
+  console.log('[CANVA_STEALTH] 👥 Bước 4: Đang chuyển vào https://www.canva.com/settings/people...');
+  await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.waitForTimeout(2500);
+
+  // Xử lý Cloudflare Challenge trên trang settings nếu có
+  await handleCloudflareChallenge(page);
+
+  // Kiểm tra nếu gặp thông báo "Đã xảy ra lỗi bên phía chúng tôi" -> tự động F5 / reload lại
+  try {
+    const errorNotice = page.locator('text="Đã xảy ra lỗi bên phía chúng tôi", text="Something went wrong on our end"').first();
+    if (await errorNotice.isVisible({ timeout: 2000 })) {
+      console.log('[CANVA_STEALTH] ⚠️ Phát hiện thông báo lỗi phía Canva, đang tự động F5 (Reload) lại trang Settings...');
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(3000);
+      await handleCloudflareChallenge(page);
     }
   } catch (_) {}
 }
@@ -304,11 +397,13 @@ export async function getTeamInfo(teamId = null) {
       browser = await chromium.launch({
         headless: true,
         channel: 'chrome',
+        ignoreDefaultArgs: ['--enable-automation'],
         args: STEALTH_LAUNCH_ARGS
       });
     } catch {
       browser = await chromium.launch({
         headless: true,
+        ignoreDefaultArgs: ['--enable-automation'],
         args: STEALTH_LAUNCH_ARGS
       });
     }
@@ -321,13 +416,10 @@ export async function getTeamInfo(teamId = null) {
       ignoreHTTPSErrors: true
     });
 
-    const page = await setupStealthPage(context, cookies, sessionData.localStorage);
+    const page = await setupStealthPage(context, sessionData.localStorage);
 
-    await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(2000);
-
-    // Xử lý màn hình Cloudflare Challenge nếu gặp
-    await handleCloudflareChallenge(page);
+    // Bước 1: canva.com -> Bước 2: Nạp cookie + localStorage -> Bước 3: settings/people (tự F5 nếu lỗi)
+    await navigateToCanvaPeoplePage(context, page, cookies, sessionData.localStorage);
 
     const currentUrl = page.url();
     if (currentUrl.includes('/login') || currentUrl.includes('/signup')) {
@@ -435,11 +527,13 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       browser = await chromium.launch({
         headless: headless,
         channel: 'chrome',
+        ignoreDefaultArgs: ['--enable-automation'],
         args: STEALTH_LAUNCH_ARGS
       });
     } catch (err) {
       browser = await chromium.launch({
         headless: headless,
+        ignoreDefaultArgs: ['--enable-automation'],
         args: STEALTH_LAUNCH_ARGS
       });
     }
@@ -452,14 +546,10 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       ignoreHTTPSErrors: true
     });
 
-    const page = await setupStealthPage(context, cookies, sessionData.localStorage);
+    const page = await setupStealthPage(context, sessionData.localStorage);
 
-    // 1. Mở Settings People
-    await page.goto('https://www.canva.com/settings/people', { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(2500);
-
-    // 2. Xử lý Cloudflare Challenge "Chờ một chút..." nếu xuất hiện trên VPS/Server
-    await handleCloudflareChallenge(page);
+    // 1. Mở canva.com load xong -> 2. Nạp cookie + storage -> 3. Vào settings/people (tự F5 nếu lỗi)
+    await navigateToCanvaPeoplePage(context, page, cookies, sessionData.localStorage);
 
     // Kiểm tra chuyển hướng đăng nhập
     const currentUrl = page.url();

@@ -53,6 +53,9 @@ export async function GET() {
             gmail_edu_price: 10000,
             gmail_edu_domain: 'suafpoly.app',
             gmail_edu_delete_hours: 1,
+            // Canva & Netflix Auto Services
+            canva_enabled: true,
+            netflix_enabled: true,
             // Admin IDs
             admin_ids: [],
             // Admin login accounts
@@ -68,8 +71,8 @@ export async function GET() {
 
         rows.forEach((row) => {
             // Handle booleans
-            if (['mb_auto_deposit', 'gmail_edu_enabled'].includes(row.key)) {
-                settings[row.key] = row.value === 'true';
+            if (['mb_auto_deposit', 'gmail_edu_enabled', 'canva_enabled', 'netflix_enabled'].includes(row.key)) {
+                settings[row.key] = row.value !== 'false';
             } else if (['min_deposit', 'exchange_rate', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
             } else if (['admin_ids', 'gmail_checker_api_keys', 'deposit_rank_promotions'].includes(row.key)) {
@@ -143,6 +146,9 @@ export async function POST(request: Request) {
             gmail_edu_price,
             gmail_edu_domain,
             gmail_edu_delete_hours,
+            // Canva & Netflix Auto Services
+            canva_enabled,
+            netflix_enabled,
             // Admin IDs
             admin_ids,
             // Admin login accounts
@@ -205,6 +211,9 @@ export async function POST(request: Request) {
             if (gmail_edu_price !== undefined) await upsertSetting('gmail_edu_price', gmail_edu_price);
             if (gmail_edu_domain !== undefined) await upsertSetting('gmail_edu_domain', gmail_edu_domain);
             if (gmail_edu_delete_hours !== undefined) await upsertSetting('gmail_edu_delete_hours', gmail_edu_delete_hours);
+            // Canva & Netflix Auto Services
+            if (canva_enabled !== undefined) await upsertSetting('canva_enabled', canva_enabled ? 'true' : 'false');
+            if (netflix_enabled !== undefined) await upsertSetting('netflix_enabled', netflix_enabled ? 'true' : 'false');
             // Admin IDs - save as JSON string
             if (admin_ids !== undefined) await upsertSetting('admin_ids', JSON.stringify(admin_ids));
             // Admin login accounts

@@ -43,6 +43,9 @@ interface SystemSettings {
     gmail_edu_price: number;
     gmail_edu_domain: string;
     gmail_edu_delete_hours: number;
+    // Canva & Netflix Auto Services
+    canva_enabled?: boolean;
+    netflix_enabled?: boolean;
     // Admin IDs
     admin_ids: number[];
     // Admin Accounts
@@ -95,6 +98,8 @@ export default function SettingsPage() {
         gmail_edu_price: 10000,
         gmail_edu_domain: 'suafpoly.app',
         gmail_edu_delete_hours: 1,
+        canva_enabled: true,
+        netflix_enabled: true,
         admin_ids: [],
         admin_username: 'admin',
         admin_password: '',
@@ -640,6 +645,38 @@ export default function SettingsPage() {
                                     checked={settings.auto_block_spam_ip ?? true}
                                     onChange={() => setSettings(prev => ({ ...prev, auto_block_spam_ip: !prev.auto_block_spam_ip }))}
                                     className="h-5 w-5 rounded accent-orange-600 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Service Toggle: Canva Pro */}
+                            <div className="pt-3 flex items-center justify-between border-t border-teal-100 bg-teal-50/40 p-3 rounded-xl mt-2">
+                                <div>
+                                    <div className="font-extrabold text-teal-900 text-xs flex items-center gap-1.5">
+                                        <span>🎨 Bật / Tắt Dịch vụ Tự Động Mời Canva Pro</span>
+                                    </div>
+                                    <div className="text-[11px] text-teal-700">Khi tắt, nút bấm và tính năng mời Canva Pro trên Bot Telegram sẽ được ẩn / tạm đóng</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.canva_enabled ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, canva_enabled: !prev.canva_enabled }))}
+                                    className="h-5 w-5 rounded accent-teal-600 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Service Toggle: Netflix 30 Days */}
+                            <div className="pt-3 flex items-center justify-between border-t border-rose-100 bg-rose-50/40 p-3 rounded-xl mt-2">
+                                <div>
+                                    <div className="font-extrabold text-rose-900 text-xs flex items-center gap-1.5">
+                                        <span>🎬 Bật / Tắt Dịch vụ Tự Động Nhận Netflix 30 Ngày</span>
+                                    </div>
+                                    <div className="text-[11px] text-rose-700">Khi tắt, nút bấm và tính năng nhận Netflix trên Bot Telegram sẽ được ẩn / tạm đóng</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.netflix_enabled ?? true}
+                                    onChange={() => setSettings(prev => ({ ...prev, netflix_enabled: !prev.netflix_enabled }))}
+                                    className="h-5 w-5 rounded accent-rose-600 cursor-pointer"
                                 />
                             </div>
                         </div>

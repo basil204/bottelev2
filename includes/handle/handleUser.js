@@ -167,17 +167,43 @@ export const sendUtilityMenu = async (bot, chatId, user = null) => {
   const { t } = await import('../helpers/langHelper.js');
   const { createCallbackData } = await import('../../utils/index.js');
   const lang = user?.language || 'vi';
+
+  // Kiểm tra trạng thái bật/tắt của Canva và Netflix từ database
+  let netflixEnabled = true;
+  let canvaEnabled = true;
+  try {
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('netflix_enabled', 'canva_enabled')");
+    rows.forEach((r) => {
+      if (r.key === 'netflix_enabled') netflixEnabled = r.value !== 'false';
+      if (r.key === 'canva_enabled') canvaEnabled = r.value !== 'false';
+    });
+  } catch (_) {}
+
+  const inline_keyboard = [];
+  if (netflixEnabled) {
+    inline_keyboard.push([{ text: '🎬 Nhận Netflix 30 Ngày (Auto)', callback_data: createCallbackData({ action: 'netflix_info' }) }]);
+  }
+  if (canvaEnabled) {
+    inline_keyboard.push([{ text: '🎨 Mời Canva Pro (Auto)', callback_data: createCallbackData({ action: 'canva_info' }) }]);
+  }
+
+  const keyboard = [
+    [{ text: t('btn_check_live', lang) }, { text: t('btn_download_all', lang) }]
+  ];
+
+  const middleRow = [{ text: t('btn_locket', lang) }];
+  if (netflixEnabled) middleRow.push({ text: '🎬 Netflix 30 Ngày' });
+  keyboard.push(middleRow);
+
+  const bottomRow = [];
+  if (canvaEnabled) bottomRow.push({ text: '🎨 Mời Canva Pro' });
+  bottomRow.push({ text: t('btn_main_menu', lang) });
+  keyboard.push(bottomRow);
+
   return sendTrackedMenu(bot, chatId, t('utility_menu_title', lang), {
     reply_markup: {
-      inline_keyboard: [
-        [{ text: '🎬 Nhận Netflix 30 Ngày (Auto)', callback_data: createCallbackData({ action: 'netflix_info' }) }],
-        [{ text: '🎨 Mời Canva Pro (Auto)', callback_data: createCallbackData({ action: 'canva_info' }) }]
-      ],
-      keyboard: [
-        [{ text: t('btn_check_live', lang) }, { text: t('btn_download_all', lang) }],
-        [{ text: t('btn_locket', lang) }, { text: '🎬 Netflix 30 Ngày' }],
-        [{ text: '🎨 Mời Canva Pro' }, { text: t('btn_main_menu', lang) }]
-      ],
+      inline_keyboard,
+      keyboard,
       resize_keyboard: true
     }
   });

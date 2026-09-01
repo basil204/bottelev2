@@ -145,14 +145,22 @@ export default function CanvaDashboardPage() {
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   // Tải dữ liệu tổng hợp
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (includeSettings = true) => {
     try {
       setRefreshing(true);
-      const [queueRes, settingsRes, teamsRes] = await Promise.all([
+      const fetchPromises: Promise<Response>[] = [
         fetch('/api/canva/queue'),
-        fetch('/api/canva/settings'),
         fetch('/api/canva/teams')
-      ]);
+      ];
+
+      if (includeSettings) {
+        fetchPromises.push(fetch('/api/canva/settings'));
+      }
+
+      const results = await Promise.all(fetchPromises);
+      const queueRes = results[0];
+      const teamsRes = results[1];
+      const settingsRes = includeSettings ? results[2] : null;
 
       if (queueRes.ok) {
         const qData = await queueRes.json();
@@ -164,17 +172,17 @@ export default function CanvaDashboardPage() {
         }
       }
 
-      if (settingsRes.ok) {
-        const sData = await settingsRes.json();
-        if (sData.success) {
-          setSettings(sData.data);
-        }
-      }
-
       if (teamsRes.ok) {
         const tData = await teamsRes.json();
         if (tData.success) {
           setTeams(tData.teams || []);
+        }
+      }
+
+      if (settingsRes && settingsRes.ok) {
+        const sData = await settingsRes.json();
+        if (sData.success && sData.data) {
+          setSettings(sData.data);
         }
       }
     } catch (e) {
@@ -186,8 +194,14 @@ export default function CanvaDashboardPage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 6000);
+    // Lần đầu load toàn bộ bao gồm cả settings
+    fetchData(true);
+
+    // Auto-refresh mỗi 5 giây CHỈ làm mới Hàng chờ & Đội, không ghi đè form Cài đặt
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 5000);
+
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -202,7 +216,8 @@ export default function CanvaDashboardPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('✅ Đã lưu cấu hình & lời nhắn Canva Pro thành công!');
+        alert('✅ Đã lưu cấu hình & URL API Canva thành công!');
+        fetchData(true);
       } else {
         alert('❌ Lỗi: ' + (data.error || 'Không thể lưu cài đặt'));
       }
@@ -427,7 +442,7 @@ export default function CanvaDashboardPage() {
 
             <Button
               variant="outline"
-              onClick={fetchData}
+              onClick={() => fetchData(true)}
               disabled={refreshing}
               className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md gap-2"
             >

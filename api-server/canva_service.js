@@ -517,11 +517,13 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
 
   const formattedCookies = formatCookiesForPlaywright(sessionData.cookies);
   let browserInstance = null;
+  let pageInstance = null;
   const startTime = Date.now();
 
   try {
     const { browser, page } = await createCanvaBrowserAndPage(formattedCookies, sessionData.localStorage, headless);
     browserInstance = browser;
+    pageInstance = page;
 
     console.log(`[CANVA_SERVICE] 🚀 Bắt đầu quy trình mời: ${targetEmail} (Vai trò: ${roleName})...`);
 
@@ -715,6 +717,9 @@ export async function sendCanvaInviteApi(params, defaultRole = 'designer', defau
       response: responseJson
     };
   } catch (error) {
+    if (pageInstance) {
+      await pageInstance.screenshot({ path: path.join(__dirname, 'canva_error_debug.png') }).catch(() => {});
+    }
     if (browserInstance) {
       await browserInstance.close().catch(() => {});
     }

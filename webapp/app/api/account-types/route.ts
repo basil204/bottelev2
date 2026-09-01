@@ -4,11 +4,14 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logAdminAction, getAdminFromCookie } from '@/lib/adminLog';
 
 
-// GET - List all account types
+// GET - List all account types with counts
 export async function GET() {
     try {
         const [rows] = await pool.query<RowDataPacket[]>(`
-            SELECT at.*, COUNT(sa.id) AS account_count
+            SELECT at.*, 
+                   COUNT(sa.id) AS account_count,
+                   SUM(CASE WHEN sa.sale_status = 'in_stock' THEN 1 ELSE 0 END) AS in_stock_count,
+                   SUM(CASE WHEN sa.sale_status = 'sold' THEN 1 ELSE 0 END) AS sold_count
             FROM account_types at
             LEFT JOIN stored_accounts sa ON sa.account_type_id = at.id
             GROUP BY at.id
@@ -25,10 +28,20 @@ export async function GET() {
     }
 }
 
-// PUT - Rename account type
+// PUT - Rename or Reassign account type
 export async function PUT(request: Request) {
     try {
-        const { id, name } = await request.json();
+        const body = await request.json();
+        const { id, name, action, target_type_id } = body;
+
+        // Chuyển toàn bộ tài khoản từ loại id sang target_type_id
+        if (action === 'reassign') {
+            if (!id || !target_type_id) {
+                return NextResponse.json({ success: false, error: 'Thiếu ID loại nguồn hoặc loại đích' }, { status: 400 });
+            }
+            await pool.query('UPDATE stored_accounts SET account_type_id = ? WHERE account_type_id = ?', [target_type_id, id]);
+            return NextResponse.json({ success: true, message: 'Đã chuyển toàn bộ tài khoản sang loại mới thành công!' });
+        }
 
         if (!id || !name?.trim()) {
             return NextResponse.json(
@@ -69,10 +82,41 @@ export async function PUT(request: Request) {
     }
 }
 
-// POST - Create new account type
+// POST - Create new account type or seed presets
 export async function POST(request: Request) {
     try {
-        const { name } = await request.json();
+        const body = await request.json();
+        const { name, seed } = body;
+
+        if (seed) {
+            const presets = [
+                '🤖 ChatGPT Plus / Team',
+                '🎬 CapCut Pro Workspace',
+                '📧 Gmail EDU (Office 365)',
+                '🎨 Canva Pro VIP',
+                '🍿 Netflix 4K Ultra HD',
+                '🎵 Spotify Premium',
+                '✈️ Telegram Premium',
+                '🔑 Key Active / License Code'
+            ];
+
+            let addedCount = 0;
+            for (const item of presets) {
+                const [existing] = await pool.query<RowDataPacket[]>(
+                    'SELECT id FROM account_types WHERE LOWER(name) = LOWER(?)',
+                    [item]
+                );
+                if (existing.length === 0) {
+                    await pool.query('INSERT INTO account_types (name) VALUES (?)', [item]);
+                    addedCount++;
+                }
+            }
+
+            return NextResponse.json({
+                success: true,
+                message: `Đã khởi tạo ${addedCount} loại tài khoản mẫu!`
+            });
+        }
 
         if (!name?.trim()) {
             return NextResponse.json(

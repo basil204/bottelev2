@@ -6,6 +6,7 @@ import { showCapCutMenu, startCapCutFlow, startCapCutBuyFlow, handleCapCutInput 
 import { startDownloadFlow, handleDownloadInput, handleDownloadSelection } from './handle/handleDownload.js';
 import { handleCheckLiveCommand } from './handle/handleCheckLive.js';
 import { startLocketFlow, handleLocketInput } from './handle/handleLocket.js';
+import { showNetflixMenu, startNetflixFlow, handleNetflixEmailInput } from './handle/handleNetflix.js';
 
 import {
   adminMenu,
@@ -149,37 +150,8 @@ export const registerListeners = (bot, config) => {
       }
     }
 
-    // User đã có ngôn ngữ - hiển thị menu bình thường
-    const lang = user.language || 'vi';
-
-    // Lấy tỷ giá để quy đổi USDT
-    let exchangeRate = 26000;
-    try {
-      const rateRows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
-      if (rateRows && rateRows[0]?.value) {
-        exchangeRate = Number(rateRows[0].value) || 26000;
-      }
-    } catch (e) {
-      console.error('[START] Error fetching exchange rate:', e);
-    }
-    const balanceVnd = Number(user.balance) || 0;
-    const balanceUsdt = (balanceVnd / exchangeRate).toFixed(2);
-
-    let messageText = '';
-    messageText += t('welcome', lang) + '\n\n';
-    messageText += t('user_info', lang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
-    messageText += t('guide', lang) + '\n\n';
-    messageText += PUBLIC_COMMANDS_TEXT;
-    if (config.ADMIN_IDS.includes(msg.from.id)) {
-      messageText += `\n/admin - Mở bảng điều khiển Admin\n/kmnap - Quản lý khuyến mãi nạp`;
-    }
-
-    const opts = {
-      parse_mode: 'Markdown',
-      reply_markup: buildMainKeyboard(t, lang)
-    };
-
-    await sendTrackedMenu(bot, msg.chat.id, messageText, opts);
+    // User đã có ngôn ngữ - hiển thị menu tùy chỉnh /start
+    return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
   });
 
   bot.onText(/^\/menu/i, async (msg) => {
@@ -282,6 +254,11 @@ export const registerListeners = (bot, config) => {
     await showCapCutMenu(bot, msg.chat.id);
   });
 
+  bot.onText(/^\/netflix/i, async (msg) => {
+    await ensureUser(bot, msg);
+    await showNetflixMenu(bot, msg.chat.id, msg.from.id);
+  });
+
   // Command /buymail gmail <số lượng> để mua Gmail nhanh
   bot.onText(/^\/buymail\s+gmail(?:\s+(\d+))?/i, async (msg, match) => {
     const user = await ensureUser(bot, msg);
@@ -346,6 +323,7 @@ export const registerListeners = (bot, config) => {
         cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '↩️ 主菜单' || cleanTxt === '主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
         cleanTxt === '📧 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '📧 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || isMatchButton(cleanTxt, 'btn_buy_gmail_edu', userLang) ||
         cleanTxt === '🎬 CapCut Workspace' || cleanTxt === 'CapCut Workspace' ||
+        cleanTxt === '🎬 Netflix 30 Ngày' || cleanTxt === 'Netflix 30 Ngày' || cleanTxt === '🎬 Netflix' || cleanTxt === 'Netflix' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
         cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
         cleanTxt === '🔐 Locket' || cleanTxt === 'Locket' || isMatchButton(cleanTxt, 'btn_locket', userLang) ||
@@ -364,6 +342,7 @@ export const registerListeners = (bot, config) => {
       delCache(`chatgpt_waiting_${msg.from.id}`);
       delCache(`gmail_edu_waiting_${msg.from.id}`);
       delCache(`capcut_flow_${msg.from.id}`);
+      delCache(`netflix_flow_${msg.from.id}`);
       delCache(`waiting_trc20_amount_${msg.from.id}`);
       delCache(`waiting_trc20_hash_${msg.from.id}`);
       delCache(`trc20_amount_${msg.from.id}`);
@@ -382,6 +361,7 @@ export const registerListeners = (bot, config) => {
       if (isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
       if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
       if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
+      if (text === '🎬 Netflix 30 Ngày' || text === 'Netflix 30 Ngày' || text === '🎬 Netflix' || text === 'Netflix') return showNetflixMenu(bot, msg.chat.id, msg.from.id);
       if (isMatchButton(text, 'btn_utilities', userLang) || text === 'Tiện ích' || text === 'Utilities' || text === '工具箱') return sendUtilityMenu(bot, msg.chat.id, user);
       if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
       if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
@@ -497,12 +477,20 @@ export const registerListeners = (bot, config) => {
     const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
     if (handledGmailEdu) return;
 
+    // Kiểm tra input email Netflix 30 Days
+    const handledNetflix = await handleNetflixEmailInput(bot, msg, config);
+    if (handledNetflix) return;
+
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     const handledDeposit = await handleDepositAmount(bot, msg, user, config);
     if (handledDeposit) return;
 
-    // Tự động lưu tin nhắn từ khách hàng vào Hệ thống Trò chuyện / Hỗ trợ (Realtime Live Chat)
-    if (text && !text.startsWith('/')) {
+    // Chỉ lưu và phản hồi tin nhắn Hỗ trợ khi người dùng ĐÃ BẤM NÚT "Hỗ trợ / Bảo hành" trước đó
+    const { getCache, delCache } = await import('../lib/cache/index.js');
+    const isWaitingSupport = getCache(`waiting_support_request_${msg.from.id}`);
+
+    if (isWaitingSupport && text && !text.startsWith('/')) {
+      delCache(`waiting_support_request_${msg.from.id}`);
       try {
         const { query } = await import('./database/index.js');
         await query(
@@ -640,6 +628,10 @@ export const registerListeners = (bot, config) => {
           return startCapCutBuyFlow(bot, chatId, query.from.id);
         case 'capcut_start':
           return startCapCutFlow(bot, chatId, query.from.id);
+        case 'netflix_info':
+          return showNetflixMenu(bot, chatId, query.from.id);
+        case 'netflix_start':
+          return startNetflixFlow(bot, chatId, query.from.id);
         case 'apply_coupon_prompt':
           {
             const { waitingForCouponState } = await import('./handle/handleBuy.js');
@@ -666,28 +658,7 @@ export const registerListeners = (bot, config) => {
             await bot.sendMessage(chatId, t('lang_switched', selectedLang), { parse_mode: 'Markdown' });
 
             // Lấy tỷ giá để quy đổi USDT
-            let exchangeRate = 26000;
-            try {
-              const rateRows = await query("SELECT `value` FROM settings WHERE `key` = 'exchange_rate'");
-              if (rateRows && rateRows[0]?.value) {
-                exchangeRate = Number(rateRows[0].value) || 26000;
-              }
-            } catch (e) { }
-            const balanceVnd = Number(user.balance) || 0;
-            const balanceUsdt = (balanceVnd / exchangeRate).toFixed(2);
-
-            // Hiển thị welcome message và menu
-            let welcomeText = '';
-            welcomeText += t('welcome', selectedLang) + '\n\n';
-            welcomeText += t('user_info', selectedLang, { id: user.telegram_id, balance: formatCurrency(balanceVnd), usdt: balanceUsdt }) + '\n\n';
-            welcomeText += t('guide', selectedLang) + '\n\n';
-
-            await sendTrackedMenu(bot, chatId, welcomeText, {
-              parse_mode: 'Markdown',
-              reply_markup: buildMainKeyboard(t, selectedLang)
-            });
-
-            return;
+            return sendMenu(bot, chatId, user, config.TELEGRAM_GROUP_LINKS);
           }
 
         case 'change_lang':

@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import {
   Sparkles, Video, RefreshCw, CheckCircle, XCircle, Clock, Copy, Download,
   Trash2, ShieldCheck, Cpu, Zap, Key, Layers, Database, ArrowRight, UserCheck,
-  Plus, AlertTriangle, DollarSign, Search, Calendar, Users
+  Plus, AlertTriangle, DollarSign, Search, Calendar, Users, Settings, UserMinus,
+  UserPlus, Shield, Edit2, Link2, ExternalLink, X, Mail, Check, AlertCircle
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { Button } from '@/components/ui/button';
 
 interface AccountResult {
   index: number;
@@ -27,6 +29,7 @@ interface AccountType {
 interface AdminWorkspace {
   id: number;
   admin_email: string;
+  admin_password?: string;
   workspace_id: string;
   workspace_name: string;
   member_limit: number;
@@ -81,6 +84,20 @@ export default function CapCutManagementPage() {
   const [warranties, setWarranties] = useState<UserWarranty[]>([]);
   const [loadingWarranties, setLoadingWarranties] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Workspace CRUD Modal State
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [workspaceDetail, setWorkspaceDetail] = useState<any>(null);
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+  const [inviteLink, setInviteLink] = useState<string>('');
+  const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
+
+  // Modal form states
+  const [editWsName, setEditWsName] = useState<string>('');
+  const [inviteEmail, setInviteEmail] = useState<string>('');
+  const [inviteRole, setInviteRole] = useState<number>(2); // 1: Admin, 2: Member, 3: Editor
+  const [processingAction, setProcessingAction] = useState<boolean>(false);
+  const [modalTab, setModalTab] = useState<'members' | 'add_member' | 'rename'>('members');
 
   useEffect(() => {
     fetchAccountTypes();
@@ -138,6 +155,224 @@ export default function CapCutManagementPage() {
       console.error('Error fetching warranties:', err);
     } finally {
       setLoadingWarranties(false);
+    }
+  };
+
+  // Open Workspace CRUD Modal & Fetch Realtime Data from CapCut
+  const openWorkspaceModal = async (wsId: string) => {
+    setSelectedWorkspaceId(wsId);
+    setLoadingDetail(true);
+    setWorkspaceDetail(null);
+    setWorkspaceMembers([]);
+    setInviteLink('');
+    setModalTab('members');
+
+    try {
+      const res = await fetch(`/api/capcut/workspace-details?workspace_id=${wsId}`);
+      const data = await res.json();
+
+      if (data.success) {
+        setWorkspaceDetail(data.workspace);
+        setWorkspaceMembers(Array.isArray(data.members) ? data.members : []);
+        setInviteLink(data.invite_link || '');
+        setEditWsName(data.workspace?.workspace_name || '');
+      } else {
+        alert(data.error || 'Không thể tải thông tin chi tiết Workspace.');
+        setSelectedWorkspaceId(null);
+      }
+    } catch (err: any) {
+      alert('Lỗi kết nối khi tải chi tiết Workspace CapCut');
+      setSelectedWorkspaceId(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  // Update Workspace Name
+  const handleUpdateWsName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editWsName.trim()) {
+      alert('Vui lòng nhập tên Workspace mới!');
+      return;
+    }
+
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_name',
+          workspace_id: selectedWorkspaceId,
+          name: editWsName.trim()
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert(data.message || 'Đã đổi tên Workspace thành công!');
+        fetchAdminWorkspaces();
+        openWorkspaceModal(selectedWorkspaceId!);
+      } else {
+        alert(data.error || 'Lỗi đổi tên Workspace');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi đổi tên Workspace');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Refresh Invitation Link
+  const handleRefreshInviteLink = async () => {
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'refresh_link',
+          workspace_id: selectedWorkspaceId
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setInviteLink(data.invite_link || '');
+        alert('Đã làm mới & tạo link mời Workspace mới thành công!');
+      } else {
+        alert(data.error || 'Lỗi làm mới link mời');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi làm mới link mời');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Add Member by Email
+  const handleAddMemberByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) {
+      alert('Vui lòng nhập Email thành viên cần mời!');
+      return;
+    }
+
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_member',
+          workspace_id: selectedWorkspaceId,
+          email: inviteEmail.trim(),
+          role: inviteRole
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert(data.message || `Đã gửi lời mời thành công tới ${inviteEmail}!`);
+        setInviteEmail('');
+        openWorkspaceModal(selectedWorkspaceId!);
+      } else {
+        alert(data.error || 'Không thể gửi lời mời thành viên.');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi gửi lời mời');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Remove / Kick Member from Workspace
+  const handleRemoveMember = async (memberRoleId: string, memberName: string) => {
+    if (!confirm(`Bạn có chắc muốn XÓA/KICK thành viên "${memberName || memberRoleId}" khỏi Workspace?`)) return;
+
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove_member',
+          workspace_id: selectedWorkspaceId,
+          role_id: memberRoleId
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert(data.message || 'Đã xóa thành viên khỏi Workspace!');
+        fetchAdminWorkspaces();
+        openWorkspaceModal(selectedWorkspaceId!);
+      } else {
+        alert(data.error || 'Lỗi khi xóa thành viên');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi xóa thành viên');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Change Member Role
+  const handleChangeRole = async (memberRoleId: string, newRole: number) => {
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set_role',
+          workspace_id: selectedWorkspaceId,
+          role_id: memberRoleId,
+          role: newRole
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert('Đã cập nhật vai trò thành viên thành công!');
+        openWorkspaceModal(selectedWorkspaceId!);
+      } else {
+        alert(data.error || 'Lỗi phân quyền thành viên');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi cập nhật vai trò');
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  // Delete Workspace Record from DB
+  const handleDeleteWorkspace = async () => {
+    if (!confirm('⚠️ BẠN CÓ CHẮC MUỐN XÓA WORKSPACE NÀY KHỎI CSDL? Hành động này không thể hoàn tác.')) return;
+
+    setProcessingAction(true);
+    try {
+      const res = await fetch('/api/capcut/workspace-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete_workspace',
+          workspace_id: selectedWorkspaceId
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert('Đã xóa Workspace khỏi hệ thống CSDL!');
+        setSelectedWorkspaceId(null);
+        fetchAdminWorkspaces();
+      } else {
+        alert(data.error || 'Lỗi khi xóa Workspace');
+      }
+    } catch (err) {
+      alert('Lỗi mạng khi xóa Workspace');
+    } finally {
+      setProcessingAction(false);
     }
   };
 
@@ -455,10 +690,14 @@ export default function CapCutManagementPage() {
           {/* Admin Workspaces Table */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xs">
             <div className="border-b border-zinc-100 pb-3 mb-4 flex items-center justify-between">
-              <h2 className="font-black text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
-                <Users className="h-4 w-4 text-orange-600" />
-                <span>DANH SÁCH WORKSPACE ADMIN HẠN VIP</span>
-              </h2>
+              <div>
+                <h2 className="font-black text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                  <Users className="h-4 w-4 text-orange-600" />
+                  <span>DANH SÁCH WORKSPACE ADMIN HẠN VIP</span>
+                </h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Nhấp vào bất kỳ dòng Workspace nào để xem danh sách thành viên và quản lý CRUD toàn bộ tính năng CapCut.</p>
+              </div>
+
               <button
                 onClick={fetchAdminWorkspaces}
                 className="text-orange-600 font-extrabold hover:underline flex items-center gap-1 cursor-pointer"
@@ -483,6 +722,7 @@ export default function CapCutManagementPage() {
                       <th className="p-3 text-center">SLOT THÀNH VIÊN</th>
                       <th className="p-3">HẠN VIP PRO</th>
                       <th className="p-3 text-center">TRẠNG THÁI</th>
+                      <th className="p-3 text-center">THAO TÁC (CRUD)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -491,9 +731,15 @@ export default function CapCutManagementPage() {
                       const isNearExpiry = ws.team_vip_end > 0 && (ws.team_vip_end - Math.floor(Date.now() / 1000)) < 7 * 86400;
 
                       return (
-                        <tr key={ws.workspace_id} className="hover:bg-zinc-50/50 font-medium">
+                        <tr
+                          key={ws.workspace_id}
+                          className="hover:bg-orange-50/40 font-medium transition-colors cursor-pointer group"
+                          onClick={() => openWorkspaceModal(ws.workspace_id)}
+                        >
                           <td className="p-3 font-extrabold text-zinc-900">{ws.admin_email}</td>
-                          <td className="p-3 font-bold text-zinc-800">{ws.workspace_name}</td>
+                          <td className="p-3 font-bold text-zinc-800 flex items-center gap-1.5">
+                            <span className="group-hover:text-orange-600 transition-colors">{ws.workspace_name}</span>
+                          </td>
                           <td className="p-3 font-mono text-zinc-500">{ws.workspace_id}</td>
                           <td className="p-3 text-center font-extrabold">
                             <span className={ws.member_cnt >= ws.member_limit ? 'text-red-600' : 'text-emerald-600'}>
@@ -519,6 +765,18 @@ export default function CapCutManagementPage() {
                             {ws.status === 'expired' && (
                               <span className="bg-amber-100 text-amber-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase">Hết Hạn VIP</span>
                             )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openWorkspaceModal(ws.workspace_id);
+                              }}
+                              className="inline-flex items-center gap-1 bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+                            >
+                              <Settings className="h-3.5 w-3.5" />
+                              <span>QUẢN LÝ (CRUD)</span>
+                            </button>
                           </td>
                         </tr>
                       );
@@ -698,26 +956,24 @@ export default function CapCutManagementPage() {
                     onChange={(e) => setSaveToStorage(e.target.checked)}
                     className="h-4 w-4 rounded accent-orange-600 cursor-pointer"
                   />
-                  <Database className="h-4 w-4 text-orange-600" />
-                  <span>TỰ ĐỘNG LƯU VÀO KHO TÀI KHOẢN (STORED ACCOUNTS)</span>
+                  <span>TỰ ĐỘNG LƯU TÀI KHOẢN VÀO KHO LƯU TÀI KHOẢN TỰ ĐỘNG</span>
                 </label>
                 <p className="text-[11px] text-zinc-500 pl-6">
-                  Khi bật option này, các tài khoản tạo thành công sẽ tự động lưu thẳng vào CSDL để bán trên Bot Telegram
+                  Tài khoản tạo thành công sẽ tự động được thêm vào kho lưu trữ (tự động xuất cho đơn hàng CapCut nếu cần).
                 </p>
               </div>
 
               {saveToStorage && (
-                <div className="min-w-[220px]">
-                  <label className="font-extrabold uppercase text-zinc-700 text-[10px] block mb-1">CHỌN LOẠI TÀI KHOẢN</label>
+                <div className="min-w-[200px] space-y-1">
+                  <label className="font-extrabold uppercase text-zinc-700 text-[10px]">CHỌN LOẠI TÀI KHOẢN KHO *</label>
                   <select
                     value={selectedAccountTypeId}
                     onChange={(e) => setSelectedAccountTypeId(Number(e.target.value))}
-                    className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-bold text-zinc-900 text-xs outline-none"
+                    className="w-full rounded-xl border border-zinc-200 bg-white p-2 font-bold text-zinc-900 text-xs outline-none focus:border-orange-500"
                   >
-                    <option value="">-- Chọn loại tài khoản --</option>
                     {accountTypes.map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name} (ID: {t.id})
+                        {t.name}
                       </option>
                     ))}
                   </select>
@@ -725,54 +981,48 @@ export default function CapCutManagementPage() {
               )}
             </div>
 
-            <div className="pt-2 flex justify-end">
+            {/* Submit Button */}
+            <div className="pt-2">
               <button
-                type="button"
                 onClick={handleStartGenerate}
                 disabled={generating}
-                className="w-full sm:w-auto rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs uppercase px-8 py-3.5 shadow-lg transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-sm uppercase px-8 py-3.5 shadow-lg shadow-orange-500/20 transition active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
-                <span>{generating ? 'ĐANG TẠO TÀI KHOẢN CAPCUT...' : '⚡ BẮT ĐẦU TẠO TÀI KHOẢN CAPCUT'}</span>
+                <span>{generating ? 'ĐANG KHỞI TẠO TÀI KHOẢN...' : `⚡ BẮT ĐẦU TẠO ${count} TK CAPCUT`}</span>
               </button>
             </div>
           </div>
 
           {/* Progress Message */}
           {progressMsg && (
-            <div className="p-4 rounded-xl border border-orange-200 bg-orange-50 text-orange-900 font-extrabold text-xs flex items-center justify-between shadow-2xs">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-600 animate-spin" />
-                <span>{progressMsg}</span>
-              </div>
+            <div className="p-4 rounded-xl bg-zinc-900 text-white font-mono text-xs flex items-center justify-between">
+              <span>{progressMsg}</span>
+              {generating && <RefreshCw className="h-4 w-4 animate-spin text-orange-400" />}
             </div>
           )}
 
-          {/* Results List */}
+          {/* Results Table */}
           {results.length > 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 space-y-4 shadow-2xs">
-              <div className="border-b border-zinc-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-black text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-emerald-600" />
-                    <span>DANH SÁCH TÀI KHOẢN TẠO THÀNH CÔNG ({results.filter(r => r.status === 'success').length})</span>
-                  </h2>
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-3">
+                <h2 className="font-black text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
+                  <Database className="h-4 w-4 text-orange-600" />
+                  <span>KẾT QUẢ KHO TÀI KHOẢN CAPCUT TẠO MỚI</span>
+                </h2>
 
                 <div className="flex items-center gap-2">
                   <button
-                    type="button"
                     onClick={handleCopyAll}
-                    className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-[11px] uppercase transition flex items-center gap-1.5 cursor-pointer"
+                    className="rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 font-extrabold text-xs px-4 py-2 flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    <span>SAO CHÉP TẤT CẢ</span>
+                    <span>SAO CHÉP TẤT CẢ (TX|MK|UID)</span>
                   </button>
 
                   <button
-                    type="button"
                     onClick={handleDownloadTxt}
-                    className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-[11px] uppercase transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    className="rounded-xl bg-zinc-900 hover:bg-black text-white font-extrabold text-xs px-4 py-2 flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Download className="h-3.5 w-3.5" />
                     <span>TẢI FILE .TXT</span>
@@ -787,32 +1037,31 @@ export default function CapCutManagementPage() {
                       <th className="p-3">#</th>
                       <th className="p-3">EMAIL CAPCUT</th>
                       <th className="p-3">MẬT KHẨU</th>
-                      <th className="p-3">CAPCUT UID</th>
-                      <th className="p-3">MÃ OTP</th>
+                      <th className="p-3">CAPCUT USER ID (UID)</th>
                       <th className="p-3 text-center">TRẠNG THÁI</th>
-                      <th className="p-3 text-center">LƯU CSDL</th>
+                      <th className="p-3 text-center">KHO LƯU TRỮ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {results.map((r, i) => (
-                      <tr key={i} className="hover:bg-zinc-50/50 font-medium text-xs">
-                        <td className="p-3 text-zinc-400 font-bold">{i + 1}</td>
-                        <td className="p-3 font-bold text-zinc-900 font-mono">{r.email}</td>
-                        <td className="p-3 font-mono text-zinc-700">{r.password}</td>
-                        <td className="p-3 font-mono text-emerald-700 font-bold">{r.userId || 'Đang lấy...'}</td>
-                        <td className="p-3 font-mono text-orange-600 font-bold">{r.code || 'N/A'}</td>
+                  <tbody className="divide-y divide-zinc-100 font-mono">
+                    {results.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-50/50">
+                        <td className="p-3 font-bold text-zinc-400">{r.index || idx + 1}</td>
+                        <td className="p-3 font-extrabold text-zinc-900">{r.email}</td>
+                        <td className="p-3 font-bold text-orange-600">{r.password}</td>
+                        <td className="p-3 text-zinc-500">{r.userId || 'N/A'}</td>
                         <td className="p-3 text-center">
-                          {r.status === 'success' ? (
-                            <span className="bg-emerald-100 text-emerald-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase">Thành Công</span>
-                          ) : (
-                            <span className="bg-red-100 text-red-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase">Thất Bại</span>
+                          {r.status === 'success' && (
+                            <span className="bg-emerald-100 text-emerald-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase">Thành công</span>
+                          )}
+                          {r.status === 'failed' && (
+                            <span className="bg-red-100 text-red-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase">Thất bại</span>
                           )}
                         </td>
                         <td className="p-3 text-center">
                           {r.savedToDb ? (
-                            <span className="bg-blue-100 text-blue-800 font-extrabold text-[10px] px-2 py-0.5 rounded-full">Đã Lưu</span>
+                            <span className="text-emerald-600 font-bold">✓ Đã lưu kho</span>
                           ) : (
-                            <span className="text-zinc-400 text-[10px]">-</span>
+                            <span className="text-zinc-400">Tạo chay</span>
                           )}
                         </td>
                       </tr>
@@ -824,6 +1073,279 @@ export default function CapCutManagementPage() {
           )}
         </div>
       )}
+
+      {/* FULL CRUD MODAL FOR SELECTED WORKSPACE */}
+      {selectedWorkspaceId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
+          <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl space-y-6 border border-zinc-200 animate-in fade-in zoom-in duration-150">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600 font-bold">
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-zinc-900 flex items-center gap-2">
+                    {workspaceDetail?.workspace_name || 'Chi Tiết Workspace CapCut'}
+                    <span className="text-xs font-mono text-zinc-400 font-normal">({selectedWorkspaceId})</span>
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                    Admin: <span className="font-bold text-zinc-800">{workspaceDetail?.admin_email || 'N/A'}</span> • Hạn VIP: <span className="font-bold text-orange-600">{formatDaysRemaining(workspaceDetail?.team_vip_end || 0)}</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedWorkspaceId(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 hover:bg-zinc-200 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {loadingDetail ? (
+              <div className="py-20 text-center space-y-3">
+                <RefreshCw className="animate-spin h-8 w-8 text-orange-600 mx-auto" />
+                <p className="font-extrabold text-sm text-zinc-700">Đang đồng bộ dữ liệu trực tiếp từ CapCut API...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+
+                {/* Invite Link Card */}
+                <div className="rounded-2xl bg-orange-50/60 border border-orange-200/80 p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-orange-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Link2 size={14} className="text-orange-600" /> Link Mời Tham Gia Workspace Mới Nhất
+                    </span>
+                    <button
+                      onClick={handleRefreshInviteLink}
+                      disabled={processingAction}
+                      className="text-xs font-bold text-orange-700 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw size={12} className={processingAction ? 'animate-spin' : ''} />
+                      Tạo & Làm mới Link mới
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteLink || 'Không lấy được link mời'}
+                      className="w-full rounded-xl border border-orange-200 bg-white p-2.5 font-mono text-xs text-zinc-900 outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (inviteLink) {
+                          navigator.clipboard.writeText(inviteLink);
+                          alert('Đã sao chép link mời CapCut!');
+                        }
+                      }}
+                      disabled={!inviteLink}
+                      className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs px-4 py-2.5 shrink-0 transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Copy size={13} /> Sao Chép
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub Navigation Tabs */}
+                <div className="flex border-b border-zinc-200 gap-2">
+                  <button
+                    onClick={() => setModalTab('members')}
+                    className={`px-4 py-2.5 font-extrabold text-xs border-b-2 transition ${
+                      modalTab === 'members' ? 'border-orange-600 text-orange-600' : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    👥 DANH SÁCH THÀNH VIÊN ({workspaceMembers.length} / {workspaceDetail?.member_limit || 7})
+                  </button>
+
+                  <button
+                    onClick={() => setModalTab('add_member')}
+                    className={`px-4 py-2.5 font-extrabold text-xs border-b-2 transition ${
+                      modalTab === 'add_member' ? 'border-orange-600 text-orange-600' : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    ➕ MỜI THÀNH VIÊN QUA EMAIL
+                  </button>
+
+                  <button
+                    onClick={() => setModalTab('rename')}
+                    className={`px-4 py-2.5 font-extrabold text-xs border-b-2 transition ${
+                      modalTab === 'rename' ? 'border-orange-600 text-orange-600' : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                    }`}
+                  >
+                    ✏️ ĐỔI TÊN WORKSPACE
+                  </button>
+                </div>
+
+                {/* TAB 1: MEMBERS LIST */}
+                {modalTab === 'members' && (
+                  <div className="space-y-4">
+                    {workspaceMembers.length === 0 ? (
+                      <div className="py-10 text-center text-zinc-400 font-semibold">Chưa có thành viên nào trong Workspace này.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-200 bg-zinc-50 text-[10px] uppercase font-black text-zinc-600">
+                              <th className="p-3">THÀNH VIÊN</th>
+                              <th className="p-3">EMAIL / UID</th>
+                              <th className="p-3">VAI TRÒ</th>
+                              <th className="p-3 text-center">THAO TÁC CRUD</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-100">
+                            {workspaceMembers.map((m: any, idx: number) => {
+                              const mName = m.nickname || m.name || m.user_id_str || `User ${idx + 1}`;
+                              const mEmail = m.email || m.user_id_str || m.user_id || 'N/A';
+                              const mRoleId = m.role_id || m.user_id || m.user_id_str;
+                              const currentRole = Number(m.role) || 2;
+
+                              return (
+                                <tr key={idx} className="hover:bg-zinc-50/50 font-medium">
+                                  <td className="p-3 flex items-center gap-2.5">
+                                    {m.avatar_url ? (
+                                      <img src={m.avatar_url} alt="Avatar" className="h-8 w-8 rounded-full border" />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-full bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-xs">
+                                        {mName.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="font-extrabold text-zinc-900">{mName}</span>
+                                  </td>
+
+                                  <td className="p-3 font-mono text-zinc-600">{mEmail}</td>
+
+                                  <td className="p-3">
+                                    <select
+                                      value={currentRole}
+                                      onChange={(e) => handleChangeRole(mRoleId, Number(e.target.value))}
+                                      disabled={processingAction}
+                                      className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-bold text-xs outline-none"
+                                    >
+                                      <option value={1}>Chủ sở hữu / Admin (Role 1)</option>
+                                      <option value={2}>Thành viên (Member - Role 2)</option>
+                                      <option value={3}>Biên tập viên (Editor - Role 3)</option>
+                                    </select>
+                                  </td>
+
+                                  <td className="p-3 text-center">
+                                    <button
+                                      onClick={() => handleRemoveMember(mRoleId, mName)}
+                                      disabled={processingAction}
+                                      className="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-[11px] px-3 py-1.5 rounded-xl transition cursor-pointer"
+                                    >
+                                      <UserMinus size={13} />
+                                      <span>Xóa / Kick</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 2: ADD MEMBER */}
+                {modalTab === 'add_member' && (
+                  <form onSubmit={handleAddMemberByEmail} className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-5 space-y-4">
+                    <h4 className="font-bold text-xs uppercase text-zinc-800">Mời thành viên mới vào Workspace này qua Email CapCut</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                      <div className="sm:col-span-2 space-y-1">
+                        <label className="font-bold text-[11px] text-zinc-700 uppercase">Email CapCut Khách Hàng *</label>
+                        <input
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="khachhang_capcut@gmail.com"
+                          className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 text-xs text-zinc-900 outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-[11px] text-zinc-700 uppercase">Chọn Vai Trò *</label>
+                        <select
+                          value={inviteRole}
+                          onChange={(e) => setInviteRole(Number(e.target.value))}
+                          className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 text-xs text-zinc-900 outline-none"
+                        >
+                          <option value={2}>Thành viên (Member)</option>
+                          <option value={1}>Administrator</option>
+                          <option value={3}>Editor</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={processingAction}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                    >
+                      <UserPlus size={14} className="mr-1" />
+                      {processingAction ? 'Đang gửi...' : 'Gửi Lời Mời Trực Tiếp'}
+                    </Button>
+                  </form>
+                )}
+
+                {/* TAB 3: RENAME WORKSPACE */}
+                {modalTab === 'rename' && (
+                  <form onSubmit={handleUpdateWsName} className="rounded-2xl border border-zinc-200 bg-zinc-50/50 p-5 space-y-4">
+                    <h4 className="font-bold text-xs uppercase text-zinc-800">Đổi tên Workspace CapCut Pro</h4>
+                    <div className="space-y-1">
+                      <label className="font-bold text-[11px] text-zinc-700 uppercase">Tên Workspace Mới *</label>
+                      <input
+                        type="text"
+                        value={editWsName}
+                        onChange={(e) => setEditWsName(e.target.value)}
+                        placeholder="VD: DUCVIET PRO SPACE"
+                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 text-xs text-zinc-900 outline-none"
+                        required
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={processingAction}
+                      className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs"
+                    >
+                      <Edit2 size={14} className="mr-1" />
+                      {processingAction ? 'Đang cập nhật...' : 'Cập Nhật Tên Workspace'}
+                    </Button>
+                  </form>
+                )}
+
+                {/* Footer System Actions */}
+                <div className="pt-4 border-t border-zinc-100 flex items-center justify-between">
+                  <button
+                    onClick={() => openWorkspaceModal(selectedWorkspaceId!)}
+                    className="text-xs font-bold text-zinc-600 hover:text-zinc-900 flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw size={13} /> Tải lại dữ liệu CapCut API
+                  </button>
+
+                  <button
+                    onClick={handleDeleteWorkspace}
+                    disabled={processingAction}
+                    className="text-xs font-bold text-red-600 hover:text-red-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 size={13} /> Xóa Workspace khỏi CSDL
+                  </button>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

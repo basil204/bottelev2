@@ -385,6 +385,38 @@ export const initDb = async (config) => {
       console.log('✅ Bảng translations sẵn sàng');
     } catch (e) {}
 
+    // Ensure netflix_tasks table and default settings exist
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS netflix_tasks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          telegram_id VARCHAR(64) NULL,
+          email VARCHAR(255) NOT NULL,
+          price DECIMAL(15, 2) DEFAULT 0,
+          proxy_used VARCHAR(255) NULL,
+          status ENUM('pending', 'running', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+          step_status VARCHAR(255) NULL,
+          error_message TEXT NULL,
+          screenshot_path VARCHAR(255) NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          started_at TIMESTAMP NULL,
+          completed_at TIMESTAMP NULL,
+          INDEX idx_netflix_status (status),
+          INDEX idx_netflix_tg (telegram_id),
+          INDEX idx_netflix_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_enabled', 'true')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_price', '25000')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_headless', 'true')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_concurrency', '1')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_proxies', '')");
+      console.log('✅ Bảng netflix_tasks sẵn sàng');
+    } catch (e) {
+      console.error('Migration error for netflix_tasks:', e.message);
+    }
+
     // ChatGPT Join FAM was removed; legacy migration is disabled.
     if (false) {
     // ensure ChatGPT FAM table exists

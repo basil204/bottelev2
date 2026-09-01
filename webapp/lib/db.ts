@@ -179,6 +179,36 @@ async function initAccountStorageTables() {
       await pool.query("ALTER TABLE capcut_user_warranties ADD COLUMN admin_email VARCHAR(255) NULL AFTER workspace_id");
     } catch (e: any) {}
 
+    // Auto Netflix 30 Days Tasks & Queue table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS netflix_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        telegram_id VARCHAR(64) NULL,
+        email VARCHAR(255) NOT NULL,
+        price DECIMAL(15, 2) DEFAULT 0,
+        proxy_used VARCHAR(255) NULL,
+        status ENUM('pending', 'running', 'completed', 'failed', 'cancelled') DEFAULT 'pending',
+        step_status VARCHAR(255) NULL,
+        error_message TEXT NULL,
+        screenshot_path VARCHAR(255) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP NULL,
+        completed_at TIMESTAMP NULL,
+        INDEX idx_netflix_status (status),
+        INDEX idx_netflix_tg (telegram_id),
+        INDEX idx_netflix_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // Seed default settings for Netflix 30 Days
+    await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_enabled', 'true')");
+    await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_price', '25000')");
+    await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_headless', 'true')");
+    await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_concurrency', '1')");
+    await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('netflix_proxies', '')");
+
+
     // Create broadcast_templates table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS broadcast_templates (

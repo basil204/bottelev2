@@ -8,7 +8,7 @@ import {
   BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
   Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
   Bell, Target, Settings, Code2, Layers, Globe, Languages, Link as LinkIcon,
-  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video
+  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -56,6 +56,8 @@ export function Sidebar() {
       label: 'CẤU HÌNH & TÙY BIẾN',
       items: [
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
+        { name: 'QUẢN LÝ /START', href: '/start-menu', icon: MessageSquare },
+        { name: 'AUTO NETFLIX 30D', href: '/netflix', icon: Film },
         { name: 'TẠO TK CAPCUT', href: '/capcut', icon: Video },
         { name: 'NGÔN NGỮ & LỜI NHẮN', href: '/settings/translations', icon: Languages },
         { name: 'API KEY USER', href: '/user-api-keys', icon: Key },
@@ -91,7 +93,7 @@ export function Sidebar() {
       {/* Sidebar Navigation */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-40 w-[17.5rem] border-r border-zinc-200/80 bg-white shadow-sm transition-transform duration-300 ease-out md:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-[17.5rem] border-r border-zinc-200/80 bg-white shadow-2xl transition-transform duration-300 ease-out md:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -176,7 +178,7 @@ export function Sidebar() {
       {/* Overlay Backdrop for Mobile */}
       {isOpen && (
         <button
-          className="fixed inset-0 z-30 bg-zinc-950/40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-zinc-950/40 backdrop-blur-xs md:hidden"
           onClick={() => setIsOpen(false)}
           aria-label="Đóng điều hướng"
         />

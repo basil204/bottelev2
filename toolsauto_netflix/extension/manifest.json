@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Netflix Device Cookie Manager",
+  "version": "2.0.0",
+  "author": "Telegram @storm9117",
+  "description": "Locally stores and reapplies the complete Netflix device-cookie set.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://www.netflix.com/*",
+    "https://netflix.com/*",
+    "https://*.netflix.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Netflix Device Cookie Manager",
+    "default_popup": "popup.html"
+  }
+}

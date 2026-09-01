@@ -42,6 +42,98 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
       t('msg_account_banned', lang)
     );
   }
+
+  // Tải cấu hình /start từ bảng settings
+  let config = null;
+  let shopName = 'DUCVIETSTORE';
+  try {
+    const rows = await query(
+      "SELECT `key`, `value` FROM settings WHERE `key` IN ('start_menu_config', 'shop_name')"
+    );
+    rows.forEach((r) => {
+      if (r.key === 'start_menu_config' && r.value) {
+        try {
+          config = JSON.parse(r.value);
+        } catch {}
+      } else if (r.key === 'shop_name' && r.value) {
+        shopName = r.value;
+      }
+    });
+  } catch (e) {
+    console.error('[sendMenu] Error loading settings:', e.message);
+  }
+
+  if (!config) {
+    config = {
+      enabled: true,
+      welcome_text: `👋 **Chào mừng {name} đến với {shop_name}!**\n\n📌 **ID Telegram:** \`{id}\`\n💰 **Số dư tài khoản:** {balance}\n🎁 **Điểm thưởng Credit:** {credit}\n\n👇 *Vui lòng chọn dịch vụ bên dưới hoặc sử dụng bàn phím:*`,
+      image_url: '',
+      buttons: [
+        { id: 'zalo_group', text: '💬 Nhóm Zalo Hỗ Trợ', type: 'url', url: 'https://zalo.me', row: 1, is_active: true },
+        { id: 'tele_channel', text: '📢 Kênh Telegram Update', type: 'url', url: 'https://t.me', row: 1, is_active: true },
+        { id: 'website_link', text: '🌐 Website Shop', type: 'url', url: 'https://example.com', row: 2, is_active: true }
+      ]
+    };
+  }
+
+  if (config && config.enabled !== false) {
+    // Thay thế biến trong lời nhắn
+    let messageText = config.welcome_text || t('menu_title', lang);
+    const userName = user?.username ? `@${user.username}` : (user?.telegram_id || 'bạn');
+    messageText = messageText
+      .split('{name}').join(userName)
+      .split('{username}').join(userName)
+      .split('{id}').join(String(user?.telegram_id || chatId))
+      .split('{balance}').join(formatCurrency(user?.balance || 0))
+      .split('{credit}').join(String(user?.credit || 0))
+      .split('{shop_name}').join(shopName);
+
+    // Xây dựng danh sách nút inline theo hàng
+    const activeButtons = Array.isArray(config.buttons) ? config.buttons.filter((b) => b.is_active) : [];
+    const rowsMap = {};
+    activeButtons.forEach((btn) => {
+      const rowNum = Number(btn.row) || 1;
+      if (!rowsMap[rowNum]) rowsMap[rowNum] = [];
+      if (btn.type === 'url' && btn.url) {
+        rowsMap[rowNum].push({ text: btn.text, url: btn.url });
+      } else if (btn.type === 'callback' && (btn.callback_data || btn.url)) {
+        rowsMap[rowNum].push({ text: btn.text, callback_data: btn.callback_data || btn.url });
+      }
+    });
+
+    const inline_keyboard = Object.keys(rowsMap)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((r) => rowsMap[r]);
+
+    const options = {
+      parse_mode: 'Markdown'
+    };
+    if (inline_keyboard.length > 0) {
+      options.reply_markup = { inline_keyboard };
+    }
+
+    if (config.image_url && config.image_url.trim()) {
+      try {
+        await bot.sendPhoto(chatId, config.image_url.trim(), {
+          caption: messageText,
+          ...options
+        });
+      } catch (imgError) {
+        console.warn('[sendMenu] Failed to send photo, fallback to text:', imgError.message);
+        await sendTrackedMenu(bot, chatId, messageText, options);
+      }
+    } else {
+      await sendTrackedMenu(bot, chatId, messageText, options);
+    }
+
+    // Gửi kèm Bàn phím chính dưới thanh chat
+    return bot.sendMessage(chatId, '👇 **BÀN PHÍM MENU CHÍNH**', {
+      parse_mode: 'Markdown',
+      reply_markup: buildMainKeyboard(t, lang)
+    });
+  }
+
+  // Mặc định nếu không có cấu hình tùy chỉnh
   await sendTrackedMenu(bot, chatId, t('menu_title', lang), {
     reply_markup: buildMainKeyboard(t, lang)
   });
@@ -56,11 +148,12 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
       inline_keyboard: [
         [{ text: t('btn_buy_accounts', lang), callback_data: createCallbackData({ action: 'list_categories' }) }],
         [{ text: t('btn_buy_gmail_edu', lang), callback_data: createCallbackData({ action: 'gmail_edu_info' }) }],
+        [{ text: '🎬 Nhận Netflix 30 Ngày', callback_data: createCallbackData({ action: 'netflix_info' }) }],
         [{ text: t('btn_order_history', lang), callback_data: createCallbackData({ action: 'order_history' }) }]
       ],
       keyboard: [
         [{ text: t('btn_buy_accounts', lang) }],
-        [{ text: t('btn_buy_gmail_edu', lang) }],
+        [{ text: t('btn_buy_gmail_edu', lang) }, { text: '🎬 Netflix 30 Ngày' }],
         [{ text: t('btn_order_history', lang) }],
         [{ text: t('btn_main_menu', lang) }]
       ],
@@ -71,12 +164,16 @@ export const sendPurchaseMenu = async (bot, chatId, user) => {
 
 export const sendUtilityMenu = async (bot, chatId, user = null) => {
   const { t } = await import('../helpers/langHelper.js');
+  const { createCallbackData } = await import('../../utils/index.js');
   const lang = user?.language || 'vi';
   return sendTrackedMenu(bot, chatId, t('utility_menu_title', lang), {
     reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎬 Nhận Netflix 30 Ngày (Auto)', callback_data: createCallbackData({ action: 'netflix_info' }) }]
+      ],
       keyboard: [
         [{ text: t('btn_check_live', lang) }, { text: t('btn_download_all', lang) }],
-        [{ text: t('btn_locket', lang) }],
+        [{ text: t('btn_locket', lang) }, { text: '🎬 Netflix 30 Ngày' }],
         [{ text: t('btn_main_menu', lang) }]
       ],
       resize_keyboard: true

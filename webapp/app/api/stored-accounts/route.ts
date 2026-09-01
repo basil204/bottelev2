@@ -23,6 +23,7 @@ export async function GET(request: Request) {
         const paymentStatus = searchParams.get('payment_status');
         const saleStatus = searchParams.get('sale_status');
         const botStatus = searchParams.get('bot_status');
+        const search = searchParams.get('search');
 
         let query = `
             SELECT sa.*, at.name as type_name, u.username as buyer_username 
@@ -51,6 +52,12 @@ export async function GET(request: Request) {
         if (botStatus) {
             query += ' AND sa.bot_status = ?';
             params.push(botStatus);
+        }
+
+        if (search) {
+            query += ' AND (sa.data LIKE ? OR sa.note LIKE ? OR sa.code LIKE ? OR u.username LIKE ?)';
+            const searchPattern = `%${search.trim()}%`;
+            params.push(searchPattern, searchPattern, searchPattern, searchPattern);
         }
 
         query += ' ORDER BY sa.created_at DESC';
@@ -202,6 +209,18 @@ export async function PUT(request: Request) {
             updates.push('code = ?');
             params.push(code);
             changedFields.code = code;
+        }
+
+        if (body.data !== undefined) {
+            updates.push('data = ?');
+            params.push(body.data);
+            changedFields.data = body.data;
+        }
+
+        if (body.account_type_id !== undefined) {
+            updates.push('account_type_id = ?');
+            params.push(body.account_type_id);
+            changedFields.account_type_id = body.account_type_id;
         }
 
         if (updates.length === 0) {

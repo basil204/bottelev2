@@ -859,7 +859,7 @@ app.post('/api/canva/session', async (req, res) => {
   }
 });
 
-// GET /api/canva/session - Kiểm tra trạng thái session Canva trong CSDL
+// GET /api/canva/session - Lấy session và cookies Canva từ CSDL
 app.get('/api/canva/session', async (req, res) => {
   try {
     const session = await getCanvaSession();
@@ -867,7 +867,8 @@ app.get('/api/canva/session', async (req, res) => {
       return res.json({
         success: true,
         hasSession: false,
-        message: 'Chưa có session Canva nào được lưu trong CSDL.'
+        message: 'Chưa có session Canva nào được lưu trong CSDL.',
+        cookies: []
       });
     }
 
@@ -876,11 +877,26 @@ app.get('/api/canva/session', async (req, res) => {
       hasSession: true,
       savedAt: session.savedAt,
       cookieCount: Array.isArray(session.cookies) ? session.cookies.length : 0,
-      hasLocalStorage: !!session.localStorage
+      hasLocalStorage: !!session.localStorage,
+      cookies: session.cookies || [],
+      localStorage: session.localStorage || {}
     });
   } catch (err) {
     console.error('[CANVA_GET_SESSION_API_ERR]', err);
     res.status(500).json({ success: false, error: err.message || 'Lỗi khi kiểm tra session Canva.' });
+  }
+});
+
+// GET /api/canva/cookies - Lấy trực tiếp mảng JSON Cookies từ CSDL
+app.get('/api/canva/cookies', async (req, res) => {
+  try {
+    const session = await getCanvaSession();
+    if (!session || !session.cookies) {
+      return res.status(404).json({ success: false, error: 'Chưa có cookie Canva trong CSDL' });
+    }
+    return res.json(session.cookies);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -950,6 +966,23 @@ app.get('/api/canva/history', async (req, res) => {
     res.json({ success: true, total: history.length, data: history });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Aliases for Direct Canva API compatibility
+app.post('/api/invite', (req, res) => app._router.handle({ ...req, url: '/api/canva/invite' }, res));
+app.post('/api/invite-batch', (req, res) => app._router.handle({ ...req, url: '/api/canva/batch-invite' }, res));
+app.get('/api/team-info', (req, res) => app._router.handle({ ...req, url: '/api/canva/team-info' }, res));
+app.get('/api/invites', (req, res) => app._router.handle({ ...req, url: '/api/canva/history' }, res));
+app.post('/api/cookies', async (req, res) => {
+  const { cookieString, cookies } = req.body;
+  const input = cookies || cookieString;
+  if (!input) return res.status(400).json({ success: false, error: 'Thiếu cookieString hoặc cookies.' });
+  try {
+    const result = await saveCanvaSession(input, {});
+    return res.json({ success: true, message: 'Đã cập nhật Cookie thành công!', ...result });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

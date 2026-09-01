@@ -1,7 +1,106 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromCookie } from '@/lib/adminLog';
-import { HttpsProxyAgent } from 'https-proxy-agent';
-import axios from 'axios';
+import http from 'http';
+import https from 'https';
+
+function testProxyWithNode(proxyInput: string): Promise<{ ip: string; latency: number }> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    let raw = proxyInput.trim();
+    let host = '';
+    let port = 8080;
+    let auth = '';
+
+    // Remove protocol prefix if exists
+    if (raw.includes('://')) {
+      raw = raw.split('://')[1];
+    }
+
+    if (raw.includes('@')) {
+      const [authPart, hostPart] = raw.split('@');
+      auth = authPart;
+      const [h, p] = hostPart.split(':');
+      host = h;
+      port = parseInt(p, 10);
+    } else {
+      const parts = raw.split(':');
+      if (parts.length === 4) {
+        host = parts[0];
+        port = parseInt(parts[1], 10);
+        auth = `${parts[2]}:${parts[3]}`;
+      } else if (parts.length === 2) {
+        host = parts[0];
+        port = parseInt(parts[1], 10);
+      } else {
+        return reject(new Error('Định dạng proxy không hợp lệ (hỗ trợ ip:port hoặc ip:port:user:pass)'));
+      }
+    }
+
+    const headers: Record<string, string> = {
+      'Host': 'api.ipify.org:443',
+      'User-Agent': 'Mozilla/5.0'
+    };
+
+    if (auth) {
+      headers['Proxy-Authorization'] = 'Basic ' + Buffer.from(auth).toString('base64');
+    }
+
+    const req = http.request({
+      host,
+      port,
+      method: 'CONNECT',
+      path: 'api.ipify.org:443',
+      headers,
+      timeout: 10000
+    });
+
+    req.on('connect', (res, socket) => {
+      if (res.statusCode !== 200) {
+        socket.destroy();
+        return reject(new Error(`Proxy CONNECT trả về HTTP ${res.statusCode}`));
+      }
+
+      const httpsReq = https.request({
+        host: 'api.ipify.org',
+        path: '/?format=json',
+        method: 'GET',
+        headers: {
+          'Host': 'api.ipify.org',
+          'User-Agent': 'Mozilla/5.0'
+        },
+        createConnection: () => socket as any,
+        timeout: 10000
+      }, (resp) => {
+        let data = '';
+        resp.on('data', chunk => { data += chunk; });
+        resp.on('end', () => {
+          const latency = Date.now() - startTime;
+          try {
+            const parsed = JSON.parse(data);
+            resolve({ ip: parsed.ip || data.trim(), latency });
+          } catch {
+            resolve({ ip: data.trim() || 'OK', latency });
+          }
+        });
+      });
+
+      httpsReq.on('error', (e) => reject(e));
+      httpsReq.on('timeout', () => {
+        httpsReq.destroy();
+        reject(new Error('Timeout khi gửi HTTPS request qua proxy (10s)'));
+      });
+      httpsReq.end();
+    });
+
+    req.on('error', (err) => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Timeout khi kết nối Proxy (10s)'));
+    });
+
+    req.end();
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,36 +114,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Vui lòng cung cấp chuỗi proxy' }, { status: 400 });
     }
 
-    const raw = proxy.trim();
-    let proxyUrl = raw;
-
-    // Handle host:port:user:pass or user:pass@host:port or host:port
-    if (!raw.includes('://')) {
-      const parts = raw.split(':');
-      if (parts.length === 4) {
-        const [host, port, user, pass] = parts;
-        proxyUrl = `http://${user}:${pass}@${host}:${port}`;
-      } else if (parts.length === 2) {
-        const [host, port] = parts;
-        proxyUrl = `http://${host}:${port}`;
-      } else if (raw.includes('@')) {
-        proxyUrl = `http://${raw}`;
-      } else {
-        proxyUrl = `http://${raw}`;
-      }
-    }
-
-    const startTime = Date.now();
-    const httpsAgent = new HttpsProxyAgent(proxyUrl);
-
-    const response = await axios.get('https://api.ipify.org?format=json', {
-      httpsAgent,
-      httpAgent: httpsAgent,
-      timeout: 10000
-    });
-
-    const latency = Date.now() - startTime;
-    const ip = response.data?.ip || 'OK';
+    const { ip, latency } = await testProxyWithNode(proxy);
 
     return NextResponse.json({
       success: true,

@@ -29,11 +29,13 @@ export async function POST(request: Request) {
         }
 
         const sale = sales[0];
-        const [botSettings] = await pool.query<RowDataPacket[]>(
-            "SELECT `value` FROM settings WHERE `key` = 'bot_username' LIMIT 1"
+        const [settingsRows] = await pool.query<RowDataPacket[]>(
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_flash_sale_notify', 'btn_flash_sale_buy')"
         );
-        const botUsername = botSettings[0]?.value || '';
+        const sMap: Record<string, string> = {};
+        settingsRows.forEach(r => { sMap[r.key] = r.value; });
 
+        const botUsername = (sMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
         const fmtMoney = (amount: number) => Number(amount).toLocaleString('vi-VN') + 'đ';
 
         let finalMessage = customMessage;
@@ -50,12 +52,28 @@ export async function POST(request: Request) {
             const startStr = new Date(sale.start_time).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
             const endStr = new Date(sale.end_time).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 
-            finalMessage = `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n` +
-                `🛍️ <b>Sản phẩm:</b> <b>${sale.product_name || `Sản phẩm #${sale.product_id}`}</b>\n` +
-                `${priceLine}\n` +
-                `⏳ <b>Thời gian áp dụng:</b> ${startStr} - ${endStr}\n\n` +
+            const defaultTpl = `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n` +
+                `🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n` +
+                `{price_line}\n` +
+                `⏳ <b>Thời gian áp dụng:</b> {start_time} - {end_time}\n\n` +
                 `⚡ <i>Số lượng ưu đãi có hạn. Hãy nhanh tay bấm nút bên dưới để sở hữu ngay!</i>`;
+
+            const rawTpl = sMap.template_flash_sale_notify || defaultTpl;
+            finalMessage = rawTpl
+                .replace(/\{name\}/g, sale.product_name || `Sản phẩm #${sale.product_id}`)
+                .replace(/\{price_line\}/g, priceLine)
+                .replace(/\{start_time\}/g, startStr)
+                .replace(/\{end_time\}/g, endStr)
+                .replace(/\{time_range\}/g, `${startStr} - ${endStr}`)
+                .replace(/\{discount_percent\}/g, String(discountPct))
+                .replace(/\{original_price\}/g, fmtMoney(origPrice))
+                .replace(/\{sale_price\}/g, fmtMoney(salePrice))
+                .replace(/\{shop_name\}/g, sMap.shop_name || 'SHOP')
+                .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⚡</tg-emoji>');
         }
+
+        const defaultBtnText = (sMap.btn_flash_sale_buy || '⚡ Mua ngay giá Flash Sale')
+            .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '');
 
         const inlineKeyboard: any[][] = [];
         const buyBtnUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${sale.product_id}` : undefined;
@@ -63,8 +81,8 @@ export async function POST(request: Request) {
 
         inlineKeyboard.push([
             buyBtnUrl
-                ? { text: buttonText || '⚡ Mua ngay giá Flash Sale', url: buyBtnUrl }
-                : { text: buttonText || '⚡ Mua ngay giá Flash Sale', callback_data: buyBtnCallback }
+                ? { text: buttonText || defaultBtnText, url: buyBtnUrl }
+                : { text: buttonText || defaultBtnText, callback_data: buyBtnCallback }
         ]);
 
         const finalBanner = bannerImage || sale.banner_image || sale.product_image || null;

@@ -204,7 +204,7 @@ export async function POST(request: Request) {
                 const sMap: Record<string, string> = {};
                 botSettings.forEach(r => { sMap[r.key] = r.value; });
 
-                const botUsername = sMap.bot_username || '';
+                const botUsername = (sMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
                 const shopName = sMap.shop_name || 'SHOP';
                 const fmtPrice = Number(price).toLocaleString('vi-VN') + 'đ';
 

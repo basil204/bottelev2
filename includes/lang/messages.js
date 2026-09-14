@@ -105,7 +105,11 @@ export const messages = {
         select_category: 'Chọn danh mục sản phẩm:',
         deposit_success_user: '**Nạp tiền thành công!**\n\nSố tiền nạp: `+{amount}`{bonusLine}\nSố dư mới: `{finalBalance}`',
         deposit_bonus_line: '\nKhuyến mãi (+{percent}%): `+{bonus}`',
-        order_requires_info: '**Sản phẩm yêu cầu thông tin**\n\nSản phẩm: {productName}\nGiá: {price}\nSố dư mới: {finalBalance}\n\n{promptMessageText}'
+        order_requires_info: '**Sản phẩm yêu cầu thông tin**\n\nSản phẩm: {productName}\nGiá: {price}\nSố dư mới: {finalBalance}\n\n{promptMessageText}',
+        msg_out_of_stock: '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.',
+        template_restock_notify: '🔥 <b>VỪA CẬP NHẬT THÊM HÀNG / BỔ SUNG KHO!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n📦 <b>Vừa nhập thêm:</b> <b>+{quantity} tài khoản</b>\n📊 <b>Hiện có trong kho:</b> <b>{stock} tài khoản</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n⚡ <i>Kho đã được bổ sung đầy đủ, hãy bấm nút bên dưới để sở hữu ngay!</i>',
+        template_flash_sale_notify: '⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Thời gian áp dụng:</b> {start_time} - {end_time}\n\n⚡ <i>Số lượng ưu đãi có hạn. Hãy nhanh tay bấm nút bên dưới để sở hữu ngay!</i>',
+        btn_flash_sale_buy: '⚡ Mua ngay giá Flash Sale'
     },
     en: {
         // Language selection
@@ -208,7 +212,11 @@ export const messages = {
         select_category: 'Select product category:',
         deposit_success_user: '**Deposit successful!**\n\nAmount credited: `+{amount}`{bonusLine}\nNew balance: `{finalBalance}`',
         deposit_bonus_line: '\nPromotion (+{percent}%): `+{bonus}`',
-        order_requires_info: '**Product requires information**\n\nProduct: {productName}\nPrice: {price}\nNew balance: {finalBalance}\n\n{promptMessageText}'
+        order_requires_info: '**Product requires information**\n\nProduct: {productName}\nPrice: {price}\nNew balance: {finalBalance}\n\n{promptMessageText}',
+        msg_out_of_stock: '❌ This product is currently out of stock. Please choose another product.',
+        template_restock_notify: '🔥 <b>STOCK RESTOCKED & READY!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n📦 <b>Restocked:</b> <b>+{quantity} accounts</b>\n📊 <b>Total Stock:</b> <b>{stock} accounts</b>\n💰 <b>Price:</b> <b>{price}</b>\n\n⚡ <i>Stock replenished, click below to buy now!</i>',
+        template_flash_sale_notify: '⚡ <b>SPECIAL FLASH SALE EVENT!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Valid Time:</b> {start_time} - {end_time}\n\n⚡ <i>Limited quantity available. Click the button below to claim now!</i>',
+        btn_flash_sale_buy: '⚡ Buy Flash Sale Now'
     },
     zh: {
         // Language selection
@@ -311,6 +319,10 @@ export const messages = {
         select_category: '选择产品分类：',
         deposit_success_user: '**充值成功！**\n\n充值金额: `+{amount}`{bonusLine}\n新余额: `{finalBalance}`',
         deposit_bonus_line: '\n促销红利 (+{percent}%): `+{bonus}`',
-        order_requires_info: '**产品需要信息**\n\n产品: {productName}\n价格: {price}\n新余额: {finalBalance}\n\n{promptMessageText}'
+        order_requires_info: '**产品需要信息**\n\n产品: {productName}\n价格: {price}\n新余额: {finalBalance}\n\n{promptMessageText}',
+        msg_out_of_stock: '❌ 该产品目前已售罄，请选择其他产品。',
+        template_restock_notify: '🔥 <b>商品补货已入库！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n📦 <b>新入库:</b> <b>+{quantity} 个账号</b>\n📊 <b>当前总库存:</b> <b>{stock} 个</b>\n💰 <b>价格:</b> <b>{price}</b>\n\n⚡ <i>库存已补充充足，点击下方按钮立即选购！</i>',
+        template_flash_sale_notify: '⚡ <b>限时特惠秒杀活动！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n{price_line}\n⏳ <b>活动时间:</b> {start_time} - {end_time}\n\n⚡ <i>优惠名额有限，请尽快点击下方按钮立即抢购！</i>',
+        btn_flash_sale_buy: '⚡ 立即按秒杀价购买'
     }
 };

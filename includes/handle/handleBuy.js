@@ -439,12 +439,19 @@ export const showProductDetail = async (bot, chatId, productId, userId, messageI
   }
 
   if (productType === 'stock' && stock === 0) {
-    const outOfStockMsg = L(lang,
-      '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.',
-      '❌ This product is out of stock. Please choose another product.',
-      '❌ 该产品已售罄，请选择其他产品。'
-    );
-    await bot.sendMessage(chatId, outOfStockMsg);
+    let outOfStockMsg = await getBotTemplate('msg_out_of_stock', lang);
+    if (!outOfStockMsg) {
+      outOfStockMsg = L(lang,
+        '❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.',
+        '❌ This product is currently out of stock. Please choose another product.',
+        '❌ 该产品目前已售罄，请选择其他产品。'
+      );
+    }
+    const renderedMsg = renderBotTemplate(outOfStockMsg, {
+      name: product?.name || '',
+      stock: 0
+    });
+    await bot.sendMessage(chatId, renderedMsg);
   }
 };
 

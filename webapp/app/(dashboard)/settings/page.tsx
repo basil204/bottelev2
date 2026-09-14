@@ -35,6 +35,7 @@ interface SystemSettings {
     min_deposit: number;
     exchange_rate: number;
     telegram_bot_token: string;
+    bot_username?: string;
     shop_name: string;
     usdt_trc20_wallet: string;
     telegram_group_link?: string;
@@ -89,6 +90,7 @@ export default function SettingsPage() {
         min_deposit: 50000,
         exchange_rate: 26000,
         telegram_bot_token: '',
+        bot_username: '',
         shop_name: 'DUCVIETSTORE',
         usdt_trc20_wallet: '',
         telegram_group_link: '',
@@ -146,6 +148,29 @@ export default function SettingsPage() {
     const [newApiKey, setNewApiKey] = useState('');
     const [configuringBank, setConfiguringBank] = useState<string>('vcb');
     const [adminRole, setAdminRole] = useState<string>('admin');
+
+    // Multi Bot Token & Username State
+    const [botRows, setBotRows] = useState<{ token: string; username: string }[]>([
+        { token: '', username: '' }
+    ]);
+
+    const handleAddBotTokenRow = () => {
+        setBotRows((prev) => [...prev, { token: '', username: '' }]);
+    };
+
+    const handleBotTokenChange = (index: number, val: string) => {
+        setBotRows((prev) => prev.map((r, i) => (i === index ? { ...r, token: val } : r)));
+    };
+
+    const handleBotUsernameChange = (index: number, val: string) => {
+        let clean = val.trim();
+        if (clean && !clean.startsWith('@')) clean = '@' + clean;
+        setBotRows((prev) => prev.map((r, i) => (i === index ? { ...r, username: clean } : r)));
+    };
+
+    const handleRemoveBotTokenRow = (index: number) => {
+        setBotRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : [{ token: '', username: '' }]));
+    };
 
     // Google Drive Backup State
     const [driveFolderId, setDriveFolderId] = useState('');
@@ -321,6 +346,19 @@ export default function SettingsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setSettings(prev => ({ ...prev, ...data }));
+
+                // Populate multi-bot rows from loaded settings
+                const tokens = (data.telegram_bot_token || '').split(/[\r\n,;|]+/).map((t: string) => t.trim()).filter(Boolean);
+                const usernames = (data.bot_username || '').split(/[\r\n,;|]+/).map((u: string) => u.trim().replace(/^@/, '')).filter(Boolean);
+                const initialRows: { token: string; username: string }[] = [];
+                const maxCount = Math.max(tokens.length, usernames.length, 1);
+                for (let i = 0; i < maxCount; i++) {
+                    initialRows.push({
+                        token: tokens[i] || '',
+                        username: usernames[i] ? `@${usernames[i]}` : ''
+                    });
+                }
+                setBotRows(initialRows);
             }
         } catch (e) {
             console.error('Fetch settings error:', e);
@@ -340,14 +378,24 @@ export default function SettingsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
+            const validTokens = botRows.map(r => r.token.trim()).filter(Boolean);
+            const validUsernames = botRows.map(r => r.username.trim().replace(/^@/, '')).filter(Boolean);
+
+            const payload = {
+                ...settings,
+                telegram_bot_token: validTokens.join('\n'),
+                bot_username: validUsernames.map(u => `@${u}`).join(', ')
+            };
+
             const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
-                alert('Đã lưu cấu hình hệ thống thành công!');
+                setSettings(payload);
+                alert('Đã lưu cấu hình hệ thống thành công! Các Bot Telegram đang hoạt động sẽ tự động cập nhật ngay.');
             } else {
                 alert('Lỗi lưu cấu hình hệ thống!');
             }
@@ -548,23 +596,207 @@ export default function SettingsPage() {
                                 />
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TELEGRAM BOT TOKEN *</label>
-                                <div className="relative">
-                                    <input
-                                        type={showToken ? 'text' : 'password'}
-                                        value={settings.telegram_bot_token}
-                                        onChange={(e) => handleChange('telegram_bot_token', e.target.value)}
-                                        placeholder="123456789:ABCdefGHIjklMNO..."
-                                        className="w-full rounded-xl border border-zinc-200 bg-white pl-3 pr-10 py-3 font-mono text-zinc-900 outline-none focus:border-orange-500 transition text-xs"
-                                    />
+                            {/* Dynamic Telegram Bot Token(s) & Username Manager */}
+                            <div className="space-y-3 md:col-span-2 bg-zinc-50/80 p-4 rounded-2xl border border-zinc-200/80">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <label className="font-extrabold uppercase text-zinc-800 text-[11px] flex items-center gap-1.5">
+                                            <Bot className="h-4 w-4 text-orange-600" />
+                                            <span>DANH SÁCH TELEGRAM BOT TOKEN & USERNAME *</span>
+                                        </label>
+                                        <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                                            Hệ thống hỗ trợ chạy đồng thời nhiều Token Bot cùng 1 lúc trên cùng một CSDL. Nhập Token và Username (@Bot) tương ứng cho từng bot.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddBotTokenRow}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-extrabold text-xs shadow-sm transition cursor-pointer"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        <span>+ Thêm Bot Token</span>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {botRows.map((botRow, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="p-3 bg-white rounded-xl border border-zinc-200 shadow-xs space-y-2 focus-within:border-orange-500 transition"
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 font-black text-[11px] border border-orange-200 flex items-center gap-1.5">
+                                                    <Bot className="h-3.5 w-3.5" />
+                                                    <span>Bot #{idx + 1} {idx === 0 ? '(Chính / Primary)' : '(Phụ / Worker)'}</span>
+                                                </span>
+                                                {botRows.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveBotTokenRow(idx)}
+                                                        title={`Xóa Bot #${idx + 1}`}
+                                                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+                                                <div className="md:col-span-8 space-y-1">
+                                                    <label className="text-[10px] font-extrabold uppercase text-zinc-500">
+                                                        TELEGRAM BOT TOKEN (TỪ @BOTFATHER) *
+                                                    </label>
+                                                    <input
+                                                        type={showToken ? 'text' : 'password'}
+                                                        value={botRow.token}
+                                                        onChange={(e) => handleBotTokenChange(idx, e.target.value)}
+                                                        placeholder="Ví dụ: 123456789:ABCdefGHIjklMNO..."
+                                                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 font-mono text-zinc-900 outline-none text-xs focus:bg-white focus:border-orange-500 transition"
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-4 space-y-1">
+                                                    <label className="text-[10px] font-extrabold uppercase text-zinc-500">
+                                                        USERNAME BOT (@USERNAME)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={botRow.username}
+                                                        onChange={(e) => handleBotUsernameChange(idx, e.target.value)}
+                                                        placeholder="Ví dụ: @MyShopBot"
+                                                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 font-mono font-bold text-orange-700 outline-none text-xs focus:bg-white focus:border-orange-500 transition"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500 pt-1 border-t border-zinc-200/60">
+                                    <span className="flex items-center gap-1 font-medium">
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                                        <span>Đang thiết lập: <strong className="text-zinc-800 font-bold">{botRows.filter((r) => r.token.trim()).length} token bot hợp lệ</strong></span>
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => setShowToken(!showToken)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700"
+                                        className="inline-flex items-center gap-1 text-zinc-500 hover:text-zinc-800 font-semibold cursor-pointer"
                                     >
-                                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                        <span>{showToken ? 'Ẩn token' : 'Hiện token'}</span>
                                     </button>
+                                </div>
+                            </div>
+
+                            {/* Admin Telegram ID(s) Notifications Setup Card */}
+                            <div className="space-y-3 md:col-span-2 bg-gradient-to-r from-orange-50/60 via-amber-50/40 to-white p-4 rounded-2xl border border-orange-200/80">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                                    <div>
+                                        <label className="font-extrabold uppercase text-zinc-900 text-xs flex items-center gap-1.5">
+                                            <Bell className="h-4 w-4 text-orange-600" />
+                                            <span>TELEGRAM ID ADMIN NHẬN THÔNG BÁO TỰ ĐỘNG</span>
+                                        </label>
+                                        <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                                            Các Telegram ID dưới đây sẽ nhận được thông báo tức thời từ Bot khi có phát sinh các sự kiện quan trọng.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Feature Badges */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                                    <div className="p-2.5 rounded-xl bg-white border border-orange-100 shadow-2xs space-y-1">
+                                        <div className="font-extrabold text-zinc-800 flex items-center gap-1">
+                                            <CreditCard className="h-3.5 w-3.5 text-orange-600" />
+                                            <span>💰 Nạp Tiền & Duyệt Bill</span>
+                                        </div>
+                                        <p className="text-zinc-500 text-[10px] leading-tight">Thông báo nạp tự động (Bank/Binance/USDT) & hóa đơn khách gửi.</p>
+                                    </div>
+
+                                    <div className="p-2.5 rounded-xl bg-white border border-orange-100 shadow-2xs space-y-1">
+                                        <div className="font-extrabold text-zinc-800 flex items-center gap-1">
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                            <span>🛒 Mua Hàng Có Sẵn</span>
+                                        </div>
+                                        <p className="text-zinc-500 text-[10px] leading-tight">Thông báo khi khách mua tài khoản có sẵn trong kho thành công.</p>
+                                    </div>
+
+                                    <div className="p-2.5 rounded-xl bg-white border border-orange-100 shadow-2xs space-y-1">
+                                        <div className="font-extrabold text-zinc-800 flex items-center gap-1">
+                                            <Layers className="h-3.5 w-3.5 text-blue-600" />
+                                            <span>📦 Đơn Hàng Order Mới</span>
+                                        </div>
+                                        <p className="text-zinc-500 text-[10px] leading-tight">Thông báo khi khách đặt đơn hàng Order/nhập tay cần xử lý.</p>
+                                    </div>
+
+                                    <div className="p-2.5 rounded-xl bg-white border border-orange-100 shadow-2xs space-y-1">
+                                        <div className="font-extrabold text-zinc-800 flex items-center gap-1">
+                                            <ShieldCheck className="h-3.5 w-3.5 text-purple-600" />
+                                            <span>🛡️ Bảo Hành & CSKH</span>
+                                        </div>
+                                        <p className="text-zinc-500 text-[10px] leading-tight">Thông báo khi khách gửi yêu cầu bảo hành hoặc nhắn tin hỗ trợ.</p>
+                                    </div>
+                                </div>
+
+                                {/* Add Admin ID Input & Badges */}
+                                <div className="space-y-2 pt-1">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newAdminId}
+                                            onChange={(e) => setNewAdminId(e.target.value.replace(/\D/g, ''))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const num = Number(newAdminId);
+                                                    if (num && !settings.admin_ids.includes(num)) {
+                                                        setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, num] }));
+                                                        setNewAdminId('');
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Nhập Telegram ID Admin (VD: 8202830305 - Lấy ID từ @userinfobot)..."
+                                            className="flex-1 rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const num = Number(newAdminId);
+                                                if (num && !settings.admin_ids.includes(num)) {
+                                                    setSettings(prev => ({ ...prev, admin_ids: [...prev.admin_ids, num] }));
+                                                    setNewAdminId('');
+                                                }
+                                            }}
+                                            className="rounded-xl bg-orange-600 text-white font-extrabold text-xs uppercase px-4 py-2 hover:bg-orange-700 transition cursor-pointer"
+                                        >
+                                            + Thêm ID
+                                        </button>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                        <span className="text-[11px] font-bold text-zinc-500">ID Admin đang nhận thông báo:</span>
+                                        {settings.admin_ids.length === 0 ? (
+                                            <span className="text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                                ⚠️ Chưa cấu hình ID Admin nào (Hãy thêm ID Telegram của bạn vào đây để nhận thông báo)
+                                            </span>
+                                        ) : (
+                                            settings.admin_ids.map((id) => (
+                                                <span
+                                                    key={id}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 py-1 font-mono text-xs font-bold text-orange-700 shadow-2xs"
+                                                >
+                                                    <User className="h-3 w-3 text-orange-500" />
+                                                    <span>{id}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
+                                                        className="text-zinc-400 hover:text-red-600 font-bold ml-1 transition cursor-pointer"
+                                                        title={`Xóa ID ${id}`}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </span>
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

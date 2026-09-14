@@ -7,10 +7,32 @@ dotenv.config();
 const configPath = path.join(process.cwd(), 'config.json');
 const fileConfig = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath)) : {};
 
+export const parseBotTokens = (rawInput) => {
+    if (!rawInput) return [];
+    let tokens = [];
+    if (Array.isArray(rawInput)) {
+        tokens = rawInput;
+    } else if (typeof rawInput === 'string') {
+        try {
+            const parsed = JSON.parse(rawInput);
+            if (Array.isArray(parsed)) tokens = parsed;
+            else if (typeof parsed === 'string') tokens = [parsed];
+        } catch {
+            tokens = rawInput.split(/[\r\n,;|]+/);
+        }
+    }
+    return [...new Set(tokens.map(t => String(t).trim()).filter(t => t.length > 10 && t.includes(':')))];
+};
+
+const rawBotTokens = process.env.TELEGRAM_BOT_TOKENS || process.env.TELEGRAM_BOT_TOKEN || fileConfig.TELEGRAM_BOT_TOKENS || fileConfig.TELEGRAM_BOT_TOKEN;
+const parsedBotTokens = parseBotTokens(rawBotTokens);
+
 export const config = {
     // Telegram
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || fileConfig.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_BOT_TOKEN: parsedBotTokens[0] || (typeof rawBotTokens === 'string' ? rawBotTokens.trim() : ''),
+    TELEGRAM_BOT_TOKENS: parsedBotTokens,
     BOT_USERNAME: null, // Will be set in main.js
+    BOT_USERNAMES: [],
     MINI_APP_URL: process.env.MINI_APP_URL || fileConfig.MINI_APP_URL || '',
     CAPCUT_API_BASE: process.env.CAPCUT_API_BASE || fileConfig.CAPCUT_API_BASE || 'https://tienich.manhit.dev',
     CAPCUT_PROXY_URL: process.env.CAPCUT_PROXY_URL || fileConfig.CAPCUT_PROXY_URL || '',

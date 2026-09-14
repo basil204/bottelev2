@@ -7,7 +7,7 @@ import {
   ExternalLink, CheckCircle2, AlertCircle, Image as ImageIcon, Sparkles,
   Eye, HelpCircle, Layers, ToggleLeft, ToggleRight, ArrowRight, Smartphone,
   Zap, ListFilter, Keyboard, CreditCard, ShoppingBag, ShieldCheck, Key, FileText,
-  Copy, Globe, ArrowLeft, ArrowUpRight, Languages, Bell
+  Copy, Globe, ArrowLeft, ArrowUpRight, Languages, Bell, Power
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StartMenuConfig, StartMenuButton } from '@/app/api/start-menu/route';
@@ -45,15 +45,15 @@ export const WALLET_CALLBACK_PRESETS = [
 ];
 
 export const DEPOSIT_CALLBACK_PRESETS = [
-  { code: 'deposit_select_bank', label: '🏦 Ngân Hàng (Bank / VietQR)', defaultText: 'Ngân hàng (Bank)', defaultTextEn: 'Bank Transfer', defaultTextZh: '银行转账' },
-  { code: 'deposit_select_binance', label: '🟡 Binance Pay (Tự Động)', defaultText: 'Binance Pay (Tự động)', defaultTextEn: 'Binance Pay (Auto)', defaultTextZh: '币安支付 (自动)' },
-  { code: 'deposit_select_usdt', label: '💲 USDT TRC20 (Binance Check)', defaultText: 'USDT TRC20', defaultTextEn: 'USDT TRC20', defaultTextZh: 'USDT TRC20' },
-  { code: 'deposit_history', label: '🧾 Xem Lịch Sử Nạp Tiền', defaultText: 'Lịch sử nạp', defaultTextEn: 'Deposit History', defaultTextZh: '充值记录' },
-  { code: 'wallet_info', label: '👛 Quay Lại Ví & Số Dư', defaultText: 'Ví & Số Dư', defaultTextEn: 'Wallet Balance', defaultTextZh: '钱包余额' },
-  { code: 'check_payment', label: '🔍 Check Nạp Tiền Bank', defaultText: 'Check Bank', defaultTextEn: 'Check Bank', defaultTextZh: '检查银行' },
-  { code: 'check_binance_payment', label: '🟡 Check Binance Pay', defaultText: 'Check Binance', defaultTextEn: 'Check Binance', defaultTextZh: '检查币安' },
-  { code: 'check_recent_trc20', label: '💵 Check USDT TRC20', defaultText: 'Check USDT', defaultTextEn: 'Check USDT', defaultTextZh: '检查 USDT' },
-  { code: 'back_to_menu', label: '↩️ Menu Chính', defaultText: 'Menu Chính', defaultTextEn: 'Main Menu', defaultTextZh: '主菜单' }
+  { code: 'deposit_select_bank', label: '🏦 Ngân Hàng (Bank / VietQR)', defaultText: '🏦 Ngân hàng (Bank)', defaultTextEn: '🏦 Bank Transfer', defaultTextZh: '🏦 银行转账' },
+  { code: 'deposit_select_binance', label: '🟡 Binance Pay (Tự Động)', defaultText: '🟡 Binance Pay (Tự động)', defaultTextEn: '🟡 Binance Pay (Auto)', defaultTextZh: '🟡 币安支付 (自动)' },
+  { code: 'deposit_select_usdt', label: '💲 USDT TRC20 (Binance Check)', defaultText: '💲 USDT TRC20', defaultTextEn: '💲 USDT TRC20', defaultTextZh: '💲 USDT TRC20' },
+  { code: 'deposit_history', label: '🧾 Xem Lịch Sử Nạp Tiền', defaultText: '🧾 Lịch sử nạp', defaultTextEn: '🧾 Deposit History', defaultTextZh: '🧾 充值记录' },
+  { code: 'wallet_info', label: '👛 Quay Lại Ví & Số Dư', defaultText: '👛 Ví & Số Dư', defaultTextEn: '👛 Wallet Balance', defaultTextZh: '👛 钱包余额' },
+  { code: 'check_payment', label: '🔍 Check Nạp Tiền Bank', defaultText: '🔍 Check Bank', defaultTextEn: '🔍 Check Bank', defaultTextZh: '🔍 检查银行' },
+  { code: 'check_binance_payment', label: '🟡 Check Binance Pay', defaultText: '🟡 Check Binance', defaultTextEn: '🟡 Check Binance', defaultTextZh: '🟡 检查币安' },
+  { code: 'check_recent_trc20', label: '💵 Check USDT TRC20', defaultText: '💵 Check USDT', defaultTextEn: '💵 Check USDT', defaultTextZh: '💵 检查 USDT' },
+  { code: 'back_to_menu', label: '↩️ Menu Chính', defaultText: '↩️ Menu Chính', defaultTextEn: '↩️ Main Menu', defaultTextZh: '↩️ 主菜单' }
 ];
 
 export const KEYBOARD_ACTION_PRESETS = [
@@ -80,6 +80,62 @@ export const ANIMATED_EMOJIS = [
   { id: '5375135722514685501', label: '🔥 Hot / Flash Sale' },
   { id: '5375135722514685502', label: '⭐ Premium Star' },
 ];
+
+export const COMMON_EMOJIS = ['🏦', '💲', '🟡', '💳', '👛', '🛍️', '📦', '📁', '🔥', '⭐', '💎', '🧾', '💬', '🛡️', '🔄', '✅', '❌', '⚡', '🌐', '🏠', '🎁', '🔍'];
+
+function EmojiQuickBar({ onInsert, label }: { onInsert: (val: string) => void; label?: string }) {
+  const [showAnimated, setShowAnimated] = useState(false);
+
+  return (
+    <div className="space-y-1 pt-1">
+      <div className="flex items-center justify-between gap-1 text-[11px] text-zinc-500 font-bold">
+        <span>{label || 'Gắn nhanh icon / ID:'}</span>
+        <button
+          type="button"
+          onClick={() => setShowAnimated(!showAnimated)}
+          className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer font-extrabold"
+        >
+          <Sparkles className="w-3 h-3" />
+          {showAnimated ? 'Ẩn ID Emoji Động' : '✨ Chèn ID Emoji Động'}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1 items-center">
+        {COMMON_EMOJIS.map((em) => (
+          <button
+            key={em}
+            type="button"
+            onClick={() => onInsert(em + ' ')}
+            className="w-6 h-6 rounded-md bg-zinc-100 dark:bg-zinc-800 hover:bg-amber-100 dark:hover:bg-amber-950 text-xs flex items-center justify-center border border-zinc-200 dark:border-zinc-700 transition-transform active:scale-90 cursor-pointer"
+            title={`Chèn icon ${em}`}
+          >
+            {em}
+          </button>
+        ))}
+      </div>
+
+      {showAnimated && (
+        <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 space-y-1 mt-1 animate-in fade-in">
+          <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+            ID EMOJI ĐỘNG TELEGRAM:
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {ANIMATED_EMOJIS.map((em) => (
+              <button
+                key={em.id}
+                type="button"
+                onClick={() => onInsert(`{emoji:${em.id}} `)}
+                className="px-2 py-0.5 rounded-lg bg-white dark:bg-zinc-900 hover:bg-amber-500 hover:text-white dark:hover:bg-amber-600 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 cursor-pointer shadow-2xs"
+              >
+                {em.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function BotCustomizationPage() {
   const [activeTab, setActiveTab] = useState<'keyboard' | 'start_menu' | 'inline_buttons' | 'deposit_templates' | 'order_templates' | 'service_templates' | 'notify_templates'>('keyboard');
@@ -108,15 +164,34 @@ export default function BotCustomizationPage() {
     { id: 'btn_wal_products', text: 'Danh mục sản phẩm', text_vi: 'Danh mục sản phẩm', text_en: 'View Products', text_zh: '查看商品分类', type: 'callback', callback_data: 'list_categories', row: 2, is_active: true }
   ]);
   const [depositButtons, setDepositButtons] = useState<BotMenuInlineButton[]>([
-    { id: 'btn_dep_bank', text: 'Ngân hàng (Bank)', text_vi: 'Ngân hàng (Bank)', text_en: 'Bank Transfer', text_zh: '银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
-    { id: 'btn_dep_binance', text: 'Binance Pay (Tự động)', text_vi: 'Binance Pay (Tự động)', text_en: 'Binance Pay (Auto)', text_zh: '币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
-    { id: 'btn_dep_usdt', text: 'USDT TRC20', text_vi: 'USDT TRC20', text_en: 'USDT TRC20', text_zh: 'USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
+    { id: 'btn_dep_bank', text: '🏦 Ngân hàng (Bank)', text_vi: '🏦 Ngân hàng (Bank)', text_en: '🏦 Bank Transfer', text_zh: '🏦 银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
+    { id: 'btn_dep_binance', text: '🟡 Binance Pay (Tự động)', text_vi: '🟡 Binance Pay (Tự động)', text_en: '🟡 Binance Pay (Auto)', text_zh: '🟡 币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
+    { id: 'btn_dep_usdt', text: '💲 USDT TRC20', text_vi: '💲 USDT TRC20', text_en: '💲 USDT TRC20', text_zh: '💲 USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
   ]);
   const [templates, setTemplates] = useState<Record<string, { label: string; group: string; description: string; vars: string[]; value: string; value_vi?: string; value_en?: string; value_zh?: string }>>({});
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleRestartBot = async () => {
+    if (!confirm('Xác nhận nạp lại cấu hình và khởi động lại toàn bộ Bot Telegram?')) return;
+    setRestarting(true);
+    try {
+      const res = await fetch('/api/restart', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showNotification('success', data.message || 'Đã gửi lệnh cập nhật và khởi động lại Bot thành công!');
+      } else {
+        showNotification('error', 'Khởi động lại bot thất bại!');
+      }
+    } catch (e) {
+      showNotification('error', 'Lỗi kết nối máy chủ!');
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   // Modal / Form state for Keyboard Button Add/Edit
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
@@ -853,6 +928,13 @@ export default function BotCustomizationPage() {
       .replace(/\{quantity\}/g, '50')
       .replace(/\{stock\}/g, '120')
       .replace(/\{description\}/g, 'Tài khoản Premium dùng ổn định, bảo hành trọn thời gian.')
+      .replace(/\{price_line\}/g, '💰 <b>Giá gốc:</b> <s>150.000đ</s> ➡️ <b>Giá Flash Sale:</b> <b>120.000đ</b> (-20%)')
+      .replace(/\{start_time\}/g, '21:11 14-09')
+      .replace(/\{end_time\}/g, '21:11 15-09')
+      .replace(/\{time_range\}/g, '21:11 14-09 - 21:11 15-09')
+      .replace(/\{discount_percent\}/g, '20')
+      .replace(/\{original_price\}/g, '150.000đ')
+      .replace(/\{sale_price\}/g, '120.000đ')
       .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '✨');
   };
 
@@ -888,8 +970,18 @@ export default function BotCustomizationPage() {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="outline"
+              onClick={handleRestartBot}
+              disabled={restarting || loading || saving}
+              className="border-orange-500/40 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 font-extrabold rounded-xl text-xs h-10 px-4"
+              title="Khởi động lại / Nạp lại toàn bộ cấu hình Bot Telegram"
+            >
+              <Power className={`w-4 h-4 mr-2 text-orange-500 ${restarting ? 'animate-spin' : ''}`} />
+              {restarting ? 'ĐANG RESTART...' : 'RESTART BOT'}
+            </Button>
+            <Button
+              variant="outline"
               onClick={fetchData}
-              disabled={loading || saving}
+              disabled={loading || saving || restarting}
               className="border-zinc-700 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl text-xs h-10"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -897,7 +989,7 @@ export default function BotCustomizationPage() {
             </Button>
             <Button
               onClick={handleSaveAll}
-              disabled={saving || loading}
+              disabled={saving || loading || restarting}
               className="bg-linear-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold shadow-lg shadow-amber-500/25 rounded-xl text-xs h-10 px-5"
             >
               <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
@@ -2871,7 +2963,7 @@ export default function BotCustomizationPage() {
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 px-1">
               CHỌN MẪU TIN NHẮN ĐƠN HÀNG
             </h3>
-            {['msg_template_purchase', 'msg_template_delivery', 'msg_template_order_placed', 'msg_template_order_refund', 'msg_template_new_order_admin'].map(k => {
+            {['msg_template_purchase', 'msg_template_delivery', 'msg_template_order_placed', 'msg_template_order_refund', 'msg_template_new_order_admin', 'msg_out_of_stock'].map(k => {
               const item = templates[k];
               if (!item) return null;
               return (
@@ -3129,7 +3221,7 @@ export default function BotCustomizationPage() {
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 px-1">
               CHỌN MẪU THÔNG BÁO SẢN PHẨM & KHO
             </h3>
-            {['template_new_product_notify', 'template_restock_notify', 'btn_view_and_buy'].map(k => {
+            {['template_new_product_notify', 'template_restock_notify', 'template_flash_sale_notify', 'btn_view_and_buy', 'btn_flash_sale_buy'].map(k => {
               const item = templates[k];
               if (!item) return null;
               return (
@@ -3229,6 +3321,24 @@ export default function BotCustomizationPage() {
                   </div>
                 )}
 
+                {/* Common Emojis Quick Insert */}
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-zinc-500">Chèn nhanh Icon / Emoji:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {COMMON_EMOJIS.map(em => (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => insertTagToTemplate(em + ' ')}
+                        className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-amber-100 dark:hover:bg-amber-950 text-xs flex items-center justify-center border border-zinc-200 dark:border-zinc-700 transition-transform active:scale-95 cursor-pointer shadow-2xs"
+                        title={`Chèn icon ${em}`}
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Telegram Custom Animated Emojis */}
                 <div className="space-y-1.5">
                   <span className="text-xs font-bold text-zinc-500">Gắn Emoji Động Telegram:</span>
@@ -3313,9 +3423,10 @@ export default function BotCustomizationPage() {
                     className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     required
                   />
+                  <EmojiQuickBar onInsert={(val) => setKbBtnTextVi(prev => prev + val)} label="Gắn icon VI:" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
                       <span>🇺🇸 English</span>
@@ -3327,6 +3438,7 @@ export default function BotCustomizationPage() {
                       placeholder="e.g. Products, Support..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setKbBtnTextEn(prev => prev + val)} label="Gắn icon EN:" />
                   </div>
 
                   <div className="space-y-1.5">
@@ -3340,6 +3452,7 @@ export default function BotCustomizationPage() {
                       placeholder="例: 产品, 客服支持..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setKbBtnTextZh(prev => prev + val)} label="Gắn icon ZH:" />
                   </div>
                 </div>
               </div>
@@ -3391,6 +3504,7 @@ export default function BotCustomizationPage() {
                       placeholder="Nhập nội dung tin nhắn tiếng Việt gửi khách..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => { setKbBtnCustomTextVi(prev => prev + val); setKbBtnCustomText(prev => prev + val); }} label="Gắn icon VI:" />
                   </div>
 
                   <div className="space-y-1">
@@ -3404,6 +3518,7 @@ export default function BotCustomizationPage() {
                       placeholder="English message sent to user..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setKbBtnCustomTextEn(prev => prev + val)} label="Gắn icon EN:" />
                   </div>
 
                   <div className="space-y-1">
@@ -3417,6 +3532,7 @@ export default function BotCustomizationPage() {
                       placeholder="发送给用户的中文消息..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setKbBtnCustomTextZh(prev => prev + val)} label="Gắn icon ZH:" />
                   </div>
                 </div>
               )}
@@ -3548,9 +3664,10 @@ export default function BotCustomizationPage() {
                     className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     required
                   />
+                  <EmojiQuickBar onInsert={(val) => setStartBtnTextVi(prev => prev + val)} label="Gắn icon VI:" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
                       <span>🇺🇸 English</span>
@@ -3562,6 +3679,7 @@ export default function BotCustomizationPage() {
                       placeholder="e.g. 🏦 Bank Transfer..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setStartBtnTextEn(prev => prev + val)} label="Gắn icon EN:" />
                   </div>
 
                   <div className="space-y-1.5">
@@ -3575,6 +3693,7 @@ export default function BotCustomizationPage() {
                       placeholder="例: 🏦 银行转账..."
                       className="w-full p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                     />
+                    <EmojiQuickBar onInsert={(val) => setStartBtnTextZh(prev => prev + val)} label="Gắn icon ZH:" />
                   </div>
                 </div>
               </div>

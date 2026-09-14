@@ -190,26 +190,44 @@ export async function POST(request: Request) {
         // Tự động phát sóng Telegram nếu được chọn
         let broadcastStats = null;
         if (notifyTelegram) {
-            const [botSettings] = await pool.query<RowDataPacket[]>(
-                "SELECT `value` FROM settings WHERE `key` = 'bot_username' LIMIT 1"
+            const [settingsRows] = await pool.query<RowDataPacket[]>(
+                "SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_flash_sale_notify', 'btn_flash_sale_buy')"
             );
-            const botUsername = botSettings[0]?.value || '';
+            const sMap: Record<string, string> = {};
+            settingsRows.forEach(r => { sMap[r.key] = r.value; });
 
+            const botUsername = (sMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
             const fmtMoney = (amount: number) => Number(amount).toLocaleString('vi-VN') + 'đ';
 
-            let priceLine = `💰 **Giá gốc:** <s>${fmtMoney(origPrice)}</s> ➡️ **Giá Flash Sale:** <b>${fmtMoney(finalSalePrice)}</b> (-${numDiscountPercent}%)`;
+            let priceLine = `💰 <b>Giá gốc:</b> <s>${fmtMoney(origPrice)}</s> ➡️ <b>Giá Flash Sale:</b> <b>${fmtMoney(finalSalePrice)}</b> (-${numDiscountPercent}%)`;
             if (saleType === 'BULK') {
-                priceLine = `💰 **Giá gốc:** ${fmtMoney(origPrice)}\n🔥 **Flash Sale mua sỉ:** Mua từ <b>${bulkMinQty} cái</b> giá chỉ <b>${fmtMoney(bulkPrice)}/cái</b>`;
+                priceLine = `💰 <b>Giá gốc:</b> ${fmtMoney(origPrice)}\n🔥 <b>Flash Sale mua sỉ:</b> Mua từ <b>${bulkMinQty} cái</b> giá chỉ <b>${fmtMoney(bulkPrice)}/cái</b>`;
             }
 
             const startStr = new Date(startTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
             const endStr = new Date(endTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 
-            const broadcastMessage = `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n` +
-                `🛍️ <b>Sản phẩm:</b> <b>${product.name}</b>\n` +
-                `${priceLine}\n` +
-                `⏳ <b>Thời gian áp dụng:</b> ${startStr} - ${endStr}\n\n` +
+            const defaultTpl = `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n` +
+                `🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n` +
+                `{price_line}\n` +
+                `⏳ <b>Thời gian áp dụng:</b> {start_time} - {end_time}\n\n` +
                 `⚡ <i>Số lượng ưu đãi có hạn. Hãy nhanh tay bấm nút bên dưới để sở hữu ngay!</i>`;
+
+            const rawTpl = sMap.template_flash_sale_notify || defaultTpl;
+            const broadcastMessage = rawTpl
+                .replace(/\{name\}/g, product.name || '')
+                .replace(/\{price_line\}/g, priceLine)
+                .replace(/\{start_time\}/g, startStr)
+                .replace(/\{end_time\}/g, endStr)
+                .replace(/\{time_range\}/g, `${startStr} - ${endStr}`)
+                .replace(/\{discount_percent\}/g, String(numDiscountPercent))
+                .replace(/\{original_price\}/g, fmtMoney(origPrice))
+                .replace(/\{sale_price\}/g, fmtMoney(finalSalePrice))
+                .replace(/\{shop_name\}/g, sMap.shop_name || 'SHOP')
+                .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⚡</tg-emoji>');
+
+            const btnText = (sMap.btn_flash_sale_buy || '⚡ Mua ngay giá Flash Sale')
+                .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '');
 
             const inlineKeyboard: any[][] = [];
             const buyBtnUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
@@ -217,8 +235,8 @@ export async function POST(request: Request) {
 
             inlineKeyboard.push([
                 buyBtnUrl
-                    ? { text: '⚡ Mua ngay giá Flash Sale', url: buyBtnUrl }
-                    : { text: '⚡ Mua ngay giá Flash Sale', callback_data: buyBtnCallback }
+                    ? { text: btnText, url: buyBtnUrl }
+                    : { text: btnText, callback_data: buyBtnCallback }
             ]);
 
             const finalBanner = bannerImage || product.image_url || null;

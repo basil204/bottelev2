@@ -1,6 +1,6 @@
 import pool from './db';
 import { RowDataPacket } from 'mysql2';
-import { getBotToken, sendPhoto } from './telegram';
+import { getBotTokens, sendPhoto } from './telegram';
 
 export interface BroadcastOptions {
     message: string;
@@ -75,9 +75,9 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
         delayMs = 800
     } = options;
 
-    const botToken = await getBotToken();
-    if (!botToken) {
-        console.error('[BROADCAST] Không tìm thấy telegram_bot_token');
+    const botTokens = await getBotTokens();
+    if (botTokens.length === 0) {
+        console.error('[BROADCAST] Không tìm thấy telegram_bot_token nào');
         return { total: 0, sent: 0, failed: 0, removed: 0 };
     }
 
@@ -129,44 +129,46 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
     let removed = 0;
 
     const sendToUser = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
-        try {
-            if (imageUrl && imageUrl.trim()) {
-                const ok = await sendPhoto(telegramId, imageUrl.trim(), formattedMessage, botToken, replyMarkup);
-                if (ok) return { ok: true, blocked: false };
-            }
+        let isBlockedOnAll = true;
 
-            // Fallback sang sendMessage dạng text/HTML
-            const payload: any = {
-                chat_id: telegramId,
-                text: formattedMessage,
-                parse_mode: 'HTML'
-            };
-            if (replyMarkup) {
-                payload.reply_markup = replyMarkup;
-            }
+        for (const currentToken of botTokens) {
+            try {
+                if (imageUrl && imageUrl.trim()) {
+                    const ok = await sendPhoto(telegramId, imageUrl.trim(), formattedMessage, currentToken, replyMarkup);
+                    if (ok) return { ok: true, blocked: false };
+                }
 
-            const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+                const payload: any = {
+                    chat_id: telegramId,
+                    text: formattedMessage,
+                    parse_mode: 'HTML'
+                };
+                if (replyMarkup) {
+                    payload.reply_markup = replyMarkup;
+                }
 
-            const data = await res.json();
-            if (data.ok) {
-                return { ok: true, blocked: false };
-            }
+                const res = await fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
 
-            if (isUserBlockedError(res, data)) {
-                return { ok: false, blocked: true };
-            }
+                const data = await res.json();
+                if (data.ok) {
+                    return { ok: true, blocked: false };
+                }
 
-            return { ok: false, blocked: false };
-        } catch (err) {
-            if (isUserBlockedError(null, err)) {
-                return { ok: false, blocked: true };
+                if (!isUserBlockedError(res, data)) {
+                    isBlockedOnAll = false;
+                }
+            } catch (err) {
+                if (!isUserBlockedError(null, err)) {
+                    isBlockedOnAll = false;
+                }
             }
-            return { ok: false, blocked: false };
         }
+
+        return { ok: false, blocked: isBlockedOnAll };
     };
 
     for (let i = 0; i < users.length; i += batchSize) {

@@ -123,9 +123,9 @@ export const getDepositButtonsConfig = async () => {
     }
   } catch (_) {}
   return [
-    { id: 'btn_dep_bank', text: 'Ngân hàng (Bank)', text_vi: 'Ngân hàng (Bank)', text_en: 'Bank Transfer', text_zh: '银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
-    { id: 'btn_dep_binance', text: 'Binance Pay (Tự động)', text_vi: 'Binance Pay (Tự động)', text_en: 'Binance Pay (Auto)', text_zh: '币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
-    { id: 'btn_dep_usdt', text: 'USDT TRC20', text_vi: 'USDT TRC20', text_en: 'USDT TRC20', text_zh: 'USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
+    { id: 'btn_dep_bank', text: '🏦 Ngân hàng (Bank)', text_vi: '🏦 Ngân hàng (Bank)', text_en: '🏦 Bank Transfer', text_zh: '🏦 银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
+    { id: 'btn_dep_binance', text: '🟡 Binance Pay (Tự động)', text_vi: '🟡 Binance Pay (Tự động)', text_en: '🟡 Binance Pay (Auto)', text_zh: '🟡 币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
+    { id: 'btn_dep_usdt', text: '💲 USDT TRC20', text_vi: '💲 USDT TRC20', text_en: '💲 USDT TRC20', text_zh: '💲 USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
   ];
 };
 

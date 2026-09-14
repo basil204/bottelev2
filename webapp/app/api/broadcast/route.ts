@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
-import { sendPhoto } from '@/lib/telegram';
+import { sendPhoto, parseTokens, getBotTokens } from '@/lib/telegram';
 
 // Kiểm tra lỗi Telegram có phải user đã block/deactivated không
 function isUserBlockedError(response: Response | null, error: unknown): boolean {
@@ -99,18 +99,24 @@ export async function POST(request: Request) {
         );
 
         let shopName = 'SHOP';
-        let botToken = '';
+        let rawBotToken = '';
         let botUsername = '';
 
         settings.forEach((row) => {
             if (row.key === 'shop_name') shopName = row.value || 'SHOP';
-            if (row.key === 'telegram_bot_token') botToken = row.value;
+            if (row.key === 'telegram_bot_token') rawBotToken = row.value;
             if (row.key === 'bot_username') botUsername = row.value;
         });
 
-        if (!botToken) {
+        const botTokens = parseTokens(rawBotToken);
+        if (botTokens.length === 0) {
+            botTokens.push(...(await getBotTokens()));
+        }
+
+        if (botTokens.length === 0) {
             return NextResponse.json({ error: 'Bot token not configured' }, { status: 400 });
         }
+        const primaryBotToken = botTokens[0];
 
         // Fetch product category and price dynamically from database
         let categoryName = '';
@@ -266,39 +272,40 @@ export async function POST(request: Request) {
         }
 
         const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
-            try {
-                if (finalImageUrl) {
-                    const success = await sendPhoto(telegramId, finalImageUrl, broadcastMessage, botToken, replyMarkup);
-                    return { ok: success, blocked: !success };
-                } else {
-                    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chat_id: telegramId,
-                            text: broadcastMessage,
-                            parse_mode: 'HTML',
-                            reply_markup: replyMarkup
-                        })
-                    });
+            let isBlockedOnAll = true;
+            for (const currentToken of botTokens) {
+                try {
+                    if (finalImageUrl) {
+                        const success = await sendPhoto(telegramId, finalImageUrl, broadcastMessage, currentToken, replyMarkup);
+                        if (success) return { ok: true, blocked: false };
+                    } else {
+                        const response = await fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chat_id: telegramId,
+                                text: broadcastMessage,
+                                parse_mode: 'HTML',
+                                reply_markup: replyMarkup
+                            })
+                        });
 
-                    if (response.ok) {
-                        return { ok: true, blocked: false };
+                        if (response.ok) {
+                            return { ok: true, blocked: false };
+                        }
+
+                        if (!isUserBlockedError(response, null)) {
+                            isBlockedOnAll = false;
+                        }
                     }
-
-                    if (isUserBlockedError(response, null)) {
-                        return { ok: false, blocked: true };
+                } catch (err) {
+                    if (!isUserBlockedError(null, err)) {
+                        isBlockedOnAll = false;
                     }
-
-                    return { ok: false, blocked: false };
+                    console.error(`[BROADCAST] Error sending to ${telegramId}:`, err);
                 }
-            } catch (err) {
-                if (isUserBlockedError(null, err)) {
-                    return { ok: false, blocked: true };
-                }
-                console.error(`[BROADCAST] Error sending to ${telegramId}:`, err);
-                return { ok: false, blocked: false };
             }
+            return { ok: false, blocked: isBlockedOnAll };
         };
 
         const { sent, failed, removed } = await sendBatch(users, sendFn);

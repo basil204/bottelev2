@@ -217,6 +217,7 @@ export const notifyAdminAboutNewManualOrder = async (bot, adminIdsInput, order) 
 
     let successCount = 0;
     let failCount = 0;
+    const userText = order.username ? `@${order.username}` : (order.telegram_id || 'n/a');
 
     for (const adminId of adminIds) {
       try {
@@ -304,9 +305,10 @@ export const notifyAdminAboutPurchase = async (bot, adminIdsInput, purchaseInfo)
 };
 
 // Thông báo cho admin khi nạp tiền thành công
-export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
+export const notifyAdminAboutDeposit = async (bot, adminIdsInput, depositInfo) => {
   try {
-    if (!adminIds || !Array.isArray(adminIds) || adminIds.length === 0) {
+    const adminIds = await getAdminIds(adminIdsInput);
+    if (!adminIds || adminIds.length === 0) {
       console.log('[NOTIFY_ADMIN] Không có admin IDs');
       return;
     }
@@ -354,7 +356,8 @@ export const notifyAdminAboutDeposit = async (bot, adminIds, depositInfo) => {
 };
 
 // Thông báo giao dịch tiền vào chưa được khớp với một yêu cầu nạp thành công.
-export const notifyAdminAboutIncomingTransfer = async (bot, adminIds, transaction) => {
+export const notifyAdminAboutIncomingTransfer = async (bot, adminIdsInput, transaction) => {
+  const adminIds = await getAdminIds(adminIdsInput);
   if (!Array.isArray(adminIds) || adminIds.length === 0) return false;
 
   const message = t('admin_notify_incoming_transfer', 'vi', {

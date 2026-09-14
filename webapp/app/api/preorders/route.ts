@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
-import { sendPhoto } from '@/lib/telegram';
+import { sendPhoto, parseTokens, getBotTokens } from '@/lib/telegram';
 
 // Kiểm tra lỗi Telegram có phải user đã block/deactivated không
 function isUserBlockedError(response: Response | null, error: unknown): boolean {
@@ -264,15 +264,20 @@ export async function POST(request: Request) {
                 "SELECT `key`, `value` FROM settings WHERE `key` IN ('shop_name', 'telegram_bot_token', 'bot_username')"
             );
 
-            let botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+            let rawBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
             let botUsername = '';
 
             settings.forEach((row) => {
-                if (row.key === 'telegram_bot_token' && row.value) botToken = row.value.trim();
+                if (row.key === 'telegram_bot_token' && row.value) rawBotToken = row.value.trim();
                 if (row.key === 'bot_username' && row.value) botUsername = row.value.trim().replace(/^@/, '');
             });
 
-            if (!botToken) {
+            const botTokens = parseTokens(rawBotToken);
+            if (botTokens.length === 0) {
+                botTokens.push(...(await getBotTokens()));
+            }
+
+            if (botTokens.length === 0) {
                 return NextResponse.json({ error: 'Chưa cấu hình Telegram Bot Token trong Cài đặt hệ thống' }, { status: 400 });
             }
 
@@ -357,39 +362,40 @@ export async function POST(request: Request) {
             const finalImageUrl = bannerImage && bannerImage.trim() ? bannerImage.trim() : undefined;
 
             const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
-                try {
-                    if (finalImageUrl) {
-                        const success = await sendPhoto(telegramId, finalImageUrl, formattedMessage, botToken, replyMarkup);
-                        return { ok: success, blocked: !success };
-                    } else {
-                        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                chat_id: telegramId,
-                                text: formattedMessage,
-                                parse_mode: 'HTML',
-                                reply_markup: replyMarkup
-                            })
-                        });
+                let isBlockedOnAll = true;
+                for (const currentToken of botTokens) {
+                    try {
+                        if (finalImageUrl) {
+                            const success = await sendPhoto(telegramId, finalImageUrl, formattedMessage, currentToken, replyMarkup);
+                            if (success) return { ok: true, blocked: false };
+                        } else {
+                            const response = await fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    chat_id: telegramId,
+                                    text: formattedMessage,
+                                    parse_mode: 'HTML',
+                                    reply_markup: replyMarkup
+                                })
+                            });
 
-                        if (response.ok) {
-                            return { ok: true, blocked: false };
+                            if (response.ok) {
+                                return { ok: true, blocked: false };
+                            }
+
+                            if (!isUserBlockedError(response, null)) {
+                                isBlockedOnAll = false;
+                            }
                         }
-
-                        if (isUserBlockedError(response, null)) {
-                            return { ok: false, blocked: true };
+                    } catch (err) {
+                        if (!isUserBlockedError(null, err)) {
+                            isBlockedOnAll = false;
                         }
-
-                        return { ok: false, blocked: false };
+                        console.error(`[PREORDER_BROADCAST] Error sending to ${telegramId}:`, err);
                     }
-                } catch (err) {
-                    if (isUserBlockedError(null, err)) {
-                        return { ok: false, blocked: true };
-                    }
-                    console.error(`[PREORDER BROADCAST] Error sending to ${telegramId}:`, err);
-                    return { ok: false, blocked: false };
                 }
+                return { ok: false, blocked: isBlockedOnAll };
             };
 
             const { sent, failed, removed } = await sendBatch(users, sendFn);

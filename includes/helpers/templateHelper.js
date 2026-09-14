@@ -73,9 +73,23 @@ export const DEFAULT_BOT_TEMPLATES = {
     template_restock_notify_en: `🔥 <b>STOCK RESTOCKED & READY!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n📦 <b>Restocked:</b> <b>+{quantity} accounts</b>\n📊 <b>Total Stock:</b> <b>{stock} accounts</b>\n💰 <b>Price:</b> <b>{price}</b>\n\n⚡ <i>Stock replenished, click below to buy now!</i>`,
     template_restock_notify_zh: `🔥 <b>商品补货已入库！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n📦 <b>新入库:</b> <b>+{quantity} 个账号</b>\n📊 <b>当前总库存:</b> <b>{stock} 个</b>\n💰 <b>价格:</b> <b>{price}</b>\n\n⚡ <i>库存已补充充足，点击下方按钮立即选购！</i>`,
 
+    msg_out_of_stock: `❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.`,
+    msg_out_of_stock_en: `❌ This product is currently out of stock. Please choose another product.`,
+    msg_out_of_stock_zh: `❌ 该产品目前已售罄，请选择其他产品。`,
+    msg_template_new_order_admin_en: `**NEW PRE-ORDER TO PROCESS!**\n\n**Order ID:** \`#{order_code}\`\n**Product:** {product_name}\n**Price:** {price} VND\n**Customer:** @{username} (ID: \`{telegram_id}\`)\n**Details:**\n\`\`\`\n{input_data}\n\`\`\`\n\nPlease check Admin Dashboard to deliver!`,
+    msg_template_new_order_admin_zh: `**有新的预定订单待处理！**\n\n**订单编号:** \`#{order_code}\`\n**商品:** {product_name}\n**金额:** {price} VND\n**客户:** @{username} (ID: \`{telegram_id}\`)\n**客户信息:**\n\`\`\`\n{input_data}\n\`\`\`\n\n请进入后台处理交付！`,
+
+    template_flash_sale_notify: `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Thời gian áp dụng:</b> {start_time} - {end_time}\n\n⚡ <i>Số lượng ưu đãi có hạn. Hãy nhanh tay bấm nút bên dưới để sở hữu ngay!</i>`,
+    template_flash_sale_notify_en: `⚡ <b>SPECIAL FLASH SALE EVENT!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Valid Time:</b> {start_time} - {end_time}\n\n⚡ <i>Limited quantity available. Click the button below to claim now!</i>`,
+    template_flash_sale_notify_zh: `⚡ <b>限时特惠秒杀活动！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n{price_line}\n⏳ <b>活动时间:</b> {start_time} - {end_time}\n\n⚡ <i>优惠名额有限，请尽快点击下方按钮立即抢购！</i>`,
+
     btn_view_and_buy: '🛍️ Xem & Mua sản phẩm ngay',
     btn_view_and_buy_en: '🛍️ View & Buy Now',
     btn_view_and_buy_zh: '🛍️ 查看并立即购买',
+
+    btn_flash_sale_buy: '⚡ Mua ngay giá Flash Sale',
+    btn_flash_sale_buy_en: '⚡ Buy Flash Sale Now',
+    btn_flash_sale_buy_zh: '⚡ 立即按秒杀价购买',
 
     // Default Main Keyboard Buttons Config (Multilingual without icons)
     bot_main_keyboard_config: JSON.stringify([

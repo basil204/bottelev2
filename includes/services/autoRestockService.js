@@ -98,11 +98,11 @@ export const executeAutoRestock = async (bot, customParams = null) => {
     const randQty = Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
 
     // 4. Lấy bot username để tạo deep-link
-    let botUsername = settingsMap.bot_username || '';
+    let botUsername = (settingsMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
     if (!botUsername && bot?.getMe) {
       try {
         const me = await bot.getMe();
-        botUsername = me.username || '';
+        botUsername = me?.username || '';
       } catch (e) {
         console.error('[AUTO_RESTOCK] Lỗi lấy getMe:', e.message);
       }

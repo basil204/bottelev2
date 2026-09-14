@@ -38,9 +38,9 @@ export const DEFAULT_WALLET_BUTTONS: BotMenuInlineButton[] = [
 ];
 
 export const DEFAULT_DEPOSIT_BUTTONS: BotMenuInlineButton[] = [
-  { id: 'btn_dep_bank', text: 'Ngân hàng (Bank)', text_vi: 'Ngân hàng (Bank)', text_en: 'Bank Transfer', text_zh: '银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
-  { id: 'btn_dep_binance', text: 'Binance Pay (Tự động)', text_vi: 'Binance Pay (Tự động)', text_en: 'Binance Pay (Auto)', text_zh: '币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
-  { id: 'btn_dep_usdt', text: 'USDT TRC20', text_vi: 'USDT TRC20', text_en: 'USDT TRC20', text_zh: 'USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
+  { id: 'btn_dep_bank', text: '🏦 Ngân hàng (Bank)', text_vi: '🏦 Ngân hàng (Bank)', text_en: '🏦 Bank Transfer', text_zh: '🏦 银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
+  { id: 'btn_dep_binance', text: '🟡 Binance Pay (Tự động)', text_vi: '🟡 Binance Pay (Tự động)', text_en: '🟡 Binance Pay (Auto)', text_zh: '🟡 币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
+  { id: 'btn_dep_usdt', text: '💲 USDT TRC20', text_vi: '💲 USDT TRC20', text_en: '💲 USDT TRC20', text_zh: '💲 USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
 ];
 
 export const DEFAULT_KEYBOARD_BUTTONS: MainKeyboardButton[] = [
@@ -153,6 +153,24 @@ export const DEFAULT_TEMPLATES: Record<string, { label: string; group: string; d
     default_val_en: `**PRE-ORDER RECORDED!**\n\n**Order ID:** \`#{order_code}\`\n**Product:** {product_name}\n**Price:** {price} VND\n**Submitted info:**\n\`\`\`\n{input_data}\n\`\`\`\n\nYour order is being processed by Admin. You will be notified once ready!`,
     default_val_zh: `**预定订单已记录！**\n\n**订单编号:** \`#{order_code}\`\n**商品:** {product_name}\n**金额:** {price} VND\n**提交信息:**\n\`\`\`\n{input_data}\n\`\`\`\n\n管理员正在处理您的订单，交付后将立即通知您！`
   },
+  msg_template_new_order_admin: {
+    label: 'Thông Báo Đơn Order Mới (Cho Admin)',
+    group: 'orders',
+    description: 'Gửi thông báo tới Admin Telegram khi có khách đặt hàng đơn Order thành công.',
+    vars: ['{order_code}', '{product_name}', '{price}', '{username}', '{telegram_id}', '{input_data}'],
+    default_val: `**CÓ ĐƠN HÀNG ORDER MỚI CẦN XỬ LÝ!**\n\n**Mã đơn:** \`#{order_code}\`\n**Sản phẩm:** {product_name}\n**Số tiền:** {price} đ\n**Khách hàng:** @{username} (ID: \`{telegram_id}\`)\n**Thông tin từ khách:**\n\`\`\`\n{input_data}\n\`\`\`\n\nVui lòng vào Web Dashboard để xử lý bàn giao cho khách!`,
+    default_val_en: `**NEW PRE-ORDER TO PROCESS!**\n\n**Order ID:** \`#{order_code}\`\n**Product:** {product_name}\n**Price:** {price} VND\n**Customer:** @{username} (ID: \`{telegram_id}\`)\n**Details:**\n\`\`\`\n{input_data}\n\`\`\`\n\nPlease check Admin Dashboard to deliver!`,
+    default_val_zh: `**有新的预定订单待处理！**\n\n**订单编号:** \`#{order_code}\`\n**商品:** {product_name}\n**金额:** {price} VND\n**客户:** @{username} (ID: \`{telegram_id}\`)\n**客户信息:**\n\`\`\`\n{input_data}\n\`\`\`\n\n请进入后台处理交付！`
+  },
+  msg_out_of_stock: {
+    label: 'Thông Báo Hết Hàng (Xem Sản Phẩm)',
+    group: 'orders',
+    description: 'Tin nhắn gửi cho khách khi bấm xem chi tiết sản phẩm mà số lượng tồn kho = 0.',
+    vars: ['{name}', '{stock}'],
+    default_val: `❌ Sản phẩm hiện đã hết hàng. Vui lòng chọn sản phẩm khác.`,
+    default_val_en: `❌ This product is currently out of stock. Please choose another product.`,
+    default_val_zh: `❌ 该产品目前已售罄，请选择其他产品。`
+  },
   msg_template_order_refund: {
     label: 'Thông Báo Hoàn Tiền Đơn Hàng',
     group: 'orders',
@@ -221,7 +239,7 @@ export const DEFAULT_TEMPLATES: Record<string, { label: string; group: string; d
     group: 'service',
     description: 'Nội dung phản hồi khi người dùng bấm nút Điểm danh mỗi ngày.',
     vars: ['{customer_name}', '{bonus}'],
-    default_val: `**ĐIỂM DANH NHẬN THƯỞNG HẰNG NGÀY**\n\n**Khách hàng:** {customer_name}\nBạn đã điểm danh thành công hôm nay!\n**Phần thưởng:** +{bonus} đ vào số dư ví.\n\n*Hãy quay lại vào ngày mai để tiếp tục nhận quà nhé!*`,
+    default_val: `**ĐIỂM DANH NHẬN THƯỞNG HẰNG NGÀY**\n\n**Khách hàng:** {customer_name}\nBạn đã điểm danh thành công hôm đây!\n**Phần thưởng:** +{bonus} đ vào số dư ví.\n\n*Hãy quay lại vào ngày mai để tiếp tục nhận quà nhé!*`,
     default_val_en: `**DAILY REWARD CHECK-IN**\n\n**Customer:** {customer_name}\nDaily check-in successful!\n**Reward:** +{bonus} VND credited to your wallet.\n\n*Come back tomorrow for more rewards!*`,
     default_val_zh: `**每日签到领奖励**\n\n**客户:** {customer_name}\n今日签到成功！\n**获得奖励:** +{bonus} VND 钱包余额。\n\n*明天记得继续来签到领奖哦！*`
   },
@@ -254,6 +272,15 @@ export const DEFAULT_TEMPLATES: Record<string, { label: string; group: string; d
     default_val_en: `🔥 <b>STOCK RESTOCKED & READY!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n📦 <b>Restocked:</b> <b>+{quantity} accounts</b>\n📊 <b>Total Stock:</b> <b>{stock} accounts</b>\n💰 <b>Price:</b> <b>{price}</b>\n\n⚡ <i>Stock replenished, click below to buy now!</i>`,
     default_val_zh: `🔥 <b>商品补货已入库！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n📦 <b>新入库:</b> <b>+{quantity} 个账号</b>\n📊 <b>当前总库存:</b> <b>{stock} 个</b>\n💰 <b>价格:</b> <b>{price}</b>\n\n⚡ <i>库存已补充充足，点击下方按钮立即选购！</i>`
   },
+  template_flash_sale_notify: {
+    label: 'Thông Báo Chương Trình Flash Sale',
+    group: 'notify',
+    description: 'Mẫu tin nhắn phát sóng khi tạo chương trình Flash Sale hoặc bấm phát sóng khuyến mãi.',
+    vars: ['{name}', '{price_line}', '{start_time}', '{end_time}', '{original_price}', '{sale_price}', '{discount_percent}', '{shop_name}', '{emoji:5375135722514685501}'],
+    default_val: `⚡ <b>CHƯƠNG TRÌNH FLASH SALE ĐẶC BIỆT!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Thời gian áp dụng:</b> {start_time} - {end_time}\n\n⚡ <i>Số lượng ưu đãi có hạn. Hãy nhanh tay bấm nút bên dưới để sở hữu ngay!</i>`,
+    default_val_en: `⚡ <b>SPECIAL FLASH SALE EVENT!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Valid Time:</b> {start_time} - {end_time}\n\n⚡ <i>Limited quantity available. Click the button below to claim now!</i>`,
+    default_val_zh: `⚡ <b>限时特惠秒杀活动！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n{price_line}\n⏳ <b>活动时间:</b> {start_time} - {end_time}\n\n⚡ <i>优惠名额有限，请尽快点击下方按钮立即抢购！</i>`
+  },
   btn_view_and_buy: {
     label: 'Nút: Xem & Mua sản phẩm ngay',
     group: 'notify',
@@ -262,6 +289,15 @@ export const DEFAULT_TEMPLATES: Record<string, { label: string; group: string; d
     default_val: '🛍️ Xem & Mua sản phẩm ngay',
     default_val_en: '🛍️ View & Buy Now',
     default_val_zh: '🛍️ 查看并立即购买'
+  },
+  btn_flash_sale_buy: {
+    label: 'Nút: Mua ngay giá Flash Sale',
+    group: 'notify',
+    description: 'Nút đính kèm dưới thông báo phát sóng Flash Sale.',
+    vars: [],
+    default_val: '⚡ Mua ngay giá Flash Sale',
+    default_val_en: '⚡ Buy Flash Sale Now',
+    default_val_zh: '⚡ 立即按秒杀价购买'
   },
 
   // === NHÓM D: NÚT QUY TRÌNH NẠP TIỀN & THANH TOÁN ===

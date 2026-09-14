@@ -45,6 +45,7 @@ export async function GET() {
             min_deposit: 50000,
             exchange_rate: 26000, // USDT -> VND exchange rate
             telegram_bot_token: '',
+            bot_username: '',
             shop_name: 'SHOP',
             usdt_trc20_wallet: '',
             telegram_group_link: '',
@@ -136,6 +137,7 @@ export async function POST(request: Request) {
             min_deposit,
             exchange_rate, // Exchange rate USDT -> VND
             telegram_bot_token,
+            bot_username,
             shop_name,
             usdt_trc20_wallet,
             telegram_group_link,
@@ -199,6 +201,7 @@ export async function POST(request: Request) {
                 await upsertSetting('telegram_bot_token', telegram_bot_token);
                 shouldRestart = true;
             }
+            if (bot_username !== undefined) await upsertSetting('bot_username', bot_username);
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
             if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
             if (telegram_group_link !== undefined) await upsertSetting('telegram_group_link', telegram_group_link);

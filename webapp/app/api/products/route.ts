@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { dbReady } from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
+import { broadcastToUsers } from '@/lib/telegramBroadcast';
 
 export async function GET(request: Request) {
     try {
@@ -114,7 +115,11 @@ export async function POST(request: Request) {
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
+            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id,
+            name_vi, name_en, name_zh,
+            description_vi, description_en, description_zh,
+            note_vi, note_en, note_zh,
+            prompt_message_vi, prompt_message_en, prompt_message_zh
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -135,20 +140,44 @@ export async function POST(request: Request) {
             finalType = 'order';
         }
 
+        const finalNameVi = (name_vi || name || '').trim();
+        const finalNameEn = (name_en || finalNameVi).trim();
+        const finalNameZh = (name_zh || finalNameVi).trim();
+
+        const finalDescVi = (description_vi !== undefined ? description_vi : (description || '')).trim();
+        const finalDescEn = (description_en !== undefined ? description_en : finalDescVi).trim();
+        const finalDescZh = (description_zh !== undefined ? description_zh : finalDescVi).trim();
+
+        const finalNoteVi = (note_vi !== undefined ? note_vi : finalDescVi).trim();
+        const finalNoteEn = (note_en !== undefined ? note_en : finalDescEn).trim();
+        const finalNoteZh = (note_zh !== undefined ? note_zh : finalDescZh).trim();
+
+        const finalPromptVi = (prompt_message_vi !== undefined ? prompt_message_vi : (prompt_message || '')).trim();
+        const finalPromptEn = (prompt_message_en !== undefined ? prompt_message_en : finalPromptVi).trim();
+        const finalPromptZh = (prompt_message_zh !== undefined ? prompt_message_zh : finalPromptVi).trim();
+
         const [result] = await pool.query<ResultSetHeader>(
             `INSERT INTO products (
                 name, price, description, type, code, priority, check_live, is_active, require_email, category_id, low_stock_threshold,
                 delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
                 telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
                 preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-                image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id,
+                name_vi, name_en, name_zh,
+                description_vi, description_en, description_zh,
+                note_vi, note_en, note_zh,
+                prompt_message_vi, prompt_message_en, prompt_message_zh
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name, price, description, finalType, code || null, priority || 0, check_live || 0, numIsActive, numRequireEmail, finalCategoryId || null, Math.max(0, Math.trunc(Number(low_stock_threshold ?? 5))),
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
-                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId
+                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId,
+                finalNameVi, finalNameEn, finalNameZh,
+                finalDescVi, finalDescEn, finalDescZh,
+                finalNoteVi, finalNoteEn, finalNoteZh,
+                finalPromptVi, finalPromptEn, finalPromptZh
             ]
         );
 
@@ -165,7 +194,55 @@ export async function POST(request: Request) {
             request
         });
 
-        return NextResponse.json({ id: result.insertId, message: 'Product created' });
+        // Broadcast to Telegram users if notify_telegram is enabled
+        let broadcastStats = null;
+        if (body.notify_telegram) {
+            try {
+                const [botSettings] = await pool.query<RowDataPacket[]>(
+                    "SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_new_product_notify', 'btn_view_and_buy')"
+                );
+                const sMap: Record<string, string> = {};
+                botSettings.forEach(r => { sMap[r.key] = r.value; });
+
+                const botUsername = sMap.bot_username || '';
+                const shopName = sMap.shop_name || 'SHOP';
+                const fmtPrice = Number(price).toLocaleString('vi-VN') + 'đ';
+
+                let rawTpl = sMap.template_new_product_notify || `🎉 <b>SẢN PHẨM MỚI VỪA LÊN KỆ!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n📝 <b>Mô tả:</b>\n{description}\n\n👉 <i>Bấm nút bên dưới để xem chi tiết và đặt mua ngay!</i>`;
+
+                const broadcastMessage = rawTpl
+                    .split('{name}').join(name || '')
+                    .split('{price}').join(fmtPrice)
+                    .split('{shop_name}').join(shopName)
+                    .split('{description}').join(description ? description.slice(0, 400) : '')
+                    .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+
+                const btnLabel = sMap.btn_view_and_buy || '🛍️ Xem & Mua sản phẩm ngay';
+
+                const inlineKeyboard: any[][] = [];
+                const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${result.insertId}` : undefined;
+                inlineKeyboard.push([
+                    buyUrl
+                        ? { text: btnLabel, url: buyUrl }
+                        : { text: btnLabel, callback_data: `view_product_${result.insertId}` }
+                ]);
+
+                broadcastStats = await broadcastToUsers({
+                    message: broadcastMessage,
+                    imageUrl: image_url || null,
+                    customEmojiId: finalCustomEmojiId,
+                    inlineKeyboard
+                });
+            } catch (broadcastErr) {
+                console.error('[PRODUCT_BROADCAST_ERR]', broadcastErr);
+            }
+        }
+
+        return NextResponse.json({
+            id: result.insertId,
+            message: 'Product created',
+            broadcastStats
+        });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -181,7 +258,11 @@ export async function PUT(request: Request) {
             delivery_type, prompt_message, item_structure, account_prefix, file_delivery_mode,
             telegram_file_id, telegram_file_unique_id, access_duration_enabled, access_duration_days,
             preorder_enabled, preorder_fee_vnd, preorder_fee_usdt, preorder_max_per_user, preorder_total_limit,
-            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id
+            image_url, emoji, custom_emoji_id, telegram_emoji, telegram_custom_emoji_id,
+            name_vi, name_en, name_zh,
+            description_vi, description_en, description_zh,
+            note_vi, note_en, note_zh,
+            prompt_message_vi, prompt_message_en, prompt_message_zh
         } = body;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
@@ -214,20 +295,45 @@ export async function PUT(request: Request) {
             finalType = 'order';
         }
 
+        const finalNameVi = (name_vi || name || '').trim();
+        const finalNameEn = (name_en || finalNameVi).trim();
+        const finalNameZh = (name_zh || finalNameVi).trim();
+
+        const finalDescVi = (description_vi !== undefined ? description_vi : (description || '')).trim();
+        const finalDescEn = (description_en !== undefined ? description_en : finalDescVi).trim();
+        const finalDescZh = (description_zh !== undefined ? description_zh : finalDescVi).trim();
+
+        const finalNoteVi = (note_vi !== undefined ? note_vi : finalDescVi).trim();
+        const finalNoteEn = (note_en !== undefined ? note_en : finalDescEn).trim();
+        const finalNoteZh = (note_zh !== undefined ? note_zh : finalDescZh).trim();
+
+        const finalPromptVi = (prompt_message_vi !== undefined ? prompt_message_vi : (prompt_message || '')).trim();
+        const finalPromptEn = (prompt_message_en !== undefined ? prompt_message_en : finalPromptVi).trim();
+        const finalPromptZh = (prompt_message_zh !== undefined ? prompt_message_zh : finalPromptVi).trim();
+
         await pool.query(
             `UPDATE products SET 
                 name = ?, price = ?, description = ?, type = ?, code = ?, priority = ?, check_live = ?, is_active = ?, require_email = ?, category_id = ?, low_stock_threshold = ?,
                 delivery_type = ?, prompt_message = ?, item_structure = ?, account_prefix = ?, file_delivery_mode = ?,
                 telegram_file_id = ?, telegram_file_unique_id = ?, access_duration_enabled = ?, access_duration_days = ?,
                 preorder_enabled = ?, preorder_fee_vnd = ?, preorder_fee_usdt = ?, preorder_max_per_user = ?, preorder_total_limit = ?,
-                image_url = ?, emoji = ?, custom_emoji_id = ?, telegram_emoji = ?, telegram_custom_emoji_id = ?
+                image_url = ?, emoji = ?, custom_emoji_id = ?, telegram_emoji = ?, telegram_custom_emoji_id = ?,
+                name_vi = ?, name_en = ?, name_zh = ?,
+                description_vi = ?, description_en = ?, description_zh = ?,
+                note_vi = ?, note_en = ?, note_zh = ?,
+                prompt_message_vi = ?, prompt_message_en = ?, prompt_message_zh = ?
             WHERE id = ?`,
             [
                 name.trim(), numPrice, description || null, finalType, code || null, numPriority, numCheckLive, numIsActive, numRequireEmail, finalCategoryId || null, numLowStockThreshold,
                 delivery_type || null, prompt_message || null, item_structure || null, account_prefix || null, file_delivery_mode || null,
                 telegram_file_id || null, telegram_file_unique_id || null, access_duration_enabled ? 1 : 0, access_duration_days || 30,
                 preorder_enabled ? 1 : 0, preorder_fee_vnd || 0, preorder_fee_usdt || 0, preorder_max_per_user || 5, preorder_total_limit || 100,
-                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId, id
+                image_url || null, finalEmoji, finalCustomEmojiId, finalEmoji, finalCustomEmojiId,
+                finalNameVi, finalNameEn, finalNameZh,
+                finalDescVi, finalDescEn, finalDescZh,
+                finalNoteVi, finalNoteEn, finalNoteZh,
+                finalPromptVi, finalPromptEn, finalPromptZh,
+                id
             ]
         );
 

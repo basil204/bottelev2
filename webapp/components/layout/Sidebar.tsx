@@ -8,7 +8,8 @@ import {
   BarChart2, FileText, Package, Folders, ShoppingCart, Clock,
   Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
   Bell, Target, Settings, Code2, Layers, Globe, Languages, Link as LinkIcon,
-  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film, Palette
+  Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film, Palette,
+  Users, ArrowDownCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -35,15 +36,17 @@ export function Sidebar() {
       ],
     },
     {
-      label: 'QUẢN LÝ BÁN HÀNG',
+      label: 'QUẢN LÝ BÁN HÀNG & KHÁCH HÀNG',
       items: [
+        { name: 'NGƯỜI DÙNG', href: '/users', icon: Users },
+        { name: 'QUẢN LÝ VÍ', href: '/wallets', icon: Wallet },
+        { name: 'LỊCH SỬ NẠP TIỀN', href: '/deposits', icon: ArrowDownCircle },
+        { name: 'LỊCH SỬ BANK', href: '/bank-history', icon: CreditCard },
+        { name: 'ĐIỂM DANH HÀNG NGÀY', href: '/checkin', icon: CheckSquare },
         { name: 'SẢN PHẨM', href: '/products', icon: Package },
         { name: 'DANH MỤC SẢN PHẨM', href: '/categories', icon: Folders },
         { name: 'ĐƠN HÀNG', href: '/orders', icon: ShoppingCart },
         { name: 'ĐẶT TRƯỚC', href: '/preorders', icon: Clock },
-        { name: 'LỊCH SỬ NẠP TIỀN', href: '/deposits', icon: Wallet },
-        { name: 'LỊCH SỬ BANK', href: '/bank-history', icon: CreditCard },
-        { name: 'ĐIỂM DANH / KHÁCH HÀNG', href: '/users', icon: CheckSquare },
         { name: 'FLASH SALE', href: '/promotions', icon: Zap },
         { name: 'MÃ GIẢM GIÁ', href: '/promotions', icon: Ticket },
         { name: 'HỖ TRỢ / BẢO HÀNH', href: '/notifications', icon: HelpCircle },
@@ -56,11 +59,7 @@ export function Sidebar() {
       label: 'CẤU HÌNH & TÙY BIẾN',
       items: [
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
-        { name: 'QUẢN LÝ /START', href: '/start-menu', icon: MessageSquare },
-        { name: 'AUTO NETFLIX 30D', href: '/netflix', icon: Film },
-        { name: 'AUTO CANVA PRO', href: '/canva', icon: Palette },
-        { name: 'TẠO TK CAPCUT', href: '/capcut', icon: Video },
-        { name: 'NGÔN NGỮ & LỜI NHẮN', href: '/settings/translations', icon: Languages },
+        { name: 'NÚT BẤM & NỘI DUNG BOT', href: '/start-menu', icon: MessageSquare },
         { name: 'API KEY USER', href: '/user-api-keys', icon: Key },
       ],
     },

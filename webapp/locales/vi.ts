@@ -23,6 +23,8 @@ export const vi = {
     sidebar: {
         dashboard: 'Tổng quan',
         users: 'Người dùng',
+        wallets: 'Quản lý ví',
+        checkin: 'Điểm danh',
         products: 'Sản phẩm',
         categories: 'Thư mục',
         'stored-accounts': 'Kho tài khoản',

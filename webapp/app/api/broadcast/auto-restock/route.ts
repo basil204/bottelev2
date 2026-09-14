@@ -148,36 +148,40 @@ export async function POST(request: Request) {
             const randQty = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
 
             const targetLang = ['vi', 'en', 'zh'].includes(channelLang) ? channelLang : 'vi';
-            const [transRows] = await pool.query<RowDataPacket[]>(
-                "SELECT msg_key, msg_value FROM translations WHERE lang = ? AND msg_key IN ('auto_restock_notify', 'btn_buy_now_direct')",
-                [targetLang]
+            const tplKey = targetLang === 'en' ? 'template_restock_notify_en' : (targetLang === 'zh' ? 'template_restock_notify_zh' : 'template_restock_notify');
+            const btnKey = targetLang === 'en' ? 'btn_view_and_buy_en' : (targetLang === 'zh' ? 'btn_view_and_buy_zh' : 'btn_view_and_buy');
+
+            const [tplSettings] = await pool.query<RowDataPacket[]>(
+                "SELECT `key`, `value` FROM settings WHERE `key` IN (?, ?, 'template_restock_notify', 'btn_view_and_buy', 'shop_name')",
+                [tplKey, btnKey]
             );
-            const transMap: Record<string, string> = {};
-            if (Array.isArray(transRows)) {
-                transRows.forEach(r => { transMap[r.msg_key] = r.msg_value; });
-            }
+            const sMap: Record<string, string> = {};
+            tplSettings.forEach(r => { sMap[r.key] = r.value; });
 
             const defaultNotify: Record<string, string> = {
-                vi: '*THÔNG BÁO NHẬP KHO HÀNG*\n\nSản phẩm: *{name}*\nVừa về thêm: *+{quantity}* sản phẩm (Đơn giá: {price})\nBấm nút bên dưới để vào mua ngay kẻo hết hàng!',
-                en: '*STOCK RESTOCKED NOTIFICATION*\n\nProduct: *{name}*\nRestocked: *+{quantity}* items (Price: {price})\nClick the button below to buy now before it runs out!',
-                zh: '*补货通知*\n\n产品: *{name}*\n新到货: *+{quantity}* 件 (单价: {price})\n点击下方按钮立即购买，先到先得！'
+                vi: '🔥 <b>VỪA CẬP NHẬT THÊM HÀNG / BỔ SUNG KHO!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n📦 <b>Vừa nhập thêm:</b> <b>+{quantity} tài khoản</b>\n📊 <b>Hiện có trong kho:</b> <b>{stock} tài khoản</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n⚡ <i>Kho đã được bổ sung đầy đủ, hãy bấm nút bên dưới để sở hữu ngay!</i>',
+                en: '🔥 <b>STOCK RESTOCKED & READY!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n📦 <b>Restocked:</b> <b>+{quantity} accounts</b>\n📊 <b>Total Stock:</b> <b>{stock} accounts</b>\n💰 <b>Price:</b> <b>{price}</b>\n\n⚡ <i>Stock replenished, click below to buy now!</i>',
+                zh: '🔥 <b>商品补货已入库！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n📦 <b>新入库:</b> <b>+{quantity} 个账号</b>\n📊 <b>当前总库存:</b> <b>{stock} 个</b>\n💰 <b>价格:</b> <b>{price}</b>\n\n⚡ <i>库存已补充充足，点击下方按钮立即选购！</i>'
             };
 
             const defaultBtn: Record<string, string> = {
-                vi: 'Mua ngay sản phẩm này',
-                en: 'Buy Now',
-                zh: '立即购买'
+                vi: '🛍️ Xem & Mua sản phẩm ngay',
+                en: '🛍️ View & Buy Now',
+                zh: '🛍️ 查看并立即购买'
             };
 
-            let templateMsg = transMap.auto_restock_notify || defaultNotify[targetLang] || defaultNotify.vi;
+            let templateMsg = sMap[tplKey] || sMap.template_restock_notify || defaultNotify[targetLang] || defaultNotify.vi;
 
             const formattedPrice = formatCurrency(Number(product.price) || 0);
             const textMsg = templateMsg
                 .split('{name}').join(product.name || '')
                 .split('{quantity}').join(String(randQty))
-                .split('{price}').join(formattedPrice);
+                .split('{stock}').join(String(product.stock || randQty))
+                .split('{price}').join(formattedPrice)
+                .split('{shop_name}').join(sMap.shop_name || 'SHOP')
+                .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
 
-            const buttonText = transMap.btn_buy_now_direct || defaultBtn[targetLang] || defaultBtn.vi;
+            const buttonText = sMap[btnKey] || sMap.btn_view_and_buy || defaultBtn[targetLang] || defaultBtn.vi;
             const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
             const replyMarkup = buyUrl ? {
                 inline_keyboard: [

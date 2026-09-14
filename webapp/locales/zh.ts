@@ -23,6 +23,8 @@ export const zh = {
     sidebar: {
         dashboard: '仪表盘',
         users: '用户',
+        wallets: '钱包管理',
+        checkin: '每日签到',
         products: '产品',
         categories: '分类',
         'stored-accounts': '账号库存',

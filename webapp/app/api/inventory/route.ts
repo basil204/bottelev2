@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getAdminFromCookie, getRequestInfo } from '@/lib/adminLog';
+import { broadcastToUsers } from '@/lib/telegramBroadcast';
 
 
 export async function GET(request: Request) {
@@ -258,11 +259,64 @@ export async function POST(request: Request) {
             );
 
             await connection.commit();
+
+            let broadcastStats = null;
+            if (body.notify_telegram && addedAccounts.length > 0) {
+                try {
+                    const [prodRows] = await pool.query<RowDataPacket[]>(
+                        'SELECT name, price, image_url, custom_emoji_id, telegram_custom_emoji_id FROM products WHERE id = ?',
+                        [productId]
+                    );
+                    if (prodRows && prodRows.length > 0) {
+                        const prod = prodRows[0];
+                        const [botSettings] = await pool.query<RowDataPacket[]>(
+                            "SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_restock_notify', 'btn_view_and_buy')"
+                        );
+                        const sMap: Record<string, string> = {};
+                        botSettings.forEach(r => { sMap[r.key] = r.value; });
+
+                        const botUsername = sMap.bot_username || '';
+                        const shopName = sMap.shop_name || 'SHOP';
+                        const fmtPrice = Number(prod.price).toLocaleString('vi-VN') + 'đ';
+
+                        let rawTpl = sMap.template_restock_notify || `🔥 <b>VỪA CẬP NHẬT THÊM HÀNG / BỔ SUNG KHO!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n📦 <b>Vừa nhập thêm:</b> <b>+{quantity} tài khoản</b>\n📊 <b>Hiện có trong kho:</b> <b>{stock} tài khoản</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n⚡ <i>Kho đã được bổ sung đầy đủ, hãy bấm nút bên dưới để sở hữu ngay!</i>`;
+
+                        const broadcastMessage = rawTpl
+                            .split('{name}').join(prod.name || '')
+                            .split('{quantity}').join(String(addedAccounts.length))
+                            .split('{stock}').join(String(totalStock))
+                            .split('{price}').join(fmtPrice)
+                            .split('{shop_name}').join(shopName)
+                            .replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+
+                        const btnLabel = sMap.btn_view_and_buy || '🛍️ Xem & Mua ngay';
+
+                        const inlineKeyboard: any[][] = [];
+                        const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${productId}` : undefined;
+                        inlineKeyboard.push([
+                            buyUrl
+                                ? { text: btnLabel, url: buyUrl }
+                                : { text: btnLabel, callback_data: `view_product_${productId}` }
+                        ]);
+
+                        broadcastStats = await broadcastToUsers({
+                            message: broadcastMessage,
+                            imageUrl: prod.image_url || null,
+                            customEmojiId: prod.custom_emoji_id || prod.telegram_custom_emoji_id,
+                            inlineKeyboard
+                        });
+                    }
+                } catch (err) {
+                    console.error('[INVENTORY_BROADCAST_ERR]', err);
+                }
+            }
+
             return NextResponse.json({
                 success: true,
                 count: addedAccounts.length,
                 skipped: skippedAccounts.length,
-                totalStock
+                totalStock,
+                broadcastStats
             });
         } catch (error) {
             await connection.rollback();

@@ -72,6 +72,8 @@ export default function DepositsPage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalUsers, setTotalUsers] = useState(0);
+    const [totalWalletBalance, setTotalWalletBalance] = useState(0);
+    const [todayRegisteredUsers, setTodayRegisteredUsers] = useState(0);
     const [mounted, setMounted] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -272,6 +274,10 @@ export default function DepositsPage() {
                 setUsers(Array.isArray(data.data) ? data.data : []);
                 setTotalPages(data.pagination?.totalPages || 1);
                 setTotalUsers(data.pagination?.total || 0);
+                if (data.stats) {
+                    if (typeof data.stats.totalWalletBalance === 'number') setTotalWalletBalance(data.stats.totalWalletBalance);
+                    if (typeof data.stats.todayRegisteredUsers === 'number') setTodayRegisteredUsers(data.stats.todayRegisteredUsers);
+                }
                 setLoading(false);
             })
             .catch((err) => {
@@ -716,9 +722,13 @@ export default function DepositsPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3.5">
-                                                    {d.type === 'usdt' ? (
+                                                    {d.type === 'binance' || (d.content && d.content.includes('BINANCE')) ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-300 px-2.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                                            🟡 BINANCE PAY
+                                                        </span>
+                                                    ) : d.type === 'usdt' ? (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                            💲 USDT (TRC20/Bybit)
+                                                            💲 USDT (TRC20)
                                                         </span>
                                                     ) : (
                                                         <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
@@ -814,22 +824,35 @@ export default function DepositsPage() {
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                         <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG KHÁCH</span>
-                                <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
-                                    <span className="text-xs font-bold">👤</span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG THÀNH VIÊN</span>
+                                <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                    <span className="text-xs font-bold">👥</span>
                                 </div>
                             </div>
-                            <div className="text-xl font-black text-zinc-900 mt-1">{totalUsers}</div>
-                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Trang hiện tại {page}/{totalPages}</p>
+                            <div className="text-xl font-black text-zinc-900 mt-1">{totalUsers.toLocaleString('vi-VN')}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Tài khoản toàn hệ thống</p>
                         </div>
 
                         <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">SỐ DƯ TRANG NÀY</span>
-                                <CreditCard className="h-4 w-4 text-emerald-600" />
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">TỔNG VÍ TOÀN HỆ THỐNG</span>
+                                <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                    <Wallet className="h-4 w-4" />
+                                </div>
                             </div>
-                            <div className="text-xl font-black text-emerald-600 mt-1">{formatCurrency(pageTotalBalance)}</div>
-                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">{users.length} ví hiển thị</p>
+                            <div className="text-xl font-black text-emerald-600 mt-1">{formatCurrency(totalWalletBalance)}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Trang này: {formatCurrency(pageTotalBalance)}</p>
+                        </div>
+
+                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">ĐĂNG KÝ HÔM NAY</span>
+                                <div className="h-7 w-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                    <span className="text-xs font-bold">⚡</span>
+                                </div>
+                            </div>
+                            <div className="text-xl font-black text-emerald-600 mt-1">+{todayRegisteredUsers.toLocaleString('vi-VN')}</div>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Thành viên mới trong 24h</p>
                         </div>
 
                         <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
@@ -841,16 +864,7 @@ export default function DepositsPage() {
                                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>{activeCount} Đang hoạt động</span>
                             </div>
-                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Không có ví bị khóa</p>
-                        </div>
-
-                        <div className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">GIAO DỊCH</span>
-                                <Clock className="h-4 w-4 text-orange-500" />
-                            </div>
-                            <div className="text-xl font-black text-zinc-900 mt-1">370</div>
-                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Giao dịch tích lũy trên trang</p>
+                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Ví khách hàng hoạt động</p>
                         </div>
                     </div>
 

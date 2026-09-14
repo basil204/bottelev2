@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   RefreshCw, Download, DollarSign, Coins, TrendingUp, Percent,
   RotateCcw, UserCheck, Calendar, Filter, Users, ArrowUpRight,
-  TrendingDown, Package, Sparkles
+  TrendingDown, Package, Sparkles, Wallet, UserPlus, CreditCard
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -33,6 +34,15 @@ interface PnLData {
   };
 }
 
+interface GeneralStats {
+  totalUsers: number;
+  todayRegisteredUsers: number;
+  totalWalletBalance: number;
+  totalDeposits: number;
+  todayDeposits: number;
+  todayOrders: number;
+}
+
 interface ChartEntry {
   date: string;
   revenue: number;
@@ -58,6 +68,14 @@ export default function PnLAnalyticsDashboard() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [pnl, setPnl] = useState<PnLData | null>(null);
+  const [generalStats, setGeneralStats] = useState<GeneralStats>({
+    totalUsers: 0,
+    todayRegisteredUsers: 0,
+    totalWalletBalance: 0,
+    totalDeposits: 0,
+    todayDeposits: 0,
+    todayOrders: 0,
+  });
   const [chartData, setChartData] = useState<ChartEntry[]>([]);
   const [products, setProducts] = useState<ProductProfitability[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +96,14 @@ export default function PnLAnalyticsDashboard() {
         if (data.pnl) setPnl(data.pnl);
         if (data.chartData) setChartData(data.chartData);
         if (data.productProfitability) setProducts(data.productProfitability);
+        setGeneralStats({
+          totalUsers: Number(data.totalUsers || 0),
+          todayRegisteredUsers: Number(data.todayRegisteredUsers || 0),
+          totalWalletBalance: Number(data.totalWalletBalance || 0),
+          totalDeposits: Number(data.totalDeposits || 0),
+          todayDeposits: Number(data.todayDeposits || 0),
+          todayOrders: Number(data.todayOrders || 0),
+        });
       }
     } catch (e) {
       console.error('Error fetching P&L stats:', e);
@@ -95,7 +121,13 @@ export default function PnLAnalyticsDashboard() {
   const handleExportCSV = () => {
     if (!pnl) return;
     const csvRows = [
-      ['Chỉ số P&L Analytics', 'Giá trị'],
+      ['Chỉ số Thống kê & P&L', 'Giá trị'],
+      ['Tổng thành viên', generalStats.totalUsers],
+      ['Đăng ký hôm nay', generalStats.todayRegisteredUsers],
+      ['Tổng số dư ví thành viên', generalStats.totalWalletBalance],
+      ['Tổng tiền nạp đã duyệt', generalStats.totalDeposits],
+      ['Tiền nạp hôm nay', generalStats.todayDeposits],
+      ['Đơn hàng hôm nay', generalStats.todayOrders],
       ['Doanh thu thuần', pnl.netRevenue],
       ['Giá vốn (COGS)', pnl.cogs],
       ['Lợi nhuận gộp', pnl.grossProfit],
@@ -139,7 +171,7 @@ export default function PnLAnalyticsDashboard() {
             </h1>
           </div>
           <p className="mt-1 text-xs text-zinc-500 font-medium">
-            Quản lý giá vốn COGS, doanh thu thuần, tỉ suất lợi nhuận gộp, hoàn tiền và tỉ lệ khách hàng quay lại
+            Quản lý số dư ví, thành viên, giá vốn COGS, doanh thu thuần và lợi nhuận hệ thống
           </p>
         </div>
 
@@ -216,6 +248,87 @@ export default function PnLAnalyticsDashboard() {
             <Filter className="h-3.5 w-3.5" />
             <span>LỌC</span>
           </button>
+        </div>
+      </div>
+
+      {/* 2.5 Member & Wallet Overview Highlight Banner */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Card 1: Tổng số dư ví thành viên */}
+        <div className="relative overflow-hidden rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white p-5 shadow-xs transition-all hover:shadow-md hover:border-amber-300">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-amber-800">TỔNG SỐ DƯ VÍ</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm shadow-amber-500/30">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-2xl font-black tracking-tight text-zinc-950">
+            {formatPrice(generalStats.totalWalletBalance)}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-zinc-500">
+            <span>Đã nạp: {formatPrice(generalStats.totalDeposits)}</span>
+            <Link href="/deposits" className="flex items-center gap-1 font-bold text-amber-700 hover:text-amber-800 hover:underline">
+              Chi tiết ví <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        {/* Card 2: Tổng thành viên */}
+        <div className="relative overflow-hidden rounded-2xl border border-indigo-200/90 bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-white p-5 shadow-xs transition-all hover:shadow-md hover:border-indigo-300">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-800">TỔNG THÀNH VIÊN</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-500/30">
+              <Users className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-2xl font-black tracking-tight text-zinc-950">
+            {generalStats.totalUsers.toLocaleString('vi-VN')} <span className="text-sm font-bold text-zinc-400">thành viên</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-zinc-500">
+            <span>Tài khoản bot & web</span>
+            <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700">
+              Toàn hệ thống
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Đăng ký hôm nay */}
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-white p-5 shadow-xs transition-all hover:shadow-md hover:border-emerald-300">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800">ĐĂNG KÝ HÔM NAY</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-500/30">
+              <UserPlus className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2 text-2xl font-black tracking-tight text-emerald-600">
+            +{generalStats.todayRegisteredUsers.toLocaleString('vi-VN')}
+            <span className="text-xs font-bold text-zinc-400">người mới</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-zinc-500">
+            <span>Gia nhập trong 24h</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100/90 px-2.5 py-0.5 text-[10px] font-black text-emerald-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              MỚI HÔM NAY
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: Nạp tiền hôm nay */}
+        <div className="relative overflow-hidden rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-white p-5 shadow-xs transition-all hover:shadow-md hover:border-sky-300">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-sky-800">NẠP TIỀN HÔM NAY</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm shadow-sky-500/30">
+              <CreditCard className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-2xl font-black tracking-tight text-zinc-950">
+            {formatPrice(generalStats.todayDeposits)}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] font-semibold text-zinc-500">
+            <span>Đơn hoàn tất hôm nay: {generalStats.todayOrders}</span>
+            <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 font-bold text-sky-700">
+              Hôm nay
+            </span>
+          </div>
         </div>
       </div>
 

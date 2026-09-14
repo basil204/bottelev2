@@ -48,14 +48,12 @@ export async function GET() {
             shop_name: 'SHOP',
             usdt_trc20_wallet: '',
             telegram_group_link: '',
-            // Gmail EDU defaults
-            gmail_edu_enabled: true,
-            gmail_edu_price: 10000,
-            gmail_edu_domain: 'suafpoly.app',
-            gmail_edu_delete_hours: 1,
-            // Canva & Netflix Auto Services
-            canva_enabled: true,
-            netflix_enabled: true,
+            // Binance Pay settings
+            binance_api_key: '',
+            binance_secret_key: '',
+            binance_pay_id: '',
+            binance_auto_deposit: false,
+            binance_min_deposit: 1,
             // Admin IDs
             admin_ids: [],
             // Admin login accounts
@@ -71,9 +69,9 @@ export async function GET() {
 
         rows.forEach((row) => {
             // Handle booleans
-            if (['mb_auto_deposit', 'gmail_edu_enabled', 'canva_enabled', 'netflix_enabled'].includes(row.key)) {
-                settings[row.key] = row.value !== 'false';
-            } else if (['min_deposit', 'exchange_rate', 'gmail_edu_price', 'gmail_edu_delete_hours'].includes(row.key)) {
+            if (['mb_auto_deposit', 'binance_auto_deposit'].includes(row.key)) {
+                settings[row.key] = row.value !== 'false' && row.value !== false && row.value !== '0';
+            } else if (['min_deposit', 'exchange_rate', 'binance_min_deposit'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
             } else if (['admin_ids', 'gmail_checker_api_keys', 'deposit_rank_promotions'].includes(row.key)) {
                 // Parse JSON array settings
@@ -141,14 +139,12 @@ export async function POST(request: Request) {
             shop_name,
             usdt_trc20_wallet,
             telegram_group_link,
-            // Gmail EDU
-            gmail_edu_enabled,
-            gmail_edu_price,
-            gmail_edu_domain,
-            gmail_edu_delete_hours,
-            // Canva & Netflix Auto Services
-            canva_enabled,
-            netflix_enabled,
+            // Binance Pay settings
+            binance_api_key,
+            binance_secret_key,
+            binance_pay_id,
+            binance_auto_deposit,
+            binance_min_deposit,
             // Admin IDs
             admin_ids,
             // Admin login accounts
@@ -206,14 +202,12 @@ export async function POST(request: Request) {
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
             if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
             if (telegram_group_link !== undefined) await upsertSetting('telegram_group_link', telegram_group_link);
-            // Gmail EDU settings
-            if (gmail_edu_enabled !== undefined) await upsertSetting('gmail_edu_enabled', gmail_edu_enabled);
-            if (gmail_edu_price !== undefined) await upsertSetting('gmail_edu_price', gmail_edu_price);
-            if (gmail_edu_domain !== undefined) await upsertSetting('gmail_edu_domain', gmail_edu_domain);
-            if (gmail_edu_delete_hours !== undefined) await upsertSetting('gmail_edu_delete_hours', gmail_edu_delete_hours);
-            // Canva & Netflix Auto Services
-            if (canva_enabled !== undefined) await upsertSetting('canva_enabled', canva_enabled ? 'true' : 'false');
-            if (netflix_enabled !== undefined) await upsertSetting('netflix_enabled', netflix_enabled ? 'true' : 'false');
+            // Binance Pay settings
+            if (binance_api_key !== undefined) await upsertSetting('binance_api_key', binance_api_key);
+            if (binance_secret_key !== undefined) await upsertSetting('binance_secret_key', binance_secret_key);
+            if (binance_pay_id !== undefined) await upsertSetting('binance_pay_id', binance_pay_id);
+            if (binance_auto_deposit !== undefined) await upsertSetting('binance_auto_deposit', binance_auto_deposit ? 'true' : 'false');
+            if (binance_min_deposit !== undefined) await upsertSetting('binance_min_deposit', binance_min_deposit);
             // Admin IDs - save as JSON string
             if (admin_ids !== undefined) await upsertSetting('admin_ids', JSON.stringify(admin_ids));
             // Admin login accounts

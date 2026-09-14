@@ -2,6 +2,93 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
+import { sendPhoto } from '@/lib/telegram';
+
+// Kiểm tra lỗi Telegram có phải user đã block/deactivated không
+function isUserBlockedError(response: Response | null, error: unknown): boolean {
+    if (response && (response.status === 403 || response.status === 400)) {
+        return true;
+    }
+    if (error) {
+        const msg = String(error instanceof Error ? error.message : error).toLowerCase();
+        if (msg.includes('blocked') || msg.includes('chat not found') ||
+            msg.includes('user is deactivated') || msg.includes('forbidden')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Xóa user không còn hoạt động khỏi database
+async function removeDeadUser(telegramId: string) {
+    try {
+        await pool.query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
+        console.log(`[PREORDERS BROADCAST] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
+    } catch (err) {
+        console.error(`[PREORDERS BROADCAST] Lỗi xóa user ${telegramId}:`, err);
+    }
+}
+
+// Format message text converting animated emoji IDs and markdown to Telegram HTML
+function formatTelegramText(text: string): string {
+    if (!text || typeof text !== 'string') return text;
+    let formatted = text;
+
+    // Convert {5375135722514685501} or {id:5375135722514685501} to <tg-emoji emoji-id="5375135722514685501">⭐</tg-emoji>
+    formatted = formatted.replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/gi, '<tg-emoji emoji-id="$1">⭐</tg-emoji>');
+    formatted = formatted.replace(/!\[([^\]]*)\]\(tg:\/\/emoji\?id=(\d+)\)/gi, '<tg-emoji emoji-id="$2">$1</tg-emoji>');
+
+    // Format markdown bold & code & italic
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+    formatted = formatted.replace(/_([^_]+)_/g, '<i>$1</i>');
+
+    return formatted;
+}
+
+// Gửi tin nhắn theo batch song song
+async function sendBatch(
+    users: RowDataPacket[],
+    sendFn: (telegramId: string) => Promise<{ ok: boolean; blocked: boolean }>,
+    batchSize: number = 25,
+    delayMs: number = 1000
+): Promise<{ sent: number; failed: number; removed: number }> {
+    let sent = 0;
+    let failed = 0;
+    let removed = 0;
+
+    for (let i = 0; i < users.length; i += batchSize) {
+        const batch = users.slice(i, i + batchSize);
+
+        const results = await Promise.allSettled(
+            batch.map(async (user) => {
+                const result = await sendFn(user.telegram_id);
+                return { telegramId: user.telegram_id, ...result };
+            })
+        );
+
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                if (result.value.ok) {
+                    sent++;
+                } else if (result.value.blocked) {
+                    await removeDeadUser(result.value.telegramId);
+                    removed++;
+                } else {
+                    failed++;
+                }
+            } else {
+                failed++;
+            }
+        }
+
+        if (i + batchSize < users.length) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+
+    return { sent, failed, removed };
+}
 
 export async function GET(request: Request) {
     try {
@@ -163,18 +250,169 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: 'Nội dung thông báo không được để trống' }, { status: 400 });
             }
 
+            const {
+                customEmojiId,
+                button1Text = '📦 Đặt trước ngay',
+                enableButton1 = true,
+                enableButton2 = true,
+                button2Text = '🛒 Xem tất cả sản phẩm',
+                inlineKeyboard
+            } = body;
+
+            // Get bot token and bot username from settings
+            const [settings] = await pool.query<RowDataPacket[]>(
+                "SELECT `key`, `value` FROM settings WHERE `key` IN ('shop_name', 'telegram_bot_token', 'bot_username')"
+            );
+
+            let botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+            let botUsername = '';
+
+            settings.forEach((row) => {
+                if (row.key === 'telegram_bot_token' && row.value) botToken = row.value.trim();
+                if (row.key === 'bot_username' && row.value) botUsername = row.value.trim().replace(/^@/, '');
+            });
+
+            if (!botToken) {
+                return NextResponse.json({ error: 'Chưa cấu hình Telegram Bot Token trong Cài đặt hệ thống' }, { status: 400 });
+            }
+
+            // Get all active users with telegram_id
+            const [users] = await pool.query<RowDataPacket[]>(
+                'SELECT DISTINCT telegram_id FROM users WHERE telegram_id IS NOT NULL AND telegram_id != "" AND telegram_id != 0'
+            );
+
+            if (!users || users.length === 0) {
+                return NextResponse.json({ success: true, sent: 0, message: 'Không có người dùng nào để gửi thông báo' });
+            }
+
+            // Format message text with HTML and animated Telegram emoji tags
+            let formattedMessage = formatTelegramText(broadcastMessage.trim());
+
+            // Build replyMarkup inline keyboard
+            let replyMarkup: any = undefined;
+
+            if (Array.isArray(inlineKeyboard) && inlineKeyboard.length > 0) {
+                replyMarkup = { inline_keyboard: inlineKeyboard };
+            } else {
+                const keyboardRows: any[] = [];
+                const firstRow: any[] = [];
+
+                if (enableButton1) {
+                    let b1Text = (button1Text || '📦 Đặt trước ngay').trim();
+                    let b1EmojiId: string | undefined = customEmojiId ? String(customEmojiId).trim() : undefined;
+
+                    const codeMatch = b1Text.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
+                    if (codeMatch) {
+                        b1EmojiId = codeMatch[1];
+                        b1Text = b1Text.replace(codeMatch[0], '').trim();
+                    }
+
+                    if (!b1Text) b1Text = '📦 Đặt trước ngay';
+
+                    const buyUrl = (botUsername && productId)
+                        ? `https://t.me/${botUsername}?start=buy_${productId}`
+                        : (botUsername ? `https://t.me/${botUsername}` : 'https://t.me');
+
+                    const btn1: any = {
+                        text: b1Text,
+                        url: buyUrl
+                    };
+                    if (b1EmojiId) {
+                        btn1.icon_custom_emoji_id = b1EmojiId;
+                    }
+                    firstRow.push(btn1);
+                }
+
+                if (firstRow.length > 0) {
+                    keyboardRows.push(firstRow);
+                }
+
+                if (enableButton2) {
+                    let b2Text = (button2Text || '🛒 Xem tất cả sản phẩm').trim();
+                    let b2EmojiId: string | undefined = undefined;
+                    const codeMatch = b2Text.match(/\{(?:emoji_id|emoji|id|tg_emoji)?:?(\d{15,22})\}/i);
+                    if (codeMatch) {
+                        b2EmojiId = codeMatch[1];
+                        b2Text = b2Text.replace(codeMatch[0], '').trim();
+                    }
+
+                    if (!b2Text) b2Text = '🛒 Xem tất cả sản phẩm';
+
+                    const shopUrl = botUsername ? `https://t.me/${botUsername}?start=shop` : 'https://t.me';
+                    const btn2: any = {
+                        text: b2Text,
+                        url: shopUrl
+                    };
+                    if (b2EmojiId) {
+                        btn2.icon_custom_emoji_id = b2EmojiId;
+                    }
+                    keyboardRows.push([btn2]);
+                }
+
+                if (keyboardRows.length > 0) {
+                    replyMarkup = { inline_keyboard: keyboardRows };
+                }
+            }
+
+            const finalImageUrl = bannerImage && bannerImage.trim() ? bannerImage.trim() : undefined;
+
+            const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
+                try {
+                    if (finalImageUrl) {
+                        const success = await sendPhoto(telegramId, finalImageUrl, formattedMessage, botToken, replyMarkup);
+                        return { ok: success, blocked: !success };
+                    } else {
+                        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                chat_id: telegramId,
+                                text: formattedMessage,
+                                parse_mode: 'HTML',
+                                reply_markup: replyMarkup
+                            })
+                        });
+
+                        if (response.ok) {
+                            return { ok: true, blocked: false };
+                        }
+
+                        if (isUserBlockedError(response, null)) {
+                            return { ok: false, blocked: true };
+                        }
+
+                        return { ok: false, blocked: false };
+                    }
+                } catch (err) {
+                    if (isUserBlockedError(null, err)) {
+                        return { ok: false, blocked: true };
+                    }
+                    console.error(`[PREORDER BROADCAST] Error sending to ${telegramId}:`, err);
+                    return { ok: false, blocked: false };
+                }
+            };
+
+            const { sent, failed, removed } = await sendBatch(users, sendFn);
+
             // Log broadcast action
             await logAdminAction({
                 adminName: adminName || 'System',
                 action: 'BROADCAST',
                 targetType: 'PREORDER',
-                details: { productId, broadcastMessage, bannerImage },
+                details: { productId, broadcastMessage, bannerImage, customEmojiId, sent, failed, total: users.length },
                 ipAddress,
                 userAgent,
                 request
             });
 
-            return NextResponse.json({ success: true, message: 'Đã gửi thông báo mở đặt trước tới toàn bộ khách hàng' });
+            return NextResponse.json({
+                success: true,
+                sent,
+                failed,
+                removed,
+                total: users.length,
+                message: `Đã phát sóng thông báo mở đặt trước tới ${sent}/${users.length} khách hàng!`
+            });
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

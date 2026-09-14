@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
     Hourglass, RefreshCw, Plus, Radio, Search, Copy, Check, X,
     Package, CheckCircle2, DollarSign, User, Sparkles, Image as ImageIcon,
-    RotateCcw, Send, HelpCircle, CheckSquare, Layers
+    RotateCcw, Send, HelpCircle, CheckSquare, Layers, Upload
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -32,6 +32,12 @@ interface ProductOption {
     id: number;
     name: string;
     price: number;
+    emoji?: string;
+    custom_emoji_id?: string;
+    image_url?: string;
+    preorder_fee_vnd?: number;
+    preorder_max_per_user?: number;
+    preorder_total_limit?: number;
 }
 
 export default function PreordersPage() {
@@ -68,11 +74,14 @@ export default function PreordersPage() {
 
     // Broadcast Form
     const [broadcastProductId, setBroadcastProductId] = useState<string>('');
+    const [broadcastCustomEmojiId, setBroadcastCustomEmojiId] = useState('');
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [broadcastImage, setBroadcastImage] = useState('');
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [enableButton1, setEnableButton1] = useState(true);
     const [button1Text, setButton1Text] = useState('📦 Đặt trước ngay');
     const [enableButton2, setEnableButton2] = useState(true);
+    const [button2Text, setButton2Text] = useState('🛒 Xem tất cả sản phẩm');
     const [submittingBroadcast, setSubmittingBroadcast] = useState(false);
 
     useEffect(() => {
@@ -86,7 +95,17 @@ export default function PreordersPage() {
             .then((res) => res.json())
             .then((data) => {
                 const list = Array.isArray(data) ? data : data.data || [];
-                setProducts(list.map((p: any) => ({ id: p.id, name: p.name, price: Number(p.price) || 0 })));
+                setProducts(list.map((p: any) => ({
+                    id: p.id,
+                    name: p.name,
+                    price: Number(p.price) || 0,
+                    emoji: p.emoji || p.telegram_emoji || '',
+                    custom_emoji_id: p.custom_emoji_id || p.telegram_custom_emoji_id || '',
+                    image_url: p.image_url || '',
+                    preorder_fee_vnd: Number(p.preorder_fee_vnd) || 0,
+                    preorder_max_per_user: Number(p.preorder_max_per_user) || 5,
+                    preorder_total_limit: Number(p.preorder_total_limit) || 100
+                })));
             })
             .catch((err) => console.error(err));
     };
@@ -136,19 +155,64 @@ export default function PreordersPage() {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
-    const fillBroadcastTemplate = () => {
-        const prod = products.find(p => String(p.id) === broadcastProductId) || products[0];
-        const prodName = prod ? prod.name : 'Sản phẩm VIP #4';
+    const fillBroadcastTemplate = (prodId?: string, customEmoji?: string) => {
+        const targetId = prodId || broadcastProductId;
+        const prod = products.find(p => String(p.id) === String(targetId)) || products[0];
+        const prodName = prod ? prod.name : 'Sản phẩm Hot';
         const priceStr = prod ? formatCurrency(prod.price) : '150.000 đ';
+        const depositStr = prod && prod.preorder_fee_vnd ? formatCurrency(prod.preorder_fee_vnd) : '0 đ';
+        const totalLimit = prod?.preorder_total_limit || 100;
+        const maxPerUser = prod?.preorder_max_per_user || 5;
+        const emojiId = customEmoji !== undefined ? customEmoji : (prod?.custom_emoji_id || broadcastCustomEmojiId || '');
+
+        const emojiTag = emojiId ? `{${emojiId}} ` : '✨ ';
 
         setBroadcastMessage(
-            `🚨 THÔNG BÁO MỞ ĐẶT TRƯỚC (PRE-ORDER) 🚨\n\n` +
-            `✨ Sản phẩm: ${prodName}\n` +
-            `💰 Giá niêm yết: ${priceStr}\n` +
-            `📦 Hạn mức mở đợt này: 100 sản phẩm\n` +
-            `🎯 Tối đa mỗi khách: 5 sản phẩm\n\n` +
-            `🔥 Đặt trước ngay để nhận hàng sớm nhất theo thứ tự ưu tiên FIFO khi kho có hàng mới!`
+            `🚨 **THÔNG BÁO MỞ ĐẶT TRƯỚC (PRE-ORDER)** 🚨\n\n` +
+            `${emojiTag}**Sản phẩm:** ${prodName}\n` +
+            `💰 **Giá niêm yết:** ${priceStr}\n` +
+            (prod && prod.preorder_fee_vnd ? `💵 **Phí đặt cọc:** ${depositStr}\n` : '') +
+            `📦 **Hạn mức mở đợt này:** ${totalLimit} sản phẩm\n` +
+            `🎯 **Tối đa mỗi khách:** ${maxPerUser} sản phẩm\n\n` +
+            `🔥 **Đặt trước ngay** để nhận hàng sớm nhất theo thứ tự ưu tiên FIFO khi kho có hàng mới!`
         );
+
+        if (prod?.image_url && !broadcastImage) {
+            setBroadcastImage(prod.image_url);
+        }
+        if (prod?.custom_emoji_id && !broadcastCustomEmojiId) {
+            setBroadcastCustomEmojiId(prod.custom_emoji_id);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (res.ok && data.url) {
+                setBroadcastImage(data.url);
+            } else {
+                alert(data.error || 'Lỗi khi tải ảnh lên');
+            }
+        } catch {
+            alert('Lỗi kết nối khi tải ảnh');
+        } finally {
+            setUploadingImage(false);
+            e.target.value = '';
+        }
+    };
+
+    const insertToMessage = (textToInsert: string) => {
+        setBroadcastMessage(prev => prev + ' ' + textToInsert);
     };
 
     const handleCreatePreorder = async () => {
@@ -207,16 +271,20 @@ export default function PreordersPage() {
                     action: 'broadcast',
                     productId: broadcastProductId,
                     broadcastMessage: broadcastMessage.trim(),
-                    bannerImage: broadcastImage,
-                    button1Text
+                    bannerImage: broadcastImage.trim() || undefined,
+                    customEmojiId: broadcastCustomEmojiId.trim() || undefined,
+                    button1Text: button1Text.trim(),
+                    enableButton1,
+                    enableButton2,
+                    button2Text: button2Text.trim()
                 })
             });
 
-            if (res.ok) {
-                alert('Đã phát sóng thông báo mở đặt trước tới toàn bộ người dùng!');
+            const data = await res.json();
+            if (res.ok && data.success) {
+                alert(data.message || `Đã phát sóng thông báo mở đặt trước tới ${data.sent || 0} khách hàng!`);
                 setIsBroadcastModalOpen(false);
             } else {
-                const data = await res.json();
                 alert(data.error || 'Lỗi gửi thông báo');
             }
         } catch (e) {
@@ -574,7 +642,7 @@ export default function PreordersPage() {
             {/* MODAL 1: BROADCAST ĐẶT TRƯỚC */}
             {isBroadcastModalOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-                    <div className="w-full max-w-2xl my-auto max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200">
+                    <div className="w-full max-w-2xl my-auto max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200">
                         <div className="h-1.5 w-full bg-orange-600 shrink-0" />
 
                         {/* Modal Header */}
@@ -607,7 +675,7 @@ export default function PreordersPage() {
                                     </label>
                                     <button
                                         type="button"
-                                        onClick={fillBroadcastTemplate}
+                                        onClick={() => fillBroadcastTemplate(broadcastProductId, broadcastCustomEmojiId)}
                                         className="text-[11px] font-bold text-orange-600 hover:underline flex items-center gap-1"
                                     >
                                         <Sparkles className="h-3 w-3" />
@@ -617,15 +685,108 @@ export default function PreordersPage() {
                                 <select
                                     value={broadcastProductId}
                                     onChange={(e) => {
-                                        setBroadcastProductId(e.target.value);
-                                        fillBroadcastTemplate();
+                                        const pid = e.target.value;
+                                        setBroadcastProductId(pid);
+                                        const prod = products.find(p => String(p.id) === pid);
+                                        if (prod?.custom_emoji_id) {
+                                            setBroadcastCustomEmojiId(prod.custom_emoji_id);
+                                        }
+                                        fillBroadcastTemplate(pid, prod?.custom_emoji_id);
                                     }}
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 >
                                     {products.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name} - Giá: {formatCurrency(p.price)}</option>
+                                        <option key={p.id} value={p.id}>
+                                            {p.emoji ? `${p.emoji} ` : ''}{p.name} - Giá: {formatCurrency(p.price)} {p.preorder_fee_vnd ? `(Cọc: ${formatCurrency(p.preorder_fee_vnd)})` : ''}
+                                        </option>
                                     ))}
                                 </select>
+                            </div>
+
+                            {/* ID Emoji Telegram (Custom Emoji ID) */}
+                            <div className="rounded-2xl border border-orange-200/80 bg-orange-50/40 p-3.5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="font-extrabold uppercase text-orange-950 text-[11px] flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+                                        <span>ID EMOJI TELEGRAM (CUSTOM EMOJI ID)</span>
+                                    </label>
+                                    <span className="text-[10px] text-orange-700 font-semibold">Tùy chọn Icon động / Emoji VIP Telegram</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={broadcastCustomEmojiId}
+                                        onChange={(e) => setBroadcastCustomEmojiId(e.target.value.trim())}
+                                        placeholder="Ví dụ: 5375135722514685501 (ID Custom Emoji Telegram)"
+                                        className="flex-1 rounded-xl border border-orange-200 bg-white px-3 py-2 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500"
+                                    />
+                                    {broadcastCustomEmojiId && (
+                                        <button
+                                            type="button"
+                                            onClick={() => insertToMessage(`{${broadcastCustomEmojiId}}`)}
+                                            className="rounded-xl border border-orange-300 bg-white px-3 py-2 font-bold text-orange-700 hover:bg-orange-100/60 transition shrink-0"
+                                            title="Chèn mã Custom Emoji vào vị trí cuối tin nhắn"
+                                        >
+                                            + Chèn vào bài
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Quick Animated Emoji Chips */}
+                                <div className="flex items-center flex-wrap gap-1.5 pt-1">
+                                    <span className="text-[10px] text-zinc-500 font-bold">Mẫu Emoji động:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastCustomEmojiId('5375135722514685501');
+                                            insertToMessage('{5375135722514685501}');
+                                        }}
+                                        className="rounded-lg bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:border-orange-500 hover:text-orange-600 transition flex items-center gap-1"
+                                    >
+                                        ⭐ <span>Star VIP</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastCustomEmojiId('5368324170671282286');
+                                            insertToMessage('{5368324170671282286}');
+                                        }}
+                                        className="rounded-lg bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:border-orange-500 hover:text-orange-600 transition flex items-center gap-1"
+                                    >
+                                        🔥 <span>Fire Flame</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastCustomEmojiId('5382977877234676166');
+                                            insertToMessage('{5382977877234676166}');
+                                        }}
+                                        className="rounded-lg bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:border-orange-500 hover:text-orange-600 transition flex items-center gap-1"
+                                    >
+                                        💎 <span>Diamond</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastCustomEmojiId('5409295508828988636');
+                                            insertToMessage('{5409295508828988636}');
+                                        }}
+                                        className="rounded-lg bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:border-orange-500 hover:text-orange-600 transition flex items-center gap-1"
+                                    >
+                                        🔔 <span>Bell</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBroadcastCustomEmojiId('5370830704991522031');
+                                            insertToMessage('{5370830704991522031}');
+                                        }}
+                                        className="rounded-lg bg-white border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:border-orange-500 hover:text-orange-600 transition flex items-center gap-1"
+                                    >
+                                        👑 <span>Crown</span>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Message text */}
@@ -642,24 +803,62 @@ export default function PreordersPage() {
                                     onChange={(e) => setBroadcastMessage(e.target.value)}
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 outline-none focus:border-orange-500 transition leading-relaxed"
                                 />
+                                <div className="flex items-center flex-wrap gap-1">
+                                    <span className="text-[10px] text-zinc-400 font-bold">Chèn nhanh:</span>
+                                    {['🚨', '🔥', '🎁', '💎', '📦', '⚡', '💵', '✨', '👉', '❤️'].map(em => (
+                                        <button
+                                            key={em}
+                                            type="button"
+                                            onClick={() => insertToMessage(em)}
+                                            className="px-2 py-0.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs transition"
+                                        >
+                                            {em}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
-                            {/* Optional Banner Image */}
+                            {/* Banner Image Upload & URL */}
                             <div className="space-y-1.5">
                                 <label className="font-extrabold uppercase text-zinc-700 text-[11px] flex items-center gap-1.5">
                                     <ImageIcon className="h-3.5 w-3.5 text-zinc-500" />
-                                    <span>ẢNH ĐÍNH KÈM (TÙY CHỌN)</span>
+                                    <span>ẢNH ĐÍNH KÈM / BANNER (TÙY CHỌN)</span>
                                 </label>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 font-bold text-zinc-700 hover:bg-zinc-100 transition flex items-center gap-1.5"
-                                    >
-                                        <ImageIcon className="h-3.5 w-3.5" />
-                                        <span>Chọn ảnh banner</span>
-                                    </button>
-                                    {broadcastImage && <span className="text-zinc-500 font-mono text-[11px] truncate">{broadcastImage}</span>}
+                                    <label className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 font-bold text-zinc-700 hover:bg-zinc-100 transition flex items-center gap-1.5 cursor-pointer shrink-0">
+                                        <Upload className="h-3.5 w-3.5 text-orange-600" />
+                                        <span>{uploadingImage ? 'Đang tải ảnh...' : 'Tải ảnh banner lên'}</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageUpload}
+                                            disabled={uploadingImage}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={broadcastImage}
+                                        onChange={(e) => setBroadcastImage(e.target.value)}
+                                        placeholder="Hoặc dán URL ảnh trực tiếp (/uploads/... hoặc https://...)"
+                                        className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500"
+                                    />
+                                    {broadcastImage && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setBroadcastImage('')}
+                                            className="p-2 rounded-xl text-red-500 hover:bg-red-50 border border-red-200 transition"
+                                            title="Xóa ảnh"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </div>
+                                {broadcastImage && (
+                                    <div className="relative inline-block mt-2 rounded-xl overflow-hidden border border-zinc-200 shadow-2xs max-h-36">
+                                        <img src={broadcastImage} alt="Banner Preview" className="h-28 w-auto object-cover" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Inline Keyboard Options */}
@@ -667,19 +866,23 @@ export default function PreordersPage() {
                                 <span className="font-extrabold uppercase text-zinc-700 text-[11px] block">
                                     NÚT TƯƠNG TÁC TELEGRAM (INLINE KEYBOARD)
                                 </span>
-                                <div className="space-y-2">
+                                <div className="space-y-2.5">
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="checkbox"
                                             checked={enableButton1}
                                             onChange={(e) => setEnableButton1(e.target.checked)}
                                             className="rounded accent-orange-600 h-4 w-4"
+                                            id="chk_enable_btn1"
                                         />
-                                        <span className="font-bold text-zinc-700">Nút mở Đặt trước:</span>
+                                        <label htmlFor="chk_enable_btn1" className="font-bold text-zinc-700 shrink-0">
+                                            Nút Đặt trước ngay:
+                                        </label>
                                         <input
                                             type="text"
                                             value={button1Text}
                                             onChange={(e) => setButton1Text(e.target.value)}
+                                            placeholder="📦 Đặt trước ngay"
                                             className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-900 outline-none focus:border-orange-500"
                                         />
                                     </div>
@@ -689,10 +892,18 @@ export default function PreordersPage() {
                                             checked={enableButton2}
                                             onChange={(e) => setEnableButton2(e.target.checked)}
                                             className="rounded accent-orange-600 h-4 w-4"
+                                            id="chk_enable_btn2"
                                         />
-                                        <span className="font-bold text-zinc-700">
-                                            Nút "🛒 Xem tất cả sản phẩm" <span className="font-mono text-zinc-400">(callback: `start:shop`)</span>
-                                        </span>
+                                        <label htmlFor="chk_enable_btn2" className="font-bold text-zinc-700 shrink-0">
+                                            Nút Xem tất cả sản phẩm:
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={button2Text}
+                                            onChange={(e) => setButton2Text(e.target.value)}
+                                            placeholder="🛒 Xem tất cả sản phẩm"
+                                            className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 font-semibold text-zinc-900 outline-none focus:border-orange-500"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -704,18 +915,24 @@ export default function PreordersPage() {
                                     <span>XEM TRƯỚC TIN NHẮN TRÊN TELEGRAM (PREVIEW)</span>
                                 </span>
                                 <div className="rounded-2xl bg-slate-900 p-4 text-slate-100 font-sans space-y-3 shadow-inner">
+                                    {broadcastImage && (
+                                        <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-800">
+                                            <img src={broadcastImage} alt="Preview Banner" className="w-full h-36 object-cover" />
+                                        </div>
+                                    )}
                                     <div className="whitespace-pre-wrap leading-relaxed text-[11px]">
                                         {broadcastMessage}
                                     </div>
                                     <div className="space-y-1.5 pt-2 border-t border-slate-800">
                                         {enableButton1 && (
-                                            <button className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 font-bold text-center text-sky-400 text-[11px] shadow-2xs">
-                                                {button1Text}
+                                            <button className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 font-bold text-center text-sky-400 text-[11px] shadow-2xs flex items-center justify-center gap-1.5">
+                                                {broadcastCustomEmojiId && <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1.5 py-0.2 rounded">Custom Emoji</span>}
+                                                <span>{button1Text}</span>
                                             </button>
                                         )}
                                         {enableButton2 && (
                                             <button className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 font-bold text-center text-sky-400 text-[11px] shadow-2xs">
-                                                🛒 Xem tất cả sản phẩm
+                                                {button2Text}
                                             </button>
                                         )}
                                     </div>
@@ -738,8 +955,8 @@ export default function PreordersPage() {
                                 disabled={submittingBroadcast}
                                 className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-6 py-2.5 font-extrabold uppercase transition active:scale-95 shadow-xs flex items-center gap-2 disabled:opacity-50"
                             >
-                                <Send className="h-4 w-4" />
-                                <span>{submittingBroadcast ? 'ĐANG GỬI...' : '🚀 GỬI THÔNG BÁO NGAY'}</span>
+                                <Send className={`h-4 w-4 ${submittingBroadcast ? 'animate-pulse' : ''}`} />
+                                <span>{submittingBroadcast ? 'ĐANG PHÁT SÓNG...' : '🚀 GỬI THÔNG BÁO NGAY'}</span>
                             </button>
                         </div>
                     </div>

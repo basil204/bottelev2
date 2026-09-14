@@ -71,7 +71,19 @@ async function initAccountStorageTables() {
       { name: 'emoji', type: 'VARCHAR(50) NULL' },
       { name: 'custom_emoji_id', type: 'VARCHAR(100) NULL' },
       { name: 'telegram_emoji', type: 'VARCHAR(50) NULL' },
-      { name: 'telegram_custom_emoji_id', type: 'VARCHAR(100) NULL' }
+      { name: 'telegram_custom_emoji_id', type: 'VARCHAR(100) NULL' },
+      { name: 'name_vi', type: 'VARCHAR(255) NULL' },
+      { name: 'name_en', type: 'VARCHAR(255) NULL' },
+      { name: 'name_zh', type: 'VARCHAR(255) NULL' },
+      { name: 'description_vi', type: 'TEXT NULL' },
+      { name: 'description_en', type: 'TEXT NULL' },
+      { name: 'description_zh', type: 'TEXT NULL' },
+      { name: 'note_vi', type: 'TEXT NULL' },
+      { name: 'note_en', type: 'TEXT NULL' },
+      { name: 'note_zh', type: 'TEXT NULL' },
+      { name: 'prompt_message_vi', type: 'TEXT NULL' },
+      { name: 'prompt_message_en', type: 'TEXT NULL' },
+      { name: 'prompt_message_zh', type: 'TEXT NULL' }
     ];
 
     for (const col of productColumns) {

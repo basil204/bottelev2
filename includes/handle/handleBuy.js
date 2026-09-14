@@ -5,9 +5,7 @@ import { createOrder, getOrderById } from '../controllers/orderController.js';
 import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../../utils/index.js';
 import { addBalanceLog } from '../controllers/balanceLogController.js';
 import { notifyAdminAboutNewManualOrder, notifyAdminAboutPurchase, getAdminIds } from './handleNotify.js';
-import { validateAndApplyCoupon, recordCouponUsage } from '../controllers/couponController.js';
 import { query } from '../database/index.js';
-import { checkGmailLive } from '../helpers/gmailChecker.js';
 import { t } from '../helpers/langHelper.js';
 import { getBotTemplate, renderBotTemplate } from '../helpers/templateHelper.js';
 import fs from 'fs';
@@ -42,13 +40,19 @@ export const isOrderProduct = (product) => {
 
 
 
-export const sendCategoryList = async (bot, chatId, user) => {
+export const sendCategoryList = async (bot, chatId, user, messageId = null) => {
   const lang = user?.language || 'vi';
 
   // Fetch all active categories from categories table
   const categories = await query('SELECT * FROM categories WHERE (is_active IS NULL OR is_active = 1) ORDER BY priority DESC, id DESC');
   if (!categories || !categories.length) {
-    return bot.sendMessage(chatId, L(lang, 'Chưa có thư mục nào.', 'No categories yet.', '暂无分类。'));
+    const noCatMsg = L(lang, 'Chưa có thư mục nào.', 'No categories yet.', '暂无分类。');
+    if (messageId) {
+      try {
+        return await bot.editMessageText(noCatMsg, { chat_id: chatId, message_id: messageId });
+      } catch (e) {}
+    }
+    return bot.sendMessage(chatId, noCatMsg);
   }
 
   // Fetch products to check stock
@@ -94,6 +98,19 @@ export const sendCategoryList = async (bot, chatId, user) => {
   }
 
   const selectMsg = t('select_category', lang);
+
+  if (messageId) {
+    try {
+      return await bot.editMessageText(selectMsg, {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {
+      console.log('[CATEGORY_LIST] Edit message fallback:', e.message);
+    }
+  }
+
   await bot.sendMessage(chatId, selectMsg, {
     reply_markup: { inline_keyboard }
   });
@@ -106,58 +123,83 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
   const actualPageSize = 10;
   const offset = (page - 1) * actualPageSize;
   const { rows, total } = await listProducts(offset, actualPageSize, categoryId);
+
+  // Lấy tên danh mục nếu có
+  let catName = '';
+  if (categoryId) {
+    try {
+      const catRows = await query('SELECT name FROM categories WHERE id = ?', [categoryId]);
+      if (catRows && catRows[0]?.name) {
+        catName = catRows[0].name.replace(/[🟢🔴]\s*/g, '').trim();
+      }
+    } catch (e) {}
+  }
+
   if (!rows.length) {
-    return bot.sendMessage(chatId, L(lang, 'Không có sản phẩm trong danh mục này.', 'No products in this category.', '此分类下暂无产品。'));
-  }
-
-  // Get settings
-  let settings = { buy_gmail_edu: true, buy_gmail_non: true };
-  try {
-    const settingRows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('buy_gmail_edu', 'buy_gmail_non')");
-    if (Array.isArray(settingRows)) {
-      settingRows.forEach(r => {
-        if (r.key === 'buy_gmail_edu') settings.buy_gmail_edu = r.value === 'true';
-        if (r.key === 'buy_gmail_non') settings.buy_gmail_non = r.value === 'true';
-      });
+    const emptyMsg = L(lang, 'Không có sản phẩm trong danh mục này.', 'No products in this category.', '此分类下暂无产品。');
+    const emptyKeyboard = [[{
+      text: L(lang, 'Quay lại danh mục', 'Back to Categories', '返回分类'),
+      callback_data: createCallbackData({ action: 'back_to_categories' })
+    }]];
+    if (messageId) {
+      try {
+        return await bot.editMessageText(emptyMsg, {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: { inline_keyboard: emptyKeyboard }
+        });
+      } catch (e) {}
     }
-  } catch (err) {
-    console.error('Error fetching settings for product list:', err);
+    return bot.sendMessage(chatId, emptyMsg, { reply_markup: { inline_keyboard: emptyKeyboard } });
   }
 
-  // Filter products
-  const filteredRows = rows.filter(p => {
-    const name = p.name.toLowerCase();
-    const isEdu = name.includes('edu');
-    if (isEdu && !settings.buy_gmail_edu) return false;
-    if (!isEdu && !settings.buy_gmail_non) return false;
-    return true;
-  });
+  const filteredRows = rows;
 
   if (!filteredRows.length && rows.length > 0) {
-    return bot.sendMessage(chatId, L(lang,
+    const hiddenMsg = L(lang,
       '🚫 Các sản phẩm đang tạm ẩn. Vui lòng quay lại sau.',
       '🚫 Products are temporarily hidden. Please come back later.',
       '🚫 产品暂时隐藏，请稍后再来。'
-    ));
+    );
+    const hiddenKeyboard = [[{
+      text: L(lang, 'Quay lại danh mục', 'Back to Categories', '返回分类'),
+      callback_data: createCallbackData({ action: 'back_to_categories' })
+    }]];
+    if (messageId) {
+      try {
+        return await bot.editMessageText(hiddenMsg, {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: { inline_keyboard: hiddenKeyboard }
+        });
+      } catch (e) {}
+    }
+    return bot.sendMessage(chatId, hiddenMsg, { reply_markup: { inline_keyboard: hiddenKeyboard } });
   }
 
   const { getUserProductPrice } = await import('../helpers/customPricing.js');
+  const { getActiveFlashSaleForProduct } = await import('../helpers/flashSaleHelper.js');
   const inline_keyboard = await Promise.all(filteredRows.map(async (p) => {
     const customEmojiId = p.custom_emoji_id || p.telegram_custom_emoji_id || null;
     const emoji = p.emoji || p.telegram_emoji || '';
     const userPrice = await getUserProductPrice(chatId, p.id, p.price);
+    const fsInfo = await getActiveFlashSaleForProduct(p.id);
     const isOrder = isOrderProduct(p);
     const stockText = isOrder ? '' : ` (${p.stock})`;
     const priceText = await formatMoney(userPrice, lang);
-    const cleanName = p.name.replace(/[🟢🔴]\s*/g, '').trim();
+    const rawName = (lang === 'en' ? (p.name_en || p.name) : (lang === 'zh' ? (p.name_zh || p.name) : (p.name_vi || p.name))) || p.name;
+    const cleanName = rawName.replace(/[🟢🔴]\s*/g, '').trim();
+
+    const saleTag = fsInfo.hasFlashSale ? `⚡ ` : '';
+    const discountTag = fsInfo.hasFlashSale && fsInfo.discountPercent > 0 ? ` (-${fsInfo.discountPercent}%)` : '';
 
     let textLabel = '';
     if (customEmojiId) {
-      textLabel = `${cleanName} - ${priceText}${stockText}`;
+      textLabel = `${saleTag}${cleanName} - ${priceText}${discountTag}${stockText}`;
     } else if (emoji) {
-      textLabel = `${emoji} ${cleanName} - ${priceText}${stockText}`;
+      textLabel = `${saleTag}${emoji} ${cleanName} - ${priceText}${discountTag}${stockText}`;
     } else {
-      textLabel = `${cleanName} - ${priceText}${stockText}`;
+      textLabel = `${saleTag}${cleanName} - ${priceText}${discountTag}${stockText}`;
     }
 
     const btnObj = {
@@ -181,35 +223,53 @@ export const sendProductList = async (bot, chatId, page, pageSize, user, categor
     callback_data: createCallbackData({ action: 'back_to_categories' })
   }]);
 
-  const selectMsg = L(lang, 'Chọn sản phẩm:', 'Select product:', '选择产品：');
+  const selectMsg = catName
+    ? L(lang, `📂 Danh mục: **${catName}**\nVui lòng chọn sản phẩm cần mua:`, `📂 Category: **${catName}**\nPlease select a product:`, `📂 分类: **${catName}**\n请选择要购买的产品:`)
+    : L(lang, 'Chọn sản phẩm:', 'Select product:', '选择产品：');
 
   if (messageId) {
     try {
-      await bot.editMessageText(selectMsg, {
+      return await bot.editMessageText(selectMsg, {
         chat_id: chatId,
         message_id: messageId,
+        parse_mode: 'Markdown',
         reply_markup: { inline_keyboard }
       });
     } catch (e) {
       console.log('[PRODUCT_LIST] Edit message skipped:', e.message);
     }
-  } else {
-    await bot.sendMessage(chatId, selectMsg, { reply_markup: { inline_keyboard } });
   }
+
+  await bot.sendMessage(chatId, selectMsg, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard }
+  });
 };
 
-// Hiển thị chi tiết sản phẩm
-export const showProductDetail = async (bot, chatId, productId, userId) => {
+// Hiển thị chi tiết sản phẩm (hỗ trợ sửa tin nhắn tại chỗ nếu có messageId)
+export const showProductDetail = async (bot, chatId, productId, userId, messageId = null) => {
   const product = await getProduct(productId);
   const user = await getUserByTelegram(userId);
   const lang = user?.language || 'vi';
 
   if (!product || (product.is_active !== undefined && product.is_active === 0)) {
-    return bot.sendMessage(chatId, L(lang, '❌ Sản phẩm không tồn tại hoặc tạm ngưng kinh doanh.', '❌ Product not found or inactive.', '❌ 产品不存在或已停售。'));
+    const notFoundMsg = L(lang, '❌ Sản phẩm không tồn tại hoặc tạm ngưng kinh doanh.', '❌ Product not found or inactive.', '❌ 产品不存在或已停售。');
+    if (messageId) {
+      try {
+        return await bot.editMessageText(notFoundMsg, { chat_id: chatId, message_id: messageId });
+      } catch (e) {}
+    }
+    return bot.sendMessage(chatId, notFoundMsg);
   }
 
   if (!user) {
-    return bot.sendMessage(chatId, L(lang, 'Vui lòng /start để tạo tài khoản.', 'Please /start to create account.', '请 /start 创建账户。'));
+    const noUserMsg = L(lang, 'Vui lòng /start để tạo tài khoản.', 'Please /start to create account.', '请 /start 创建账户。');
+    if (messageId) {
+      try {
+        return await bot.editMessageText(noUserMsg, { chat_id: chatId, message_id: messageId });
+      } catch (e) {}
+    }
+    return bot.sendMessage(chatId, noUserMsg);
   }
 
   // Lấy tỷ giá từ settings
@@ -224,7 +284,9 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   }
 
   const { getUserProductPrice } = await import('../helpers/customPricing.js');
+  const { getActiveFlashSaleForProduct } = await import('../helpers/flashSaleHelper.js');
   const priceVnd = await getUserProductPrice(userId, product.id, product.price);
+  const fsInfo = await getActiveFlashSaleForProduct(product.id);
   const priceUsd = (priceVnd / exchangeRate).toFixed(2);
 
   let productType = isOrderProduct(product) ? 'order' : 'stock';
@@ -232,7 +294,8 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   const stock = Number(product.stock) || 0;
   const soldCount = Math.max(0, Number(product.sold_count) || 0);
   const defaultDesc = L(lang, 'Không có mô tả', 'No description', '暂无描述');
-  const description = product.description || defaultDesc;
+  const description = (lang === 'en' ? (product.description_en || product.note_en || product.description) : (lang === 'zh' ? (product.description_zh || product.note_zh || product.description) : (product.description_vi || product.note_vi || product.description))) || product.description || defaultDesc;
+  const productName = (lang === 'en' ? (product.name_en || product.name) : (lang === 'zh' ? (product.name_zh || product.name) : (product.name_vi || product.name))) || product.name;
 
   const titleLabel = L(lang, '**CHI TIẾT SẢN PHẨM**', '**PRODUCT DETAILS**', '**产品详情**');
   const nameLabel = L(lang, 'Tên', 'Name', '名称');
@@ -257,8 +320,15 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   const customEmojiId = product.custom_emoji_id || product.telegram_custom_emoji_id || null;
   const emojiIcon = customEmojiId ? `{${customEmojiId}} ` : (product.emoji || product.telegram_emoji ? `${product.emoji || product.telegram_emoji} ` : '');
 
-  let detailText = `${titleLabel}\n\n` +
-    `${emojiIcon}**${nameLabel}:** ${product.name}\n` +
+  let detailText = `${titleLabel}\n\n`;
+
+  if (fsInfo.hasFlashSale) {
+    detailText += `⚡ **CHƯƠNG TRÌNH FLASH SALE ĐANG DIỄN RA!**\n` +
+      `💰 **Giá gốc:** ~${formatCurrency(fsInfo.originalPrice)}~ ➡️ **Giá Sale:** **${formatCurrency(fsInfo.finalPrice)}**${fsInfo.discountPercent > 0 ? ` (-${fsInfo.discountPercent}%)` : ''}\n` +
+      `⏳ **Thời gian còn lại:** **${fsInfo.timeLeftStr || 'Đang diễn ra'}**\n\n`;
+  }
+
+  detailText += `${emojiIcon}**${nameLabel}:** ${productName}\n` +
     `**${priceLabel}:** ${formatCurrency(priceVnd)} (~$${priceUsd})\n`;
 
   if (appliedCoupon && appliedCoupon.productId === product.id) {
@@ -320,9 +390,32 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
   inline_keyboard.push([
     { text: couponBtn, callback_data: createCallbackData({ action: 'apply_coupon_prompt', productId: product.id }) }
   ]);
+  const backCallback = product.category_id
+    ? createCallbackData({ action: 'category_products', catId: product.category_id })
+    : createCallbackData({ action: 'back_to_categories' });
+
   inline_keyboard.push([
-    { text: backBtn, callback_data: createCallbackData({ action: 'products', page: 1 }) }
+    { text: backBtn, callback_data: backCallback }
   ]);
+
+  const imagePrefix = (product.image_url && String(product.image_url).trim().startsWith('http'))
+    ? `[\u200B](${product.image_url.trim()})`
+    : '';
+  const fullDetailText = `${imagePrefix}${detailText}`;
+
+  // Nếu có messageId, sửa trực tiếp tin nhắn tại chỗ (không gỡ ra gửi lại)
+  if (messageId) {
+    try {
+      return await bot.editMessageText(fullDetailText, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {
+      console.log('[SHOW_PRODUCT_DETAIL] Edit message fallback:', e.message);
+    }
+  }
 
   if (product.image_url && String(product.image_url).trim().startsWith('http')) {
     try {
@@ -333,13 +426,13 @@ export const showProductDetail = async (bot, chatId, productId, userId) => {
       });
     } catch (e) {
       console.warn('[PRODUCT_PHOTO_ERR] Fallback to message:', e.message);
-      await bot.sendMessage(chatId, detailText, {
+      await bot.sendMessage(chatId, fullDetailText, {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard }
       });
     }
   } else {
-    await bot.sendMessage(chatId, detailText, {
+    await bot.sendMessage(chatId, fullDetailText, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard }
     });
@@ -431,18 +524,6 @@ export const handlePurchase = async (bot, msg, productId, fromUser, config) => {
     reason: `buy_product_auto_${product.id}`,
     adminId: null
   });
-
-  const isGmailEdu7Days = product.name && (
-    product.name.toLowerCase().includes('gmail edu') &&
-    product.name.toLowerCase().includes('7 ngày')
-  );
-
-  let deleteAt = null;
-  if (isGmailEdu7Days) {
-    deleteAt = new Date();
-    deleteAt.setDate(deleteAt.getDate() + 7);
-    console.log(`[BUY_PRODUCT] Đã lưu delete_at cho Gmail Edu 7 ngày: ${deleteAt.toISOString()}`);
-  }
 
   await deleteAccountAfterPurchase(account.id, product.id);
 
@@ -915,20 +996,6 @@ export const handlePurchaseWithQuantity = async (bot, msg, productId, quantity =
           break; // Exit loop if some were bought but stock is out
         }
 
-        // Check live if enabled
-        if (product.check_live) {
-          console.log(`[BUY_PRODUCT] Checking live for: ${account.username}`);
-          const liveResult = await checkGmailLive(account.username);
-          const isLive = liveResult?.results?.[account.username] === true;
-
-          if (!isLive) {
-            console.log(`[BUY_PRODUCT] Account is DEAD: ${account.username}. Deleting and trying next...`);
-            await deleteAccountAfterPurchase(account.id, product.id);
-            continue; // Try next account
-          }
-          console.log(`[BUY_PRODUCT] Account is LIVE: ${account.username}`);
-        }
-
         purchasedAccounts.push(account);
         accountFound = true;
       }
@@ -1075,8 +1142,7 @@ export const completePurchaseAfterDeposit = async (bot, userId, telegramId, chat
     const purchaseInfo = getCache(purchaseKey);
 
     if (!purchaseInfo) {
-      const { completeGmailEduPurchaseAfterDeposit } = await import('./handleGmailEdu.js');
-      return await completeGmailEduPurchaseAfterDeposit(bot, telegramId);
+      return;
     }
 
     delCache(purchaseKey);

@@ -10,6 +10,7 @@ export const messages = {
         // Welcome & Menu
         welcome: '**Chào mừng bạn đến với bot!**\n\nXin chào! Chúng tôi rất vui được phục vụ bạn.',
         menu_title: '**Menu Chức Năng**',
+        main_menu_keyboard: '👇 <b>BÀN PHÍM MENU CHÍNH</b>',
         deposit: 'Nạp tiền',
         buy_product: 'Mua sản phẩm',
         history: 'Lịch sử mua',
@@ -74,7 +75,6 @@ export const messages = {
         btn_deposit: 'Nạp tiền',
         btn_buy_menu: 'Mua hàng',
         btn_buy_accounts: 'Mua tài khoản',
-        btn_buy_gmail_edu: 'Mua Gmail EDU',
         btn_checkin: 'Điểm danh',
         btn_support: 'Hỗ trợ / Bảo hành',
         btn_utilities: 'Tiện ích',
@@ -118,6 +118,7 @@ export const messages = {
         // Welcome & Menu
         welcome: '**Welcome to the bot!**\n\nHello! We are happy to serve you.',
         menu_title: '**Main Menu**',
+        main_menu_keyboard: '👇 <b>MAIN MENU KEYBOARD</b>',
         deposit: 'Deposit',
         buy_product: 'Buy Products',
         history: 'History',
@@ -182,7 +183,6 @@ export const messages = {
         btn_deposit: 'Deposit',
         btn_buy_menu: 'Buy',
         btn_buy_accounts: 'Buy Accounts',
-        btn_buy_gmail_edu: 'Buy Gmail EDU',
         btn_checkin: 'Check-in',
         btn_support: 'Support',
         btn_utilities: 'Utilities',
@@ -221,6 +221,7 @@ export const messages = {
         // Welcome & Menu
         welcome: '**欢迎来到机器人！**\n\n您好！我们很高兴为您服务。',
         menu_title: '**功能菜单**',
+        main_menu_keyboard: '👇 <b>主菜单键盘</b>',
         deposit: '充值',
         buy_product: '购买产品',
         history: '购买记录',
@@ -285,7 +286,6 @@ export const messages = {
         btn_deposit: '充值',
         btn_buy_menu: '购买',
         btn_buy_accounts: '购买账号',
-        btn_buy_gmail_edu: '购买 Gmail EDU',
         btn_checkin: '签到',
         btn_support: '客服 / 支持',
         btn_utilities: '工具箱',

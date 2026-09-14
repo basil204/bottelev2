@@ -6,7 +6,7 @@ import {
     Save, Settings as SettingsIcon, Banknote, CreditCard, Trash2, Power, Download,
     DatabaseBackup, ShieldCheck, RefreshCw, Key, User, Globe, Bot, Bell,
     Sparkles, CheckCircle2, AlertCircle, Plus, Eye, EyeOff, Terminal, Zap, Layers, Lock, Languages,
-    CloudUpload, FileText, ExternalLink
+    CloudUpload, FileText, ExternalLink, MessageSquare
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -37,15 +37,13 @@ interface SystemSettings {
     telegram_bot_token: string;
     shop_name: string;
     usdt_trc20_wallet: string;
-    telegram_group_link: string;
-    // Gmail EDU
-    gmail_edu_enabled: boolean;
-    gmail_edu_price: number;
-    gmail_edu_domain: string;
-    gmail_edu_delete_hours: number;
-    // Canva & Netflix Auto Services
-    canva_enabled?: boolean;
-    netflix_enabled?: boolean;
+    telegram_group_link?: string;
+    // Binance Pay
+    binance_api_key?: string;
+    binance_secret_key?: string;
+    binance_pay_id?: string;
+    binance_auto_deposit?: boolean;
+    binance_min_deposit?: number;
     // Admin IDs
     admin_ids: number[];
     // Admin Accounts
@@ -94,12 +92,11 @@ export default function SettingsPage() {
         shop_name: 'DUCVIETSTORE',
         usdt_trc20_wallet: '',
         telegram_group_link: '',
-        gmail_edu_enabled: true,
-        gmail_edu_price: 10000,
-        gmail_edu_domain: 'suafpoly.app',
-        gmail_edu_delete_hours: 1,
-        canva_enabled: true,
-        netflix_enabled: true,
+        binance_api_key: '',
+        binance_secret_key: '',
+        binance_pay_id: '',
+        binance_auto_deposit: false,
+        binance_min_deposit: 1,
         admin_ids: [],
         admin_username: 'admin',
         admin_password: '',
@@ -113,7 +110,33 @@ export default function SettingsPage() {
         auto_block_spam_ip: true
     });
 
-    const [activeTab, setActiveTab] = useState<'general' | 'workflows' | 'deposit' | 'gmail' | 'admin' | 'backup'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'workflows' | 'deposit' | 'admin' | 'backup'>('general');
+    const [testingBinance, setTestingBinance] = useState(false);
+    const [binanceTestResult, setBinanceTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const handleTestBinance = async () => {
+        setTestingBinance(true);
+        setBinanceTestResult(null);
+        try {
+            const res = await fetch('/api/binance/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apiKey: settings.binance_api_key,
+                    secretKey: settings.binance_secret_key
+                })
+            });
+            const data = await res.json();
+            setBinanceTestResult({
+                success: Boolean(data.success),
+                message: data.message || (data.success ? 'Kết nối thành công!' : 'Kết nối thất bại')
+            });
+        } catch (err: any) {
+            setBinanceTestResult({ success: false, message: `Lỗi: ${err.message}` });
+        } finally {
+            setTestingBinance(false);
+        }
+    };
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [exportingSql, setExportingSql] = useState(false);
@@ -475,14 +498,6 @@ export default function SettingsPage() {
                 </button>
 
                 <button
-                    onClick={() => setActiveTab('gmail')}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'gmail' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
-                >
-                    <Globe className="h-4 w-4" />
-                    <span>📧 GMAIL EDU & CHECKER</span>
-                </button>
-
-                <button
                     onClick={() => setActiveTab('admin')}
                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'admin' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
                 >
@@ -499,6 +514,15 @@ export default function SettingsPage() {
                         <span>💾 SAO LƯU SQL</span>
                     </button>
                 )}
+
+                <Link
+                    href="/start-menu"
+                    className="ml-auto px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 bg-linear-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-sm"
+                >
+                    <MessageSquare className="h-4 w-4" />
+                    <span>🤖 TÙY BIẾN NÚT & NỘI DUNG BOT</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
             </div>
 
             {/* TAB 1: CẤU HÌNH CHUNG & BOT */}
@@ -556,23 +580,23 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        {/* Dynamic Translations Banner */}
+                        {/* Bot Templates & Buttons Banner */}
                         <div className="pt-3 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 rounded-xl border border-orange-200/80">
                             <div>
                                 <div className="font-black text-xs text-orange-950 uppercase tracking-wide flex items-center gap-1.5">
                                     <Globe className="h-4 w-4 text-orange-600" />
-                                    <span>QUẢN LÝ NGÔN NGỮ & LỜI NHẮN BOT (CSDL DYNAMIC TRANSLATIONS)</span>
+                                    <span>QUẢN LÝ NÚT BẤM & NỘI DUNG ĐA NGÔN NGỮ BOT</span>
                                 </div>
                                 <p className="text-[11px] text-orange-800 font-medium mt-0.5">
-                                    Tự do chỉnh sửa mọi câu từ, menu, thông báo Tiếng Việt, Tiếng Anh, Tiếng Trung của Telegram Bot trực tiếp từ CSDL.
+                                    Tùy chỉnh bàn phím chính, lời nhắn menu /start và các mẫu tin nhắn nạp tiền, đơn hàng đa ngôn ngữ (VI/EN/ZH).
                                 </p>
                             </div>
                             <Link
-                                href="/settings/translations"
+                                href="/start-menu"
                                 className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 text-xs font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs shrink-0"
                             >
-                                <Languages className="h-4 w-4" />
-                                <span>CHỈNH SỬA NGÔN NGỮ CSDL</span>
+                                <MessageSquare className="h-4 w-4" />
+                                <span>TÙY CHỈNH NÚT & LỜI NHẮN</span>
                             </Link>
                         </div>
                     </div>
@@ -648,37 +672,9 @@ export default function SettingsPage() {
                                 />
                             </div>
 
-                            {/* Service Toggle: Canva Pro */}
-                            <div className="pt-3 flex items-center justify-between border-t border-teal-100 bg-teal-50/40 p-3 rounded-xl mt-2">
-                                <div>
-                                    <div className="font-extrabold text-teal-900 text-xs flex items-center gap-1.5">
-                                        <span>🎨 Bật / Tắt Dịch vụ Tự Động Mời Canva Pro</span>
-                                    </div>
-                                    <div className="text-[11px] text-teal-700">Khi tắt, nút bấm và tính năng mời Canva Pro trên Bot Telegram sẽ được ẩn / tạm đóng</div>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={settings.canva_enabled ?? true}
-                                    onChange={() => setSettings(prev => ({ ...prev, canva_enabled: !prev.canva_enabled }))}
-                                    className="h-5 w-5 rounded accent-teal-600 cursor-pointer"
-                                />
-                            </div>
 
-                            {/* Service Toggle: Netflix 30 Days */}
-                            <div className="pt-3 flex items-center justify-between border-t border-rose-100 bg-rose-50/40 p-3 rounded-xl mt-2">
-                                <div>
-                                    <div className="font-extrabold text-rose-900 text-xs flex items-center gap-1.5">
-                                        <span>🎬 Bật / Tắt Dịch vụ Tự Động Nhận Netflix 30 Ngày</span>
-                                    </div>
-                                    <div className="text-[11px] text-rose-700">Khi tắt, nút bấm và tính năng nhận Netflix trên Bot Telegram sẽ được ẩn / tạm đóng</div>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={settings.netflix_enabled ?? true}
-                                    onChange={() => setSettings(prev => ({ ...prev, netflix_enabled: !prev.netflix_enabled }))}
-                                    className="h-5 w-5 rounded accent-rose-600 cursor-pointer"
-                                />
-                            </div>
+
+
                         </div>
                     </div>
                 </div>
@@ -809,108 +805,90 @@ export default function SettingsPage() {
                                 />
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
 
-            {/* TAB 4: GMAIL EDU & CHECKER */}
-            {activeTab === 'gmail' && (
-                <div className="space-y-5">
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4 shadow-2xs text-xs">
-                        <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                            <h2 className="font-extrabold text-xs uppercase text-zinc-800 tracking-wider flex items-center gap-2">
-                                <Globe className="h-4 w-4 text-orange-600" />
-                                <span>DỊCH VỤ GMAIL EDU & CHECKER API KEYS</span>
-                            </h2>
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-zinc-800">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.gmail_edu_enabled}
-                                    onChange={() => handleToggle('gmail_edu_enabled')}
-                                    className="h-4 w-4 rounded accent-orange-600"
-                                />
-                                <span>BẬT GMAIL EDU</span>
-                            </label>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">ĐƠN GIÁ TẠO GMAIL EDU (VND)</label>
-                                <input
-                                    type="number"
-                                    value={settings.gmail_edu_price}
-                                    onChange={(e) => handleChange('gmail_edu_price', Number(e.target.value))}
-                                    placeholder="10000"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-bold text-zinc-900 outline-none focus:border-orange-500 transition"
-                                />
+                        {/* Binance Pay Auto Deposit Card */}
+                        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4 space-y-4">
+                            <div className="flex items-center justify-between border-b border-amber-200/80 pb-3">
+                                <div>
+                                    <div className="font-extrabold text-amber-950 text-xs flex items-center gap-2">
+                                        <span className="text-base">🟡</span>
+                                        <span>CẤU HÌNH TỰ ĐỘNG NẠP TIỀN QUA BINANCE PAY</span>
+                                    </div>
+                                    <div className="text-[11px] text-amber-800">
+                                        Tự động quét lịch sử nhận USDT Binance Pay theo Pay ID / UID & cộng tiền ngay lập tức
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-950">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(settings.binance_auto_deposit)}
+                                        onChange={() => setSettings(prev => ({ ...prev, binance_auto_deposit: !prev.binance_auto_deposit }))}
+                                        className="h-5 w-5 rounded accent-amber-600 cursor-pointer"
+                                    />
+                                    <span>BẬT TỰ ĐỘNG QUÉT</span>
+                                </label>
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN MIỀN GMAIL EDU</label>
-                                <input
-                                    type="text"
-                                    value={settings.gmail_edu_domain}
-                                    onChange={(e) => handleChange('gmail_edu_domain', e.target.value)}
-                                    placeholder="suafpoly.app"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
-                                />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">BINANCE PAY ID / UID CỦA SHOP</label>
+                                    <input
+                                        type="text"
+                                        value={settings.binance_pay_id || ''}
+                                        onChange={(e) => handleChange('binance_pay_id', e.target.value)}
+                                        placeholder="Ví dụ: 123456789 hoặc Pay ID"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-amber-500 transition"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">BINANCE API KEY</label>
+                                    <input
+                                        type="password"
+                                        value={settings.binance_api_key || ''}
+                                        onChange={(e) => handleChange('binance_api_key', e.target.value)}
+                                        placeholder="Nhập Binance API Key..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-amber-500 transition"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">BINANCE SECRET KEY</label>
+                                    <input
+                                        type="password"
+                                        value={settings.binance_secret_key || ''}
+                                        onChange={(e) => handleChange('binance_secret_key', e.target.value)}
+                                        placeholder="Nhập Binance Secret Key..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-amber-500 transition"
+                                    />
+                                </div>
                             </div>
 
-                            <div className="space-y-1.5">
-                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">THỜI GIAN XÓA (GIỜ)</label>
-                                <input
-                                    type="number"
-                                    value={settings.gmail_edu_delete_hours}
-                                    onChange={(e) => handleChange('gmail_edu_delete_hours', Number(e.target.value))}
-                                    placeholder="1"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
-                                />
-                            </div>
-                        </div>
-
-                        {/* API Keys Manager */}
-                        <div className="space-y-3 pt-3 border-t border-zinc-100">
-                            <label className="font-extrabold uppercase text-zinc-700 text-[11px] block">GMAIL CHECKER API KEYS</label>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newApiKey}
-                                    onChange={(e) => setNewApiKey(e.target.value.trim())}
-                                    placeholder="Nhập API key check live Gmail..."
-                                    className="flex-1 rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
-                                />
+                            <div className="flex items-center justify-between pt-2">
+                                <div className="text-[11px] text-zinc-500">
+                                    💡 <i>Quyền API cần thiết trên Binance: <b>Đọc (Read-only) / Binance Pay Transaction History</b>.</i>
+                                </div>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        if (newApiKey && !settings.gmail_checker_api_keys.includes(newApiKey)) {
-                                            setSettings(prev => ({ ...prev, gmail_checker_api_keys: [...prev.gmail_checker_api_keys, newApiKey] }));
-                                            setNewApiKey('');
-                                        }
-                                    }}
-                                    className="rounded-xl bg-orange-600 text-white font-extrabold text-xs uppercase px-4 py-2 hover:bg-orange-700"
+                                    onClick={handleTestBinance}
+                                    disabled={testingBinance}
+                                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-xs transition flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                                 >
-                                    THÊM KEY
+                                    <span>{testingBinance ? '⏳ Đang kiểm tra...' : '⚡ Test Kết Nối Binance API'}</span>
                                 </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 pt-1">
-                                {settings.gmail_checker_api_keys.map((k, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 font-mono text-[11px] text-zinc-800">
-                                        <span>{k}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSettings(prev => ({ ...prev, gmail_checker_api_keys: prev.gmail_checker_api_keys.filter(item => item !== k) }))}
-                                            className="text-red-500 font-bold hover:text-red-700 ml-1"
-                                        >
-                                            ✕
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
+                            {binanceTestResult && (
+                                <div className={`p-3 rounded-xl text-xs font-semibold ${binanceTestResult.success ? 'bg-emerald-100 border border-emerald-300 text-emerald-900' : 'bg-rose-100 border border-rose-300 text-rose-900'}`}>
+                                    {binanceTestResult.message}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
+
+
 
             {/* TAB 5: QUẢN TRỊ VIÊN */}
             {activeTab === 'admin' && (

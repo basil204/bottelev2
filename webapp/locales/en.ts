@@ -23,6 +23,8 @@ export const en = {
     sidebar: {
         dashboard: 'Dashboard',
         users: 'Users',
+        wallets: 'Wallets',
+        checkin: 'Daily Checkin',
         products: 'Products',
         categories: 'Categories',
         'stored-accounts': 'Account Storage',

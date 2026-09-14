@@ -110,15 +110,25 @@ export const executeAutoRestock = async (bot, customParams = null) => {
 
     const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
 
-    // 5. Soạn tin nhắn từ hệ thống ngôn ngữ cấu hình
+    // 5. Soạn tin nhắn từ hệ thống mẫu tin đa ngôn ngữ cấu hình
+    const { getBotTemplate, renderBotTemplate } = await import('../helpers/templateHelper.js');
+    const { markdownToTelegramHtml } = await import('../helpers/telegramFormatHelper.js');
     const formattedPrice = formatCurrency(Number(product.price) || 0);
-    const textMsg = t('auto_restock_notify', channelLang, {
-      name: product.name,
-      quantity: randQty,
-      price: formattedPrice
-    });
 
-    const buttonText = t('btn_buy_now_direct', channelLang);
+    let rawTemplate = await getBotTemplate('template_restock_notify', channelLang);
+    if (!rawTemplate) rawTemplate = t('template_restock_notify', channelLang) || t('auto_restock_notify', channelLang);
+
+    const textMsg = markdownToTelegramHtml(renderBotTemplate(rawTemplate, {
+      name: product.name || '',
+      quantity: String(randQty),
+      stock: String(product.stock || randQty),
+      price: formattedPrice,
+      shop_name: settingsMap.shop_name || 'SHOP'
+    }));
+
+    let buttonText = await getBotTemplate('btn_view_and_buy', channelLang);
+    if (!buttonText) buttonText = t('btn_view_and_buy', channelLang) || t('btn_buy_now_direct', channelLang) || '🛍️ Xem & Mua ngay';
+
     const replyMarkup = buyUrl ? {
       inline_keyboard: [
         [
@@ -134,7 +144,7 @@ export const executeAutoRestock = async (bot, customParams = null) => {
 
     const sendBotMsg = async (targetId) => {
       const opts = {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...(replyMarkup ? { reply_markup: replyMarkup } : {})
       };
       if (imageUrlToUse) {

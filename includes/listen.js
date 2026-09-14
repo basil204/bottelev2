@@ -1,12 +1,8 @@
-import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo, buildMainKeyboard, sendPurchaseMenu, sendUtilityMenu, sendTrackedMenu } from './handle/handleUser.js';
+import { sendMenu, ensureUser, sendOrderCredentials, sendOrderHistory, sendUserInfo, buildMainKeyboard, sendPurchaseMenu, sendUtilityMenu, sendTrackedMenu, sendWalletMenu, sendSupportMenu, sendApiMenu, sendWarrantyMenu } from './handle/handleUser.js';
 import { startDepositFlow, handleDepositAmount, cancelQr, reloadQr } from './handle/handleDeposit.js';
 import { sendProductList, sendCategoryList, handlePurchase, handleManualOrderInput, handleProductQuantityInput } from './handle/handleBuy.js';
-import { handleBuyGmailEdu, showGmailEduInfo, handleGmailEduQuantityInput } from './handle/handleGmailEdu.js';
-import { showCapCutMenu, startCapCutFlow, startCapCutBuyFlow, handleCapCutInput } from './handle/handleCapCutSimple.js';
 import { startDownloadFlow, handleDownloadInput, handleDownloadSelection } from './handle/handleDownload.js';
 import { handleCheckLiveCommand } from './handle/handleCheckLive.js';
-import { showNetflixMenu, startNetflixFlow, handleNetflixEmailInput } from './handle/handleNetflix.js';
-import { showCanvaMenu, startCanvaFlow, handleCanvaRoleSelect, handleCanvaEmailInput } from './handle/handleCanva.js';
 
 import {
   adminMenu,
@@ -41,14 +37,14 @@ import { getCache, setCache, delCache } from '../lib/cache/index.js';
 export let globalConfig = {};
 
 const PUBLIC_COMMANDS_TEXT = `📋 CÁC LỆNH CỦA BOT
-/start - Khởi động và xem hướng dẫn
+/start - Khởi động và mở menu chính
 /menu - Mở menu chính
-/info - Xem tài khoản và số dư
-/gmail - Mua Gmail EDU
-/buymail gmail <số lượng> - Mua Gmail nhanh
+/products - Xem danh sách sản phẩm
+/wallet - Xem ví và nạp tiền
+/api - Xem thông tin kết nối API
+/warranty - Trung tâm bảo hành đơn hàng
+/support - Hỗ trợ trực tuyến / CSKH
 /history - Xem lịch sử mua hôm nay
-/getlink - Tải video, ảnh hoặc audio
-/checklive - Kiểm tra Facebook, Instagram, TikTok
 /lang - Đổi ngôn ngữ`;
 
 const BUTTON_COLOR_PATCHED = Symbol.for('bottele.inline-button-colors');
@@ -227,10 +223,29 @@ export const registerListeners = (bot, config) => {
     await handleBroadcastCommand(bot, msg, adminIds);
   });
 
-  // Command /gmail để mua Gmail EDU
-  bot.onText(/^\/gmail/i, async (msg) => {
+  bot.onText(/^\/(products|shop|sanpham)(?:@\w+)?$/i, async (msg) => {
     const user = await ensureUser(bot, msg);
-    await showGmailEduInfo(bot, msg.chat.id, user);
+    await sendCategoryList(bot, msg.chat.id, user);
+  });
+
+  bot.onText(/^\/(wallet|vi|balance)(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await sendWalletMenu(bot, msg.chat.id, user, config);
+  });
+
+  bot.onText(/^\/api(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await sendApiMenu(bot, msg.chat.id, user);
+  });
+
+  bot.onText(/^\/(warranty|baohanh)(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await sendWarrantyMenu(bot, msg.chat.id, user);
+  });
+
+  bot.onText(/^\/(support|hotro)(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    await sendSupportMenu(bot, msg.chat.id, user);
   });
 
   bot.onText(/^\/getlink(?:@\w+)?$/i, async (msg) => {
@@ -243,50 +258,10 @@ export const registerListeners = (bot, config) => {
     await handleCheckLiveCommand(bot, msg, match?.[1] || '');
   });
 
-  // Lịch sử được ẩn khỏi bàn phím chính nhưng vẫn truy cập được bằng lệnh.
+  // Lịch sử đơn hàng
   bot.onText(/^\/(history|orders)(?:@\w+)?$/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     await sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
-  });
-
-  bot.onText(/^\/capcut/i, async (msg) => {
-    await ensureUser(bot, msg);
-    await showCapCutMenu(bot, msg.chat.id);
-  });
-
-  bot.onText(/^\/netflix/i, async (msg) => {
-    await ensureUser(bot, msg);
-    await showNetflixMenu(bot, msg.chat.id, msg.from.id);
-  });
-
-  bot.onText(/^\/canva/i, async (msg) => {
-    await ensureUser(bot, msg);
-    await showCanvaMenu(bot, msg.chat.id, msg.from.id);
-  });
-
-  // Command /buymail gmail <số lượng> để mua Gmail nhanh
-  bot.onText(/^\/buymail\s+gmail(?:\s+(\d+))?/i, async (msg, match) => {
-    const user = await ensureUser(bot, msg);
-    const lang = user.language || 'vi';
-    const quantity = match[1] ? parseInt(match[1], 10) : null;
-
-    if (!quantity) {
-      // Nếu không có số lượng, hiện thông tin và chờ input
-      await showGmailEduInfo(bot, msg.chat.id, user);
-      return;
-    }
-
-    // Validate số lượng
-    if (quantity < 1 || quantity > 10) {
-      const errorMsg = lang === 'en'
-        ? '❌ Quantity must be between 1 and 10.'
-        : '❌ Số lượng phải từ 1 đến 10.';
-      return bot.sendMessage(msg.chat.id, errorMsg);
-    }
-
-    // Import và gọi trực tiếp handleBuyGmailEdu
-    const { handleBuyGmailEdu } = await import('./handle/handleGmailEdu.js');
-    await handleBuyGmailEdu(bot, msg, user, quantity, lang, null, config);
   });
 
   // Message listener for text flows
@@ -314,25 +289,21 @@ export const registerListeners = (bot, config) => {
 
     // Helper kiểm tra xem tin nhắn gửi lên có phải là Nút Bấm Menu / Lệnh điều hướng hay không
     const isNavMenuButton = (txt) => {
-      const cleanTxt = txt.trim();
+      const cleanTxt = (txt || '').replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?\d+\}/gi, '').trim();
       return (
         cleanTxt.startsWith('/') ||
         cleanTxt === '❌ Huỷ' || cleanTxt === '❌ Hủy' || cleanTxt === '❌ Cancel' || cleanTxt === '❌ 取消' || isMatchButton(cleanTxt, 'cancel', userLang) ||
-        cleanTxt === '➕ Nạp tiền' || cleanTxt === 'Nạp tiền' || cleanTxt === '➕ Deposit' || cleanTxt === 'Deposit' || cleanTxt === '➕ 充值' || cleanTxt === '充值' || isMatchButton(cleanTxt, 'btn_deposit', userLang) || isMatchButton(cleanTxt, 'deposit', userLang) ||
-        cleanTxt === '🛒 Mua hàng' || cleanTxt === 'Mua hàng' || cleanTxt === '🛒 Mua sản phẩm' || cleanTxt === 'Mua sản phẩm' || cleanTxt === '🛒 Mua tài khoản' || cleanTxt === 'Mua tài khoản' || cleanTxt === '🛒 Buy Products' || cleanTxt === 'Buy Products' || cleanTxt === '🛒 Buy' || cleanTxt === '🛒 购买产品' || cleanTxt === '购买产品' || isMatchButton(cleanTxt, 'btn_buy_menu', userLang) || isMatchButton(cleanTxt, 'buy_product', userLang) || isMatchButton(cleanTxt, 'product_list', userLang) || isMatchButton(cleanTxt, 'btn_buy_accounts', userLang) ||
-        cleanTxt === '📆 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === '📆 Check-in' || cleanTxt === 'Check-in' || cleanTxt === '📆 签到' || cleanTxt === '签到' || isMatchButton(cleanTxt, 'btn_checkin', userLang) ||
-        cleanTxt === '🛟 Hỗ trợ / Bảo hành' || cleanTxt === 'Hỗ trợ / Bảo hành' || cleanTxt === '🛟 Support / Warranty' || cleanTxt === 'Support / Warranty' || cleanTxt === '🛟 客服 / 保修' || cleanTxt === '客服 / 保修' || isMatchButton(cleanTxt, 'btn_support', userLang) ||
-        cleanTxt === 'Tiện ích' || cleanTxt === 'Utilities' || cleanTxt === '工具箱' || isMatchButton(cleanTxt, 'btn_utilities', userLang) ||
-        cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '🌐 语言' || cleanTxt === '语言' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
-        cleanTxt === '🧾 Lịch sử mua' || cleanTxt === 'Lịch sử mua' || cleanTxt === '🧾 History' || cleanTxt === 'History' || cleanTxt === '🧾 购买记录' || cleanTxt === '购买记录' || isMatchButton(cleanTxt, 'btn_order_history', userLang) ||
-        cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '↩️ 主菜单' || cleanTxt === '主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
-        cleanTxt === '📧 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '📧 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || isMatchButton(cleanTxt, 'btn_buy_gmail_edu', userLang) ||
-        cleanTxt === '🎬 CapCut Workspace' || cleanTxt === 'CapCut Workspace' ||
-        cleanTxt === '🎬 Netflix 30 Ngày' || cleanTxt === 'Netflix 30 Ngày' || cleanTxt === '🎬 Netflix' || cleanTxt === 'Netflix' ||
-        cleanTxt === '🎨 Mời Canva Pro' || cleanTxt === 'Mời Canva Pro' || cleanTxt === '🎨 Canva Pro' || cleanTxt === 'Canva Pro' || cleanTxt === '🎨 Canva' || cleanTxt === 'Canva' ||
+        cleanTxt === '🛍️ Sản phẩm' || cleanTxt === '🛍 Sản phẩm' || cleanTxt === 'Sản phẩm' || cleanTxt === '🛒 Mua hàng' || cleanTxt === 'Mua hàng' || cleanTxt === '🛒 Mua sản phẩm' || cleanTxt === 'Mua sản phẩm' || cleanTxt === '🛒 Mua tài khoản' || cleanTxt === 'Mua tài khoản' || cleanTxt === '🛒 Buy Products' || cleanTxt === 'Buy Products' || cleanTxt === '产品' || cleanTxt === '🛍️ 产品' || isMatchButton(cleanTxt, 'btn_buy_menu', userLang) || isMatchButton(cleanTxt, 'buy_product', userLang) || isMatchButton(cleanTxt, 'product_list', userLang) || isMatchButton(cleanTxt, 'btn_buy_accounts', userLang) ||
+        cleanTxt === '💬 Hỗ trợ' || cleanTxt === 'Hỗ trợ' || cleanTxt === '💬 Support' || cleanTxt === 'Support' || cleanTxt === '客服支持' || cleanTxt === '💬 客服支持' || cleanTxt === '🛟 Hỗ trợ / Bảo hành' || cleanTxt === 'Hỗ trợ / Bảo hành' || isMatchButton(cleanTxt, 'btn_support', userLang) ||
+        cleanTxt === '👛 Ví' || cleanTxt === 'Ví' || cleanTxt === '👛 Wallet' || cleanTxt === 'Wallet' || cleanTxt === '钱包' || cleanTxt === '👛 钱包' || cleanTxt === '➕ Nạp tiền' || cleanTxt === 'Nạp tiền' || cleanTxt === '➕ Deposit' || cleanTxt === 'Deposit' || cleanTxt === '充值' || isMatchButton(cleanTxt, 'btn_deposit', userLang) || isMatchButton(cleanTxt, 'deposit', userLang) ||
+        cleanTxt === '🔗 API' || cleanTxt === 'API' || cleanTxt === '🔗 Tích hợp API' ||
+        cleanTxt === '🛡️ Bảo hành' || cleanTxt === '🛡 Bảo hành' || cleanTxt === 'Bảo hành' || cleanTxt === '🛡️ Warranty' || cleanTxt === 'Warranty' || cleanTxt === '售后保修' || cleanTxt === '🛡️ 售后保修' ||
+        cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
+        cleanTxt === '🧾 Lịch sử mua' || cleanTxt === 'Lịch sử mua' || cleanTxt === '🧾 History' || cleanTxt === 'History' || cleanTxt === '购买记录' || isMatchButton(cleanTxt, 'btn_order_history', userLang) ||
+        cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '语言' || cleanTxt === '语言切换' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
+        cleanTxt === '🎁 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === 'Check-in' || cleanTxt === '每日签到' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
         cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
-        cleanTxt === '🔐 Locket' || cleanTxt === 'Locket' || isMatchButton(cleanTxt, 'btn_locket', userLang) ||
         cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组'
       );
     };
@@ -346,16 +317,11 @@ export const registerListeners = (bot, config) => {
       waitingForCouponState?.delete(String(msg.from.id));
       delCache(`waiting_usdt_amount_${msg.from.id}`);
       delCache(`chatgpt_waiting_${msg.from.id}`);
-      delCache(`gmail_edu_waiting_${msg.from.id}`);
-      delCache(`capcut_flow_${msg.from.id}`);
-      delCache(`netflix_flow_${msg.from.id}`);
-      delCache(`canva_flow_${msg.from.id}`);
       delCache(`waiting_trc20_amount_${msg.from.id}`);
       delCache(`waiting_trc20_hash_${msg.from.id}`);
       delCache(`trc20_amount_${msg.from.id}`);
       delCache(`waiting_payment_proof_${msg.from.id}`);
       delCache(`download_all_waiting_${msg.from.id}`);
-      delCache(`locket_lookup_waiting_${msg.from.id}`);
       delCache(`waiting_support_request_${msg.from.id}`);
 
       if (text === '❌ Huỷ' || text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消' || isMatchButton(text, 'cancel', userLang)) {
@@ -363,30 +329,142 @@ export const registerListeners = (bot, config) => {
         return cancelUploadState(bot, msg.chat.id, msg.from.id, config);
       }
 
-      if (isMatchButton(text, 'btn_deposit', userLang) || isMatchButton(text, 'deposit', userLang) || text === '➕ Nạp tiền' || text === 'Nạp tiền' || text === '➕ Deposit' || text === 'Deposit' || text === '➕ 充值' || text === '充值') return startDepositFlow(bot, msg, user, config);
-      if (isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Buy Products' || text === 'Buy Products' || text === '🛒 购买产品' || text === '购买产品') return sendCategoryList(bot, msg.chat.id, user);
-      if (isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Mua hàng Gmail') return sendPurchaseMenu(bot, msg.chat.id, user);
-      if (isMatchButton(text, 'btn_buy_accounts', userLang) || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản') return sendCategoryList(bot, msg.chat.id, user);
-      if (isMatchButton(text, 'btn_buy_gmail_edu', userLang) || text === '📧 Gmail EDU' || text === 'Gmail EDU' || text === '📧 Mua Gmail EDU' || text === 'Mua Gmail EDU') return showGmailEduInfo(bot, msg.chat.id, user);
-      if (text === '🎬 Netflix 30 Ngày' || text === 'Netflix 30 Ngày' || text === '🎬 Netflix' || text === 'Netflix') return showNetflixMenu(bot, msg.chat.id, msg.from.id);
-      if (text === '🎨 Mời Canva Pro' || text === 'Mời Canva Pro' || text === '🎨 Canva Pro' || text === 'Canva Pro' || text === '🎨 Canva' || text === 'Canva') return showCanvaMenu(bot, msg.chat.id, msg.from.id);
-      if (isMatchButton(text, 'btn_utilities', userLang) || text === 'Tiện ích' || text === 'Utilities' || text === '工具箱') return sendUtilityMenu(bot, msg.chat.id, user);
+      // Kiểm tra nút động cấu hình từ Web Admin
+      try {
+        const { getMainKeyboardConfig } = await import('./handle/handleUser.js');
+        const customButtons = await getMainKeyboardConfig();
+        const cleanMsgText = (text || '').replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?\d+\}/gi, '').replace(/^[^\p{L}\p{N}]+/gu, '').trim().toLowerCase();
+        const matchedBtn = Array.isArray(customButtons) ? customButtons.find((b) => {
+          if (b.is_active === false) return false;
+          const candidates = [b.text, b.text_vi, b.text_en, b.text_zh].filter(Boolean);
+          if (candidates.includes(text)) return true;
+          return candidates.some((c) => {
+            const cleanC = (c || '').replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?\d+\}/gi, '').replace(/^[^\p{L}\p{N}]+/gu, '').trim().toLowerCase();
+            return cleanC && cleanMsgText && (cleanC === cleanMsgText);
+          });
+        }) : null;
+
+        if (matchedBtn) {
+          switch (matchedBtn.action) {
+            case 'products':
+              return sendCategoryList(bot, msg.chat.id, user);
+            case 'support':
+              return sendSupportMenu(bot, msg.chat.id, user);
+            case 'wallet':
+              return sendWalletMenu(bot, msg.chat.id, user, config);
+            case 'deposit':
+              return startDepositFlow(bot, msg, user, config);
+            case 'api':
+              return sendApiMenu(bot, msg.chat.id, user);
+            case 'warranty':
+              return sendWarrantyMenu(bot, msg.chat.id, user);
+            case 'history':
+              return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+            case 'start':
+              return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+            case 'checkin':
+              {
+                const { getBotTemplate, renderBotTemplate } = await import('./helpers/templateHelper.js');
+                const rawTemplate = await getBotTemplate('template_checkin_info', userLang);
+                const text = renderBotTemplate(rawTemplate, {
+                  customer_name: user?.username ? `@${user.username}` : (user?.first_name || 'bạn'),
+                  bonus: '1.000'
+                });
+                return bot.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+              }
+            case 'lang':
+              {
+                const { createCallbackData } = await import('../utils/index.js');
+                return bot.sendMessage(msg.chat.id, t('select_language', user.language || 'vi'), {
+                  parse_mode: 'Markdown',
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        { text: '🇻🇳 Tiếng Việt', callback_data: createCallbackData({ action: 'change_lang', lang: 'vi' }) },
+                        { text: '🇺🇸 English', callback_data: createCallbackData({ action: 'change_lang', lang: 'en' }) },
+                        { text: '🇨🇳 中文', callback_data: createCallbackData({ action: 'change_lang', lang: 'zh' }) }
+                      ]
+                    ]
+                  }
+                });
+              }
+            case 'custom_text':
+              let customText = matchedBtn.custom_text_vi || matchedBtn.custom_text || '';
+              if (userLang === 'en') customText = matchedBtn.custom_text_en || customText;
+              else if (userLang === 'zh') customText = matchedBtn.custom_text_zh || customText;
+              if (customText) {
+                const { renderBotTemplate } = await import('./helpers/templateHelper.js');
+                const { markdownToTelegramHtml } = await import('./helpers/telegramFormatHelper.js');
+                const rendered = renderBotTemplate(customText, {
+                  name: user?.username ? `@${user.username}` : (user?.first_name || 'bạn'),
+                  username: user?.username ? `@${user.username}` : '',
+                  id: String(user?.telegram_id || msg.chat.id),
+                  balance: formatCurrency(user?.balance || 0),
+                  credit: String(user?.credit || 0)
+                });
+                return bot.sendMessage(msg.chat.id, markdownToTelegramHtml(rendered), { parse_mode: 'HTML' });
+              }
+              break;
+          }
+        }
+      } catch (err) {
+        console.error('[listen.js] Dynamic button check error:', err.message);
+      }
+
+      // 1. Nút 🛍️ Sản phẩm
+      if (
+        text === '🛍️ Sản phẩm' || text === '🛍 Sản phẩm' || text === 'Sản phẩm' ||
+        text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản' ||
+        text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Buy Products' || text === 'Buy Products' ||
+        isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang)
+      ) {
+        return sendCategoryList(bot, msg.chat.id, user);
+      }
+
+      // 2. Nút 💬 Hỗ trợ
+      if (
+        text === '💬 Hỗ trợ' || text === 'Hỗ trợ' ||
+        text === '💬 Support' || text === 'Support' ||
+        text === '🛟 Hỗ trợ / Bảo hành' || text === 'Hỗ trợ / Bảo hành' ||
+        isMatchButton(text, 'btn_support', userLang) || text === '/support'
+      ) {
+        return sendSupportMenu(bot, msg.chat.id, user);
+      }
+
+      // 3. Nút 👛 Ví
+      if (
+        text === '👛 Ví' || text === 'Ví' || text === '👛 Wallet' || text === 'Wallet' ||
+        text === '➕ Nạp tiền' || text === 'Nạp tiền' || text === '➕ Deposit' || text === 'Deposit' ||
+        isMatchButton(text, 'btn_deposit', userLang) || isMatchButton(text, 'deposit', userLang) || text === '/wallet' || text === '/info'
+      ) {
+        return sendWalletMenu(bot, msg.chat.id, user, config);
+      }
+
+      // 4. Nút 🔗 API
+      if (
+        text === '🔗 API' || text === 'API' || text === '🔗 Tích hợp API' || text === '/api'
+      ) {
+        return sendApiMenu(bot, msg.chat.id, user);
+      }
+
+      // 5. Nút 🛡️ Bảo hành
+      if (
+        text === '🛡️ Bảo hành' || text === '🛡 Bảo hành' || text === 'Bảo hành' ||
+        text === '🛡️ Warranty' || text === 'Warranty' || text === '/warranty'
+      ) {
+        return sendWarrantyMenu(bot, msg.chat.id, user);
+      }
+
+      if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') {
+        return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
+      }
+
+      if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === 'Lịch sử mua' || text === '🧾 History' || text === 'History') {
+        return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
+      }
+
       if (isMatchButton(text, 'btn_check_live', userLang) || text === '🔎 Check Live' || text === 'Check Live') return handleCheckLiveCommand(bot, msg, '');
       if (isMatchButton(text, 'btn_download_all', userLang) || text === '⬇️ Download All' || text === 'Download All') return startDownloadFlow(bot, msg.chat.id, msg.from.id);
-      if (isMatchButton(text, 'btn_locket', userLang) || text === '🔐 Locket' || text === 'Locket') return startLocketFlow(bot, msg.chat.id, msg.from.id);
-      if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') return sendMenu(bot, msg.chat.id, user, config.TELEGRAM_GROUP_LINKS);
-      if (text === '🎬 CapCut Workspace' || text === 'CapCut Workspace') return showCapCutMenu(bot, msg.chat.id);
-      if (isMatchButton(text, 'btn_order_history', userLang) || text === '🧾 Lịch sử mua' || text === 'Lịch sử mua' || text === '🧾 History' || text === 'History' || text === '🧾 购买记录' || text === '购买记录') return sendOrderHistory(bot, msg.chat.id, user.id, 1, config.PAGE_SIZE);
-
-      if (isMatchButton(text, 'btn_checkin', userLang) || text === '📆 Điểm danh' || text === 'Điểm danh' || text === '/checkin') {
-        const checkinModule = await import('../modules/commands/checkin.js');
-        return checkinModule.default.handler(bot, msg);
-      }
-
-      if (isMatchButton(text, 'btn_support', userLang) || text === '🛟 Hỗ trợ / Bảo hành' || text === 'Hỗ trợ / Bảo hành' || text === '/support') {
-        setCache(`waiting_support_request_${msg.from.id}`, true, 10 * 60 * 1000);
-        return bot.sendMessage(msg.chat.id, t('msg_support_guide', userLang));
-      }
 
       if (isMatchButton(text, 'btn_change_language', userLang) || text === '🌐 Ngôn ngữ' || text === 'Ngôn ngữ' || text === '🌐 Language' || text === '🌐 语言') {
         const { t } = await import('./helpers/langHelper.js');
@@ -481,17 +559,13 @@ export const registerListeners = (bot, config) => {
       }
     }
 
-    // Kiểm tra state mua Gmail EDU (số lượng / mật khẩu)
-    const handledGmailEdu = await handleGmailEduQuantityInput(bot, msg, config);
-    if (handledGmailEdu) return;
 
-    // Kiểm tra input email Netflix 30 Days
-    const handledNetflix = await handleNetflixEmailInput(bot, msg, config);
-    if (handledNetflix) return;
 
-    // Kiểm tra input email Canva Pro
-    const handledCanva = await handleCanvaEmailInput(bot, msg, config);
-    if (handledCanva) return;
+    // Xử lý nạp tiền USDT TRC20 (Nhập số tiền hoặc nhập mã TxID / Hash kiểm tra qua Binance)
+    const { handleTrc20AmountInput, handleTrc20HashInput, handleUsdtAmountInput } = await import('./handle/handleDeposit.js');
+    if (await handleTrc20AmountInput(bot, msg, user)) return;
+    if (await handleTrc20HashInput(bot, msg, user)) return;
+    if (await handleUsdtAmountInput(bot, msg, user, config)) return;
 
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     const handledDeposit = await handleDepositAmount(bot, msg, user, config);
@@ -593,7 +667,22 @@ export const registerListeners = (bot, config) => {
   // Callback query listener
   bot.on('callback_query', async (query) => {
     try {
-      const data = JSON.parse(query.data);
+      let data = {};
+      try {
+        data = JSON.parse(query.data);
+      } catch {
+        if (typeof query.data === 'string') {
+          if (query.data.startsWith('category_products:')) {
+            data = { action: 'category_products', catId: Number(query.data.split(':')[1]) };
+          } else if (query.data.startsWith('view_product:')) {
+            data = { action: 'view_product', productId: Number(query.data.split(':')[1]) };
+          } else if (query.data === 'list_categories') {
+            data = { action: 'back_to_categories' };
+          } else {
+            data = { action: query.data };
+          }
+        }
+      }
       const chatId = query.message.chat.id;
 
       // Giữ QR khi user chỉ kiểm tra; reload/cancel tự xóa trong handler.
@@ -686,88 +775,101 @@ export const registerListeners = (bot, config) => {
             // Thông báo đã đổi ngôn ngữ
             await bot.sendMessage(chatId, t('lang_switched', newLang), { parse_mode: 'Markdown' });
 
-            // Cập nhật menu keyboard theo ngôn ngữ mới
-            await sendTrackedMenu(bot, chatId, t('menu_title', newLang), {
-              parse_mode: 'Markdown',
-              reply_markup: buildMainKeyboard(t, newLang)
-            });
+            // Cập nhật menu chính & keyboard theo ngôn ngữ mới
+            return sendMenu(bot, chatId, user, config.TELEGRAM_GROUP_LINKS);
+          }
+
+        case 'wallet_info':
+          await sendWalletMenu(bot, chatId, user, config);
+          await bot.answerCallbackQuery(query.id);
+          return;
+
+        case 'start_deposit':
+          {
+            const { startDepositFlow } = await import('./handle/handleDeposit.js');
+            await startDepositFlow(bot, query.message, user, config);
+            await bot.answerCallbackQuery(query.id);
             return;
           }
 
-        case 'gmail_edu_info':
+        case 'deposit_history':
           {
-            const { showGmailEduInfo } = await import('./handle/handleGmailEdu.js');
-            await showGmailEduInfo(bot, chatId, user);
+            const { getBotTemplate, renderBotTemplate } = await import('./helpers/templateHelper.js');
+            const deposits = await query(
+              'SELECT id, amount, status, created_at FROM deposits WHERE user_id = ? ORDER BY id DESC LIMIT 10',
+              [user.id]
+            );
+            const userLang = user?.language || 'vi';
+            const statusMap = {
+              approved: userLang === 'en' ? '✅ Approved' : (userLang === 'zh' ? '✅ 成功' : '✅ Thành công'),
+              pending: userLang === 'en' ? '⏳ Pending' : (userLang === 'zh' ? '⏳ 待审核' : '⏳ Đang chờ duyệt'),
+              rejected: userLang === 'en' ? '❌ Rejected' : (userLang === 'zh' ? '❌ 拒绝' : '❌ Thất bại')
+            };
+            let depositListStr = '';
+            if (!deposits || deposits.length === 0) {
+              depositListStr = userLang === 'en' ? '• No deposit history found.' : (userLang === 'zh' ? '• 暂无充值记录。' : '• Bạn chưa có lịch sử nạp tiền nào.');
+            } else {
+              depositListStr = deposits.map((d) => {
+                const timeStr = d.created_at ? new Date(d.created_at).toLocaleString(userLang === 'zh' ? 'zh-CN' : (userLang === 'en' ? 'en-US' : 'vi-VN')) : '';
+                return `• **#${d.id}** | ${formatCurrency(d.amount)} | ${statusMap[d.status] || d.status} | ${timeStr}`;
+              }).join('\n');
+            }
+            const rawTemplate = await getBotTemplate('template_deposit_history', userLang);
+            const text = renderBotTemplate(rawTemplate, {
+              deposit_list: depositListStr
+            });
+            await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
             await bot.answerCallbackQuery(query.id);
             return;
           }
-        case 'gmail_pw_auto':
+
+        case 'api_info':
+          await sendApiMenu(bot, chatId, user);
+          await bot.answerCallbackQuery(query.id);
+          return;
+
+        case 'regenerate_api_key':
           {
-            const { handleBuyGmailEdu } = await import('./handle/handleGmailEdu.js');
-            await handleBuyGmailEdu(bot, { chat: { id: chatId }, from: query.from }, user, data.qty || 1, user.language || 'vi', null, config);
+            const crypto = await import('crypto');
+            const newKey = `sk_${crypto.randomBytes(16).toString('hex')}`;
+            await query('UPDATE user_api_keys SET api_key = ? WHERE user_id = ?', [newKey, user.id]);
+            await bot.sendMessage(chatId, `✅ **Đã tạo API Key mới thành công!**\n\`${newKey}\``, { parse_mode: 'Markdown' });
+            await sendApiMenu(bot, chatId, user);
             await bot.answerCallbackQuery(query.id);
             return;
           }
-        case 'gmail_pw_custom':
-          {
-            const { setCache } = await import('../lib/cache/index.js');
-            setCache(`gmail_edu_waiting_${query.from.id}`, {
-              waitingPassword: true,
-              quantity: data.qty || 1,
-              lang: user.language || 'vi'
-            }, 10 * 60 * 1000);
-            const pwdMsg = user.language === 'en'
-              ? '✏️ **Please enter your desired password** (at least 8 characters, containing uppercase, lowercase, numbers, and special symbols):'
-              : '✏️ **Vui lòng nhập mật khẩu bạn muốn đặt** (tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt):';
-            await bot.sendMessage(chatId, pwdMsg, { parse_mode: 'Markdown' });
-            await bot.answerCallbackQuery(query.id);
-            return;
-          }
-        case 'gmail_pw_cancel':
-        case 'gmail_deposit_cancel':
-          {
-            const { delCache } = await import('../lib/cache/index.js');
-            delCache(`gmail_edu_waiting_${query.from.id}`);
-            delCache(`gmail_edu_purchase_${query.from.id}`);
-            const cancelMsg = user.language === 'en' ? '❌ Cancelled Gmail EDU purchase.' : '❌ Đã hủy giao dịch mua Gmail EDU.';
-            await bot.sendMessage(chatId, cancelMsg);
-            await bot.answerCallbackQuery(query.id);
-            return;
-          }
-        case 'gmail_buy_again':
-          {
-            const { showGmailEduInfo } = await import('./handle/handleGmailEdu.js');
-            await showGmailEduInfo(bot, chatId, user);
-            await bot.answerCallbackQuery(query.id);
-            return;
-          }
-        case 'gmail_deposit_bank':
-          {
-            const { promptForBankDeposit } = await import('./handle/handleDeposit.js');
-            await promptForBankDeposit(bot, chatId, query.from.id, config);
-            await bot.answerCallbackQuery(query.id);
-            return;
-          }
-        case 'gmail_deposit_usdt':
-          {
-            const { showUsdtOptions } = await import('./handle/handleDeposit.js');
-            await showUsdtOptions(bot, chatId, config);
-            await bot.answerCallbackQuery(query.id);
-            return;
-          }
+
+        case 'warranty_info':
+          await sendWarrantyMenu(bot, chatId, user);
+          await bot.answerCallbackQuery(query.id);
+          return;
+
+        case 'start_warranty':
+          await sendSupportMenu(bot, chatId, user);
+          await bot.answerCallbackQuery(query.id);
+          return;
+
+        case 'support_info':
+          await sendSupportMenu(bot, chatId, user);
+          await bot.answerCallbackQuery(query.id);
+          return;
+
+        case 'order_history':
+          await sendOrderHistory(bot, chatId, user.id, 1, config.PAGE_SIZE);
+          await bot.answerCallbackQuery(query.id);
+          return;
 
         case 'products':
-          // Need to fetch user to get language for pagination callback too?
-          // If ensureUser wasn't called here (it was called above), we can pass it.
-          // user variable in 'callback_query' listener: const user = await ensureUser(...)
-          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, data.catId);
+          return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, data.catId, query.message?.message_id);
         case 'category_products':
-          return sendProductList(bot, chatId, 1, config.PAGE_SIZE, user, data.catId);
+          return sendProductList(bot, chatId, 1, config.PAGE_SIZE, user, data.catId, query.message?.message_id);
+        case 'list_categories':
         case 'back_to_categories':
-          return sendCategoryList(bot, chatId, user);
+          return sendCategoryList(bot, chatId, user, query.message?.message_id);
         case 'view_product':
+          try { await bot.answerCallbackQuery(query.id); } catch (e) {}
           const { showProductDetail } = await import('./handle/handleBuy.js');
-          return showProductDetail(bot, chatId, data.productId, query.from.id);
+          return showProductDetail(bot, chatId, data.productId, query.from.id, query.message?.message_id);
         case 'buy_product':
           return handlePurchase(bot, query.message, data.productId, query.from, config);
 
@@ -795,13 +897,26 @@ export const registerListeners = (bot, config) => {
           const { showUsdtInfo } = await import('./handle/handleDeposit.js');
           return showUsdtInfo(bot, chatId, config);
 
-        case 'deposit_usdt_bybit':
-          const { showUsdtBybitInfo } = await import('./handle/handleDeposit.js');
-          return showUsdtBybitInfo(bot, chatId, query.from.id, config);
+        case 'deposit_select_binance':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { showBinanceDepositInfo } = await import('./handle/handleDeposit.js');
+            return showBinanceDepositInfo(bot, chatId, query.from.id, config, query.message?.message_id);
+          }
+
+        case 'check_binance_payment':
+          {
+            const { checkBinancePaymentForUser } = await import('./handle/handleDeposit.js');
+            return checkBinancePaymentForUser(bot, chatId, query.from.id, config);
+          }
 
         case 'deposit_usdt_trc20':
           const { showTrc20DepositFlow } = await import('./handle/handleDeposit.js');
-          return showTrc20DepositFlow(bot, chatId, query.from.id, config);
+          return showTrc20DepositFlow(bot, chatId, query.from.id, config, query.message?.message_id);
+
+        case 'check_recent_trc20':
+          const { checkRecentTrc20DepositForUser } = await import('./handle/handleDeposit.js');
+          return checkRecentTrc20DepositForUser(bot, chatId, query.from.id, config);
 
         case 'check_payment':
           const { checkPaymentForUser } = await import('./services/autoDeposit.js');
@@ -914,49 +1029,6 @@ export const registerListeners = (bot, config) => {
           if (!await requireAdmin(config.ADMIN_IDS, query.from.id)) return;
           return adminCompleteManualOrder(bot, chatId, data.orderId, query.from);
 
-        case 'gmail_buy_again':
-          return showGmailEduInfo(bot, chatId, user);
-
-        // Gmail EDU deposit options
-        case 'gmail_deposit_bank':
-          {
-            const { getCache, setCache } = await import('../lib/cache/index.js');
-            const { handleDepositAmount } = await import('./handle/handleDeposit.js');
-
-            const amount = data.amount || 5000;
-
-            // Set bank key cho Viettel Money
-            const bankKey = `bank_${query.from.id}`;
-            setCache(bankKey, 'viettel', 10 * 60 * 1000);
-
-            // Tạo fake message để gọi handleDepositAmount
-            const fakeMsg = {
-              chat: { id: chatId },
-              from: query.from,
-              text: amount.toString()
-            };
-
-            await bot.sendMessage(chatId, `🏦 Đang tạo QR nạp ${formatCurrency(amount)}...`);
-            await handleDepositAmount(bot, fakeMsg, user, config);
-          }
-          return;
-
-        case 'gmail_deposit_usdt':
-          {
-            const { showUsdtOptions } = await import('./handle/handleDeposit.js');
-            await bot.sendMessage(chatId, `💵 Vui lòng nạp ít nhất ${data.amount || 1} USDT để hoàn tất mua Gmail EDU.`);
-            await showUsdtOptions(bot, chatId, config);
-          }
-          return;
-
-        case 'gmail_deposit_cancel':
-          {
-            const { delCache } = await import('../lib/cache/index.js');
-            const purchaseKey = `gmail_edu_purchase_${query.from.id}`;
-            delCache(purchaseKey);
-            await bot.sendMessage(chatId, '❌ Đã huỷ giao dịch mua Gmail EDU.');
-          }
-          return;
 
 
 
@@ -1053,17 +1125,7 @@ export const registerListeners = (bot, config) => {
           } catch (e) { console.error(e); }
           return;
 
-        case 'netflix_info':
-          return showNetflixMenu(bot, chatId, query.from.id);
-        case 'netflix_start':
-          return startNetflixFlow(bot, chatId, query.from.id);
 
-        case 'canva_info':
-          return showCanvaMenu(bot, chatId, query.from.id);
-        case 'canva_start':
-          return startCanvaFlow(bot, chatId, query.from.id);
-        case 'canva_role':
-          return handleCanvaRoleSelect(bot, chatId, query.from.id, data.role, query.message?.message_id);
 
         default:
           break;

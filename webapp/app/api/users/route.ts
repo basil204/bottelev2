@@ -74,6 +74,9 @@ export async function GET(request: Request) {
             };
         });
 
+        const [walletTotalRows] = await pool.query<any[]>('SELECT COALESCE(SUM(balance), 0) as total_balance FROM users');
+        const [todayUsersRows] = await pool.query<any[]>('SELECT COUNT(*) as today_count FROM users WHERE DATE(created_at) = CURDATE()');
+
         return NextResponse.json({
             data: usersWithRank,
             pagination: {
@@ -81,6 +84,11 @@ export async function GET(request: Request) {
                 limit,
                 total,
                 totalPages: Math.ceil(total / limit)
+            },
+            stats: {
+                totalUsers: total,
+                todayRegisteredUsers: Number(todayUsersRows[0]?.today_count || 0),
+                totalWalletBalance: Number(walletTotalRows[0]?.total_balance || 0),
             }
         });
     } catch (error) {

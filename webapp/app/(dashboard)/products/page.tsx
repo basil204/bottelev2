@@ -13,10 +13,19 @@ import { Switch } from '@/components/ui/switch';
 interface Product {
   id: number;
   name: string;
+  name_vi?: string;
+  name_en?: string;
+  name_zh?: string;
   code: string | null;
   price: number;
   cost_price?: number;
   description: string;
+  description_vi?: string;
+  description_en?: string;
+  description_zh?: string;
+  note_vi?: string;
+  note_en?: string;
+  note_zh?: string;
   stock: number;
   low_stock_threshold: number;
   sold_count: number;
@@ -39,6 +48,9 @@ interface Product {
   telegram_file_id?: string;
   telegram_file_unique_id?: string;
   prompt_message?: string;
+  prompt_message_vi?: string;
+  prompt_message_en?: string;
+  prompt_message_zh?: string;
   access_duration_enabled?: boolean;
   access_duration_days?: number;
   preorder_enabled?: boolean;
@@ -46,6 +58,7 @@ interface Product {
   preorder_fee_usdt?: number;
   preorder_max_per_user?: number;
   preorder_total_limit?: number;
+  notify_telegram?: boolean;
 }
 
 interface Category {
@@ -175,10 +188,62 @@ export default function ProductsPage() {
   const [productFormError, setProductFormError] = useState('');
   const [savingProduct, setSavingProduct] = useState(false);
 
+  // Active Multilingual Tabs for Form
+  const [descLang, setDescLang] = useState<'vi' | 'en' | 'zh'>('vi');
+  const [nameLang, setNameLang] = useState<'vi' | 'en' | 'zh'>('vi');
+  const [promptLang, setPromptLang] = useState<'vi' | 'en' | 'zh'>('vi');
+
   // Translation Tab state
-  const [transLang, setTransLang] = useState('vi');
-  const [transName, setTransName] = useState('');
-  const [transDesc, setTransDesc] = useState('');
+  const [transLang, setTransLang] = useState<'vi' | 'en' | 'zh'>('en');
+
+  // Multilingual field accessors
+  const getProductDescForLang = (lang: 'vi' | 'en' | 'zh') => {
+    if (!editingProduct) return '';
+    if (lang === 'en') return editingProduct.description_en !== undefined ? editingProduct.description_en : (editingProduct.note_en || '');
+    if (lang === 'zh') return editingProduct.description_zh !== undefined ? editingProduct.description_zh : (editingProduct.note_zh || '');
+    return editingProduct.description_vi !== undefined ? editingProduct.description_vi : (editingProduct.description || '');
+  };
+
+  const setProductDescForLang = (lang: 'vi' | 'en' | 'zh', val: string) => {
+    setEditingProduct(prev => {
+      if (!prev) return prev;
+      if (lang === 'en') return { ...prev, description_en: val, note_en: val };
+      if (lang === 'zh') return { ...prev, description_zh: val, note_zh: val };
+      return { ...prev, description_vi: val, note_vi: val, description: val };
+    });
+  };
+
+  const getProductNameForLang = (lang: 'vi' | 'en' | 'zh') => {
+    if (!editingProduct) return '';
+    if (lang === 'en') return editingProduct.name_en || '';
+    if (lang === 'zh') return editingProduct.name_zh || '';
+    return editingProduct.name_vi || editingProduct.name || '';
+  };
+
+  const setProductNameForLang = (lang: 'vi' | 'en' | 'zh', val: string) => {
+    setEditingProduct(prev => {
+      if (!prev) return prev;
+      if (lang === 'en') return { ...prev, name_en: val };
+      if (lang === 'zh') return { ...prev, name_zh: val };
+      return { ...prev, name_vi: val, name: val };
+    });
+  };
+
+  const getProductPromptForLang = (lang: 'vi' | 'en' | 'zh') => {
+    if (!editingProduct) return '';
+    if (lang === 'en') return editingProduct.prompt_message_en || '';
+    if (lang === 'zh') return editingProduct.prompt_message_zh || '';
+    return editingProduct.prompt_message_vi || editingProduct.prompt_message || '';
+  };
+
+  const setProductPromptForLang = (lang: 'vi' | 'en' | 'zh', val: string) => {
+    setEditingProduct(prev => {
+      if (!prev) return prev;
+      if (lang === 'en') return { ...prev, prompt_message_en: val };
+      if (lang === 'zh') return { ...prev, prompt_message_zh: val };
+      return { ...prev, prompt_message_vi: val, prompt_message: val };
+    });
+  };
 
   // Fixed Position Action Menu State
   const [actionMenuState, setActionMenuState] = useState<{ product: Product; top: number; left: number } | null>(null);
@@ -188,6 +253,7 @@ export default function ProductsPage() {
   const [stockModalView, setStockModalView] = useState<'list' | 'add'>('list');
   const [stockInputFormat, setStockInputFormat] = useState<'line' | 'block'>('line');
   const [stockData, setStockData] = useState('');
+  const [notifyStockTelegram, setNotifyStockTelegram] = useState(true);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [stockAccounts, setStockAccounts] = useState<Account[]>([]);
 
@@ -317,6 +383,7 @@ export default function ProductsPage() {
       description: '',
       type: 'stock',
       priority: 0,
+      notify_telegram: true,
     });
     setModalTab('general');
     setProductFormError('');
@@ -359,6 +426,11 @@ export default function ProductsPage() {
         setProductFormError(errorData.error || 'Không thể lưu sản phẩm.');
         setSavingProduct(false);
         return;
+      }
+
+      const resData = await res.json().catch(() => ({}));
+      if (resData.broadcastStats) {
+        alert(`Lưu sản phẩm thành công!\nĐã phát sóng thông báo sản phẩm mới đến ${resData.broadcastStats.sent}/${resData.broadcastStats.total} users Telegram.`);
       }
 
       setIsModalOpen(false);
@@ -417,11 +489,19 @@ export default function ProductsPage() {
       const res = await fetch('/api/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: currentProduct.id, data: stockData }),
+        body: JSON.stringify({
+          productId: currentProduct.id,
+          data: stockData,
+          notify_telegram: notifyStockTelegram
+        }),
       });
       if (res.ok) {
         const result = await res.json();
-        alert(`Đã nạp thành công ${result.count || 0} tài khoản!`);
+        let msg = `Đã nạp thành công ${result.count || 0} tài khoản!`;
+        if (result.broadcastStats) {
+          msg += `\nĐã phát sóng thông báo bổ sung kho đến ${result.broadcastStats.sent}/${result.broadcastStats.total} users Telegram.`;
+        }
+        alert(msg);
         setStockModalView('list');
         setStockData('');
         // Refresh inventory
@@ -450,7 +530,7 @@ export default function ProductsPage() {
   };
 
   // Open Custom Price Modal
-  const openCustomPriceModal = (product: Product) => {
+  const openCustomPriceModal = async (product: Product) => {
     setCurrentProduct(product);
     setNewCustomUser('');
     setNewCustomPrice('');
@@ -458,39 +538,54 @@ export default function ProductsPage() {
     setNewCustomStatus(true);
     setIsCustomPriceModalOpen(true);
 
-    setCustomPrices([
-      {
-        id: 1,
-        user_identifier: 'User 5865174169',
-        product_id: product.id,
-        product_name: product.name,
-        plan_label: 'Không áp dụng',
-        scope: 'all_orders',
-        custom_price: 0,
-        is_active: true,
-        created_at: '08:18:05 15/8/2026',
-        updated_at: '08:18:05 15/8/2026'
-      }
-    ]);
+    try {
+      const res = await fetch(`/api/custom-pricing?productId=${product.id}`);
+      const data = await res.json();
+      const list = Array.isArray(data.data) ? data.data : [];
+      setCustomPrices(list.map((cp: any) => ({
+        id: cp.id,
+        user_identifier: cp.username ? `@${cp.username}` : (cp.telegram_id ? `ID: ${cp.telegram_id}` : `User #${cp.user_id}`),
+        product_id: cp.product_id,
+        product_name: cp.product_name,
+        plan_label: cp.plan_id || 'Không áp dụng',
+        scope: cp.scope || 'all_orders',
+        custom_price: Number(cp.custom_price) || 0,
+        is_active: Boolean(cp.is_active),
+        created_at: new Date(cp.created_at).toLocaleString('vi-VN'),
+        updated_at: new Date(cp.created_at).toLocaleString('vi-VN')
+      })));
+    } catch {
+      setCustomPrices([]);
+    }
   };
 
-  const handleCreateCustomPrice = () => {
-    if (!newCustomUser.trim() || newCustomPrice === '') return;
-    const newEntry: CustomPrice = {
-      id: Date.now(),
-      user_identifier: newCustomUser,
-      product_id: currentProduct?.id || 0,
-      product_name: currentProduct?.name || '',
-      plan_label: newCustomPlan,
-      scope: newCustomScope,
-      custom_price: Number(newCustomPrice),
-      is_active: newCustomStatus,
-      created_at: new Date().toLocaleTimeString('vi-VN') + ' ' + new Date().toLocaleDateString('vi-VN'),
-      updated_at: new Date().toLocaleTimeString('vi-VN') + ' ' + new Date().toLocaleDateString('vi-VN')
-    };
-    setCustomPrices(prev => [newEntry, ...prev]);
-    setNewCustomUser('');
-    setNewCustomPrice('');
+  const handleCreateCustomPrice = async () => {
+    if (!newCustomUser.trim() || newCustomPrice === '' || !currentProduct) return;
+    try {
+      const res = await fetch('/api/custom-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: newCustomUser.trim(),
+          productId: currentProduct.id,
+          customPrice: Number(newCustomPrice),
+          scope: newCustomScope === 'client_api' ? 'CLIENT_API' : 'ALL_ORDERS',
+          isActive: newCustomStatus
+        })
+      });
+
+      if (res.ok) {
+        alert('Đã lưu giá riêng thành công!');
+        setNewCustomUser('');
+        setNewCustomPrice('');
+        openCustomPriceModal(currentProduct);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Lỗi khi lưu giá riêng');
+      }
+    } catch {
+      alert('Lỗi kết nối máy chủ');
+    }
   };
 
   const detectedLineCount = useMemo(() => {
@@ -871,44 +966,71 @@ export default function ProductsPage() {
           {/* Modal Body Container */}
           <div className="max-h-[65vh] overflow-y-auto p-6 space-y-5">
             {/* Top Help Validation Box */}
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs space-y-1 text-amber-900 font-medium">
-              <div className="font-bold text-amber-950 uppercase tracking-wider text-[11px] mb-1">
-                KIỂM TRA TÍNH HỢP LỆ:
-              </div>
-              <div className="flex items-center gap-1.5 text-rose-600">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                <span>Tên sản phẩm không được bỏ trống.</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-amber-800">
-                <HelpCircle className="h-3.5 w-3.5 shrink-0" />
-                <span>Cần nạp kho hàng/tải file lên sau khi tạo sản phẩm.</span>
-              </div>
-            </div>
-
-            {productFormError && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-700">
-                {productFormError}
+            {(!editingProduct?.name || !editingProduct?.description) && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs space-y-1 text-amber-900 font-medium">
+                <div className="font-bold text-amber-950 uppercase tracking-wider text-[11px] mb-1">
+                  KIỂM TRA TÍNH HỢP LỆ:
+                </div>
+                {!editingProduct?.name && (
+                  <div className="flex items-center gap-1.5 text-rose-600">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Tên sản phẩm không được bỏ trống.</span>
+                  </div>
+                )}
+                {!editingProduct?.description && (
+                  <div className="flex items-center gap-1.5 text-amber-700">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Mô tả sản phẩm đang trống. Khuyến nghị nhập mô tả để hiển thị rõ ràng trên Bot Telegram.</span>
+                  </div>
+                )}
               </div>
             )}
 
             {/* TAB 1: THÔNG TIN CHUNG */}
             {modalTab === 'general' && (
               <div className="space-y-4">
-                {/* Tên sản phẩm */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                    TÊN SẢN PHẨM <span className="text-orange-600">*</span>
-                  </label>
+                {/* Tên sản phẩm đa ngôn ngữ */}
+                <div className="space-y-2 p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                      <span>TÊN SẢN PHẨM</span>
+                      <span className="text-orange-600">*</span>
+                    </label>
+
+                    {/* Language Switcher for Name */}
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-zinc-200 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setNameLang('vi')}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${nameLang === 'vi' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                      >
+                        🇻🇳 VI
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNameLang('en')}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${nameLang === 'en' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                      >
+                        🇺🇸 EN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNameLang('zh')}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${nameLang === 'zh' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                      >
+                        🇨🇳 ZH
+                      </button>
+                    </div>
+                  </div>
+
                   <input
                     type="text"
-                    value={editingProduct?.name || ''}
-                    onChange={(e) => setEditingProduct(prev => ({ ...prev!, name: e.target.value }))}
-                    placeholder="Ví dụ: Netflix Premium 1 tháng"
-                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none"
+                    value={getProductNameForLang(nameLang)}
+                    onChange={(e) => setProductNameForLang(nameLang, e.target.value)}
+                    placeholder={nameLang === 'vi' ? 'Ví dụ: Netflix Premium 1 tháng' : (nameLang === 'en' ? 'e.g. Netflix Premium 1 Month' : '例: Netflix Premium 1 个月')}
+                    className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-xs font-bold text-zinc-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none"
                   />
                 </div>
-
-
 
                 {/* Price, Cost Price, Category & Type Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1112,73 +1234,104 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Description */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                      MÔ TẢ SẢN PHẨM (HỖ TRỢ HTML & TELEGRAM BLOCKQUOTE)
-                    </label>
-                    <div className="flex items-center gap-1">
+                {/* Multilingual Description & Note Box */}
+                <div className="space-y-2 p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                        MÔ TẢ / GHI CHÚ SẢN PHẨM (NOTE)
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-bold uppercase">
+                        {descLang.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Language Switcher Tabs for Note / Description */}
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-zinc-200 shadow-2xs">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingProduct(prev => ({
-                            ...prev!,
-                            description: (prev?.description || '') + '<blockquote>Nội dung trích dẫn...</blockquote>'
-                          }));
-                        }}
-                        className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition"
-                        title="Khung trích dẫn vạch xanh Telegram"
+                        onClick={() => setDescLang('vi')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${descLang === 'vi' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
                       >
-                        ❝ Trích dẫn &lt;blockquote&gt;
+                        🇻🇳 Tiếng Việt
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingProduct(prev => ({
-                            ...prev!,
-                            description: (prev?.description || '') + '<b>In đậm</b>'
-                          }));
-                        }}
-                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
+                        onClick={() => setDescLang('en')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${descLang === 'en' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
                       >
-                        &lt;b&gt;
+                        🇺🇸 English
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingProduct(prev => ({
-                            ...prev!,
-                            description: (prev?.description || '') + '<i>In nghiêng</i>'
-                          }));
-                        }}
-                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
+                        onClick={() => setDescLang('zh')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${descLang === 'zh' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
                       >
-                        &lt;i&gt;
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingProduct(prev => ({
-                            ...prev!,
-                            description: (prev?.description || '') + '<code>Code</code>'
-                          }));
-                        }}
-                        className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition"
-                      >
-                        &lt;code&gt;
+                        🇨🇳 中文
                       </button>
                     </div>
                   </div>
+
+                  {/* Formatting Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = getProductDescForLang(descLang);
+                        setProductDescForLang(descLang, cur + '<blockquote>Nội dung trích dẫn...</blockquote>');
+                      }}
+                      className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition"
+                      title="Khung trích dẫn vạch xanh Telegram"
+                    >
+                      ❝ Trích dẫn &lt;blockquote&gt;
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = getProductDescForLang(descLang);
+                        setProductDescForLang(descLang, cur + '<b>In đậm</b>');
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition shadow-2xs"
+                    >
+                      &lt;b&gt;
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = getProductDescForLang(descLang);
+                        setProductDescForLang(descLang, cur + '<i>In nghiêng</i>');
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition shadow-2xs"
+                    >
+                      &lt;i&gt;
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = getProductDescForLang(descLang);
+                        setProductDescForLang(descLang, cur + '<code>Code</code>');
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-bold text-zinc-700 hover:bg-zinc-100 transition shadow-2xs"
+                    >
+                      &lt;code&gt;
+                    </button>
+                  </div>
+
                   <textarea
                     rows={4}
-                    value={editingProduct?.description || ''}
-                    onChange={(e) => setEditingProduct(prev => ({ ...prev!, description: e.target.value }))}
-                    placeholder="Nhập mô tả sản phẩm... Ví dụ: <blockquote>Với gói này bạn có thể:\n- Xem phim 4K\n- Dùng 1 profile riêng</blockquote>"
-                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 focus:border-orange-500 outline-none font-mono"
+                    value={getProductDescForLang(descLang)}
+                    onChange={(e) => setProductDescForLang(descLang, e.target.value)}
+                    placeholder={
+                      descLang === 'vi'
+                        ? "Nhập mô tả / ghi chú Tiếng Việt... Ví dụ: <blockquote>Bảo hành 30 ngày đổi mới 1-1</blockquote>"
+                        : (descLang === 'en'
+                            ? "Enter English description / note... e.g.: <blockquote>30-day warranty 1-to-1 replacement</blockquote>"
+                            : "输入中文商品描述 / 售后备注... 例如: <blockquote>30天质保 1对1换新</blockquote>")
+                    }
+                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 focus:border-orange-500 outline-none font-mono"
                   />
                   <p className="text-[10px] text-zinc-400 font-medium">
-                    💡 <b>Mẹo định dạng Telegram:</b> Dùng thẻ <code className="bg-zinc-100 px-1 py-0.5 rounded text-zinc-700 font-bold">&lt;blockquote&gt;nội dung&lt;/blockquote&gt;</code> hoặc gõ <code className="bg-zinc-100 px-1 py-0.5 rounded text-zinc-700 font-bold">&gt; nội dung</code> ở đầu dòng để tạo khung trích dẫn có vạch xanh viền trái như Telegram!
+                    💡 Khách hàng đổi ngôn ngữ nào trên Bot thì Bot sẽ tự động hiển thị mô tả / note theo đúng ngôn ngữ đó.
                   </p>
                 </div>
               </div>
@@ -1331,20 +1484,54 @@ export default function ProductsPage() {
                 {/* OPTION 4: NHẬP TAY (HỎI ĐÁP, GIAO THỦ CÔNG) */}
                 {editingProduct?.delivery_type === 'Nhập tay (Hỏi đáp, giao thủ công)' && (
                   <div className="rounded-2xl border border-zinc-200/90 bg-white p-4 space-y-3 shadow-xs">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-                        <MessageSquareText className="h-3.5 w-3.5 text-orange-500" />
-                        <span>TIN NHẮN NHẮC KHÁCH NHẬP THÔNG TIN</span>
-                      </label>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                          <MessageSquareText className="h-3.5 w-3.5 text-orange-500" />
+                          <span>TIN NHẮN NHẮC KHÁCH NHẬP THÔNG TIN (ĐA NGÔN NGỮ)</span>
+                        </label>
+
+                        {/* Language Switcher for Prompt Message */}
+                        <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => setPromptLang('vi')}
+                            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${promptLang === 'vi' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                          >
+                            🇻🇳 VI
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptLang('en')}
+                            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${promptLang === 'en' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                          >
+                            🇺🇸 EN
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPromptLang('zh')}
+                            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition ${promptLang === 'zh' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                          >
+                            🇨🇳 ZH
+                          </button>
+                        </div>
+                      </div>
+
                       <textarea
                         rows={3}
-                        value={editingProduct?.prompt_message || ''}
-                        onChange={(e) => setEditingProduct(prev => ({ ...prev!, prompt_message: e.target.value }))}
-                        placeholder="Ví dụ: Vui lòng nhập ID tài khoản cần nâng cấp hoặc email đăng ký..."
+                        value={getProductPromptForLang(promptLang)}
+                        onChange={(e) => setProductPromptForLang(promptLang, e.target.value)}
+                        placeholder={
+                          promptLang === 'vi'
+                            ? "Ví dụ: Vui lòng nhập ID tài khoản cần nâng cấp hoặc email đăng ký..."
+                            : (promptLang === 'en'
+                                ? "e.g. Please enter your account ID or registered email to upgrade..."
+                                : "例如: 请输入需要升级的账号 ID 或注册邮箱...")
+                        }
                         className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 focus:border-orange-500 outline-none"
                       />
                       <p className="text-[10px] text-zinc-400 font-medium">
-                        Tin nhắn này sẽ hiển thị trên Telegram khi khách thanh toán để yêu cầu khách nhập thông tin cấu hình đơn hàng.
+                        Tin nhắn này sẽ hiển thị trên Telegram khi khách thanh toán theo ngôn ngữ ({promptLang.toUpperCase()}) của khách hàng.
                       </p>
                     </div>
                   </div>
@@ -1461,70 +1648,127 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* CHECKBOX 3: 📢 PHÁT SÓNG THÔNG BÁO SẢN PHẨM MỚI CHO USER TELEGRAM */}
+                <div className="rounded-2xl border border-zinc-200/90 p-4 space-y-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingProduct?.notify_telegram)}
+                      onChange={(e) => setEditingProduct(prev => ({ ...prev!, notify_telegram: e.target.checked }))}
+                      className="h-4 w-4 rounded accent-orange-600 cursor-pointer"
+                    />
+                    <span>📢 PHÁT SÓNG THÔNG BÁO SẢN PHẨM MỚI ĐẾN TOÀN BỘ USER TELEGRAM</span>
+                  </label>
+                  <p className="text-[11px] text-zinc-500 font-medium pl-6">
+                    Khi tạo sản phẩm mới, bot sẽ tự động gửi thông điệp giới thiệu sản phẩm kèm giá, ảnh và nút đặt mua ngay đến toàn bộ người dùng.
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* TAB 3: BẢN DỊCH */}
+            {/* TAB 3: BẢN DỊCH CHI TIẾT */}
             {modalTab === 'translation' && (
               <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                    NGÔN NGỮ BẢN DỊCH
-                  </label>
-                  <select
-                    value={transLang}
-                    onChange={(e) => setTransLang(e.target.value)}
-                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-bold text-zinc-900 outline-none"
-                  >
-                    <option value="vi">Tiếng Việt (vi)</option>
-                    <option value="en">English (en)</option>
-                    <option value="zh">中文 (zh)</option>
-                  </select>
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-orange-50 border border-orange-200">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-orange-950">CHỌN NGÔN NGỮ ĐÍCH CẦN SOẠN:</span>
+                    <p className="text-[10px] text-orange-800 font-medium">Hệ thống sẽ lưu trực tiếp vào CSDL theo từng phiên bản ngôn ngữ.</p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-orange-200">
+                    <button
+                      type="button"
+                      onClick={() => setTransLang('vi')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${transLang === 'vi' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                    >
+                      🇻🇳 Tiếng Việt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransLang('en')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${transLang === 'en' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                    >
+                      🇺🇸 English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransLang('zh')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${transLang === 'zh' ? 'bg-orange-600 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'}`}
+                    >
+                      🇨🇳 中文
+                    </button>
+                  </div>
                 </div>
 
+                {/* Tên dịch thuật */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                      TÊN DỊCH THUẬT
+                      TÊN SẢN PHẨM ({transLang.toUpperCase()})
                     </label>
                     <button
                       type="button"
-                      onClick={() => setTransName(editingProduct?.name || '')}
+                      onClick={() => setProductNameForLang(transLang, editingProduct?.name || '')}
                       className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
                     >
                       <Sparkles className="h-3 w-3" />
-                      <span>DỊCH TỪ BẢN GỐC</span>
+                      <span>SAO CHÉP TỪ TÊN GỐC</span>
                     </button>
                   </div>
                   <input
                     type="text"
-                    value={transName}
-                    onChange={(e) => setTransName(e.target.value)}
+                    value={getProductNameForLang(transLang)}
+                    onChange={(e) => setProductNameForLang(transLang, e.target.value)}
                     placeholder="Để trống sẽ dùng tên gốc"
-                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-900 outline-none"
+                    className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500"
                   />
                 </div>
 
+                {/* Mô tả / Note dịch thuật */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
-                      MÔ TẢ DỊCH THUẬT
+                      MÔ TẢ / GHI CHÚ NOTE ({transLang.toUpperCase()})
                     </label>
                     <button
                       type="button"
-                      onClick={() => setTransDesc(editingProduct?.description || '')}
+                      onClick={() => setProductDescForLang(transLang, editingProduct?.description || '')}
                       className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
                     >
                       <Sparkles className="h-3 w-3" />
-                      <span>DỊCH TỪ BẢN GỐC</span>
+                      <span>SAO CHÉP TỪ MÔ TẢ GỐC</span>
                     </button>
                   </div>
                   <textarea
                     rows={4}
-                    value={transDesc}
-                    onChange={(e) => setTransDesc(e.target.value)}
+                    value={getProductDescForLang(transLang)}
+                    onChange={(e) => setProductDescForLang(transLang, e.target.value)}
                     placeholder="Để trống sẽ dùng mô tả gốc"
-                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 outline-none"
+                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500 font-mono"
+                  />
+                </div>
+
+                {/* Prompt Message dịch thuật */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-700">
+                      TIN NHẮN NHẮC THÔNG TIN ORDER ({transLang.toUpperCase()})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setProductPromptForLang(transLang, editingProduct?.prompt_message || '')}
+                      className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      <span>SAO CHÉP TỪ BẢN GỐC</span>
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={getProductPromptForLang(transLang)}
+                    onChange={(e) => setProductPromptForLang(transLang, e.target.value)}
+                    placeholder="Để trống sẽ dùng bản gốc"
+                    className="w-full rounded-2xl border border-zinc-200 bg-white p-3 text-xs font-medium text-zinc-900 outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -1660,6 +1904,19 @@ export default function ProductsPage() {
                     placeholder={'Mỗi dòng đại diện cho 1 item giao cho khách.\nVí dụ:\nacc1|pass1\nacc2|pass2'}
                     className="w-full rounded-2xl border border-zinc-200 bg-white p-3 font-mono text-xs text-zinc-900 focus:border-orange-500 outline-none"
                   />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="stockNotifyTg"
+                    checked={notifyStockTelegram}
+                    onChange={(e) => setNotifyStockTelegram(e.target.checked)}
+                    className="h-4 w-4 rounded accent-orange-600 cursor-pointer"
+                  />
+                  <label htmlFor="stockNotifyTg" className="text-xs font-bold text-zinc-800 cursor-pointer">
+                    📢 Tự động phát sóng thông báo bổ sung hàng (Restock) đến toàn bộ User Telegram
+                  </label>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
@@ -1978,8 +2235,24 @@ export default function ProductsPage() {
                         <td className="px-4 py-3 text-[10px] text-zinc-500">{cp.updated_at}</td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1 text-zinc-400">
-                            <button className="p-1 hover:text-zinc-700 cursor-pointer"><Edit className="h-3.5 w-3.5" /></button>
-                            <button className="p-1 hover:text-rose-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm('Xóa cấu hình giá riêng này?')) return;
+                                try {
+                                  const res = await fetch(`/api/custom-pricing?id=${cp.id}`, { method: 'DELETE' });
+                                  if (res.ok && currentProduct) {
+                                    openCustomPriceModal(currentProduct);
+                                  }
+                                } catch (e) {
+                                  alert('Lỗi kết nối');
+                                }
+                              }}
+                              className="p-1 hover:text-rose-600 cursor-pointer"
+                              title="Xóa giá riêng"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>

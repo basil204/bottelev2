@@ -114,124 +114,148 @@ const getBankConfig = async (defaultConfig, bank) => {
   }
 }
 
+export const getDepositButtonsConfig = async () => {
+  try {
+    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'deposit_menu_buttons_config' LIMIT 1");
+    if (rows && rows.length > 0 && rows[0].value) {
+      const parsed = JSON.parse(rows[0].value);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (_) {}
+  return [
+    { id: 'btn_dep_bank', text: 'Ngân hàng (Bank)', text_vi: 'Ngân hàng (Bank)', text_en: 'Bank Transfer', text_zh: '银行转账', type: 'callback', callback_data: 'deposit_select_bank', row: 1, is_active: true },
+    { id: 'btn_dep_binance', text: 'Binance Pay (Tự động)', text_vi: 'Binance Pay (Tự động)', text_en: 'Binance Pay (Auto)', text_zh: '币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
+    { id: 'btn_dep_usdt', text: 'USDT TRC20', text_vi: 'USDT TRC20', text_en: 'USDT TRC20', text_zh: 'USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
+  ];
+};
+
 export const startDepositFlow = async (bot, msg, user, config) => {
   const { t } = await import('../helpers/langHelper.js');
+  const { formatReplyMarkup } = await import('../helpers/telegramFormatHelper.js');
   const lang = user?.language || 'vi';
 
-  const bankLabel = L(lang, '🏦 Ngân hàng (Bank)', '🏦 Bank Transfer', '🏦 银行转账');
-  const usdtLabel = '💲 USDT';
+  const buttons = await getDepositButtonsConfig();
+  const activeButtons = buttons.filter(b => b.is_active !== false);
+  const rowsMap = {};
+  activeButtons.forEach(btn => {
+    const r = Number(btn.row) || 1;
+    if (!rowsMap[r]) rowsMap[r] = [];
+    const label = (lang === 'en' && btn.text_en) || (lang === 'zh' && btn.text_zh) || btn.text_vi || btn.text;
+    if (btn.type === 'url' && btn.url) {
+      rowsMap[r].push({ text: label, url: btn.url });
+    } else {
+      const cb = btn.callback_data || 'deposit_select_bank';
+      const cbData = cb.startsWith('{') ? cb : createCallbackData({ action: cb });
+      rowsMap[r].push({ text: label, callback_data: cbData });
+    }
+  });
 
-  const inline_keyboard = [
-    [{ text: bankLabel, callback_data: createCallbackData({ action: 'deposit_select_bank' }) }],
-    [{ text: usdtLabel, callback_data: createCallbackData({ action: 'deposit_select_usdt' }) }]
+  const inline_keyboard = Object.keys(rowsMap)
+    .sort((a, b) => Number(a) - Number(b))
+    .map(r => rowsMap[r]);
+
+  const defaultFallback = [
+    [{ text: L(lang, 'Ngân hàng (Bank)', 'Bank Transfer', '银行转账'), callback_data: createCallbackData({ action: 'deposit_select_bank' }) }],
+    [{ text: 'Binance Pay (Tự động)', callback_data: createCallbackData({ action: 'deposit_select_binance' }) }],
+    [{ text: 'USDT TRC20', callback_data: createCallbackData({ action: 'deposit_select_usdt' }) }]
   ];
 
   const title = t('deposit_menu_title', lang);
 
   await bot.sendMessage(msg.chat.id, title, {
     parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard }
+    reply_markup: formatReplyMarkup({
+      inline_keyboard: inline_keyboard.length > 0 ? inline_keyboard : defaultFallback
+    })
   });
 };
 
-export const promptForBankDeposit = async (bot, chatId, userId, config) => {
+export const showBinanceDepositInfo = async (bot, chatId, userId, config, messageId = null) => {
   const { getUserByTelegram } = await import('../controllers/userController.js');
+  const { getBinanceConfig } = await import('../services/binanceService.js');
+  const { markdownToTelegramHtml, formatReplyMarkup } = await import('../helpers/telegramFormatHelper.js');
   const user = await getUserByTelegram(userId);
-  const lang = user?.language || 'vi';
+  const lang = user ? user.language : 'vi';
 
-  // Check existing QR
-  const existing = getCache(qrKey(userId));
-  if (existing) {
-    if (existing.expiresAt && existing.expiresAt < Date.now()) {
-      await deleteQrMessage(bot, existing);
-      if (existing.depositId) await updateDepositStatus(existing.depositId, 'rejected');
-      delCache(qrKey(userId));
-      if (existing.token) delCache(contentKey(existing.token));
-      const expiredMsg = L(lang,
-        'QR cũ đã hết hạn. Bạn có thể tạo nạp mới.',
-        'Old QR has expired. You can create a new deposit.',
-        'QR 已过期，您可以创建新的充值。'
-      );
-      await bot.sendMessage(chatId, expiredMsg);
-    } else {
-      const ttlSec = Math.ceil((existing.expiresAt - Date.now()) / 1000);
-      const waitingMsg = L(lang,
-        `Bạn đã có QR đang chờ (còn ${ttlSec}s). Số tiền: ${formatCurrency(existing.amount)}`,
-        `You have a pending QR (${ttlSec}s left). Amount: ${formatCurrency(existing.amount)}`,
-        `您已有待处理的 QR（剩余 ${ttlSec}秒）。金额: ${formatCurrency(existing.amount)}`
-      );
-      return bot.sendMessage(chatId, waitingMsg);
-    }
-  }
+  const binanceConf = await getBinanceConfig();
+  const payId = binanceConf?.payId || '464811318';
+  const exchangeRate = binanceConf?.exchangeRate || 26000;
+  const minDeposit = binanceConf?.minDeposit || 1;
+  const memoCode = `NAP ${userId}`;
 
-  // Load active_bank from database setting
-  let activeBank = 'viettel';
-  try {
-    const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank'");
-    if (rows?.[0]?.value) {
-      activeBank = rows[0].value;
-    }
-  } catch (e) {
-    console.error('Error fetching active_bank setting:', e);
-  }
+  const { getBotTemplate, renderBotTemplate } = await import('../helpers/templateHelper.js');
+  const rawTemplate = await getBotTemplate('template_binance_pay', lang);
 
-  const bankConfig = await getBankConfig(config, activeBank);
-  if (!isBankConfigured(bankConfig)) {
-    return bot.sendMessage(chatId, bankNotConfiguredMessage(lang));
-  }
+  const rawMessage = renderBotTemplate(rawTemplate, {
+    userId,
+    exchangeRate: Number(exchangeRate).toLocaleString('vi-VN'),
+    minDeposit,
+    payId,
+    memoCode
+  });
 
-  setCache(`bank_selection_${userId}`, activeBank, 15 * 60 * 1000);
-  setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
+  const htmlMessage = markdownToTelegramHtml(rawMessage);
 
-  // Directly ask for amount
-  const promptMsg = L(lang,
-    'Nhập số tiền cần nạp (VNĐ):',
-    'Enter deposit amount (VND):',
-    '请输入充值金额（越南盾）：'
-  );
-  await bot.sendMessage(chatId, promptMsg);
-};
+  const reply_markup = formatReplyMarkup({
+    inline_keyboard: [
+      [{ text: 'Kiểm tra thanh toán ngay', callback_data: createCallbackData({ action: 'check_binance_payment' }) }],
+      [{ text: 'Quay lại Menu Nạp', callback_data: createCallbackData({ action: 'back_to_deposit_options' }) }]
+    ]
+  });
 
-export const selectBankMethod = async (bot, chatId, userId, bank) => {
-  const { getUserByTelegram } = await import('../controllers/userController.js');
-  const user = await getUserByTelegram(userId);
-  const lang = user?.language || 'vi';
-
-  const bankConfig = await getBankConfig(globalConfig, bank);
-  if (!isBankConfigured(bankConfig)) {
-    return bot.sendMessage(chatId, bankNotConfiguredMessage(lang));
-  }
-
-  setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
-  setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
-
-  const promptMsg = L(lang,
-    'Nhập số tiền cần nạp (VNĐ):',
-    'Enter deposit amount (VND):',
-    '请输入充值金额（越南盾）：'
-  );
-  await bot.sendMessage(chatId, promptMsg);
-};
-
-const getUsdtConfig = async (defaultConfig) => {
-  try {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('usdt_wallet_address', 'usdt_network')");
-    const dbConfig = {};
-    if (Array.isArray(rows)) {
-      rows.forEach(r => {
-        if (r.key === 'usdt_wallet_address') dbConfig.walletAddress = r.value;
-        if (r.key === 'usdt_network') dbConfig.network = r.value;
+  if (messageId) {
+    try {
+      return await bot.editMessageText(htmlMessage, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'HTML',
+        reply_markup
       });
+    } catch (e) {}
+  }
+
+  await bot.sendMessage(chatId, htmlMessage, {
+    parse_mode: 'HTML',
+    reply_markup
+  });
+};
+
+export const checkBinancePaymentForUser = async (bot, chatId, userId, config) => {
+  const { fetchBinancePayTransactions, processBinancePayTransaction, getBinanceConfig } = await import('../services/binanceService.js');
+  
+  const binanceConf = await getBinanceConfig();
+  if (!binanceConf || !binanceConf.apiKey || !binanceConf.secretKey) {
+    return bot.sendMessage(chatId, '⚠️ Hệ thống chưa kích hoạt API Key Binance. Vui lòng liên hệ Admin hỗ trợ.');
+  }
+
+  await bot.sendMessage(chatId, '🔍 Đang kiểm tra giao dịch Binance Pay của bạn...');
+
+  try {
+    const startTime = Date.now() - 24 * 60 * 60 * 1000;
+    const transactions = await fetchBinancePayTransactions(binanceConf, startTime);
+    let matched = 0;
+
+    if (Array.isArray(transactions) && transactions.length > 0) {
+      for (const tx of transactions) {
+        const result = await processBinancePayTransaction(tx, bot);
+        if (result && String(result.telegramId) === String(userId)) {
+          matched++;
+        }
+      }
     }
-    return {
-      walletAddress: dbConfig.walletAddress || 'Chưa cập nhật',
-      network: dbConfig.network || 'BEP20'
-    };
-  } catch (e) {
-    return {
-      walletAddress: 'Chưa cập nhật',
-      network: 'BEP20'
-    };
+
+    if (matched === 0) {
+      await bot.sendMessage(
+        chatId,
+        `⏳ **Chưa tìm thấy giao dịch nạp mới của bạn.**\n\n` +
+        `👉 Vui lòng đảm bảo bạn đã chuyển đến Binance Pay ID: \`${binanceConf.payId}\` và nhập đúng ghi chú: \`NAP ${userId}\`.\n` +
+        `Nếu bạn vừa chuyển, vui lòng chờ 10-30 giây rồi bấm kiểm tra lại.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch (err) {
+    console.error('[CHECK_BINANCE_PAYMENT] Error:', err.message);
+    await bot.sendMessage(chatId, '❌ Có lỗi xảy ra khi kiểm tra giao dịch. Vui lòng thử lại sau giây lát.');
   }
 };
 
@@ -241,8 +265,8 @@ export const showUsdtOptions = async (bot, chatId, config) => {
   const user = await getUserByTelegram(chatId);
   const lang = user ? user.language : 'vi';
 
-  // Only TRC20 option now
   const inline_keyboard = [
+    [{ text: '🟡 Binance Pay (Tự động)', callback_data: createCallbackData({ action: 'deposit_select_binance' }) }],
     [{ text: L(lang, '💎 Ví TRC20 (Tự động)', '💎 TRC20 Wallet (Auto)', '💎 TRC20 钱包（自动）'), callback_data: createCallbackData({ action: 'deposit_usdt_trc20' }) }]
   ];
 
@@ -380,11 +404,15 @@ export const showUsdtInfo = async (bot, chatId, config) => {
   await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 };
 
-// ========== TRC20 USDT DEPOSIT FLOW ==========
+// ========== TRC20 USDT DEPOSIT FLOW (CHECK QUA BINANCE) ==========
 
-// Get TRC20 wallet address from settings
+// Get TRC20 wallet address from settings or Binance API
 const getTrc20WalletAddress = async () => {
   try {
+    const { getBinanceDepositAddress } = await import('../services/binanceService.js');
+    const res = await getBinanceDepositAddress('USDT', 'TRX');
+    if (res?.address) return res.address;
+
     const rows = await query("SELECT `value` FROM settings WHERE `key` = 'usdt_trc20_wallet'");
     return rows?.[0]?.value || '';
   } catch (e) {
@@ -402,9 +430,10 @@ const getExchangeRate = async () => {
   }
 };
 
-// Start TRC20 deposit flow - show wallet and ask for amount
-export const showTrc20DepositFlow = async (bot, chatId, userId, config) => {
+// Start TRC20 deposit flow - show wallet and prompt for TxID or Amount
+export const showTrc20DepositFlow = async (bot, chatId, userId, config, messageId = null) => {
   const { getUserByTelegram } = await import('../controllers/userController.js');
+  const { markdownToTelegramHtml, formatReplyMarkup } = await import('../helpers/telegramFormatHelper.js');
   const user = await getUserByTelegram(userId);
   const lang = user?.language || 'vi';
 
@@ -412,32 +441,54 @@ export const showTrc20DepositFlow = async (bot, chatId, userId, config) => {
 
   if (!walletAddress) {
     const errorMsg = L(lang,
-      '❌ Chưa cấu hình địa chỉ ví TRC20. Vui lòng liên hệ Admin.',
-      '❌ TRC20 wallet address not configured. Please contact admin.',
-      '❌ TRC20 钱包地址未配置，请联系管理员。'
+      '❌ Chưa cấu hình địa chỉ ví USDT TRC20. Vui lòng cấu hình API Key Binance hoặc ví TRC20 trong Web Admin.',
+      '❌ USDT TRC20 wallet not configured. Please configure Binance API Key or TRC20 wallet in Web Admin.',
+      '❌ 未配置 USDT TRC20 钱包地址。请在 Web 管理后台配置 Binance API 或 TRC20 钱包。'
     );
     return bot.sendMessage(chatId, errorMsg);
   }
 
-  // Store state: waiting for amount
-  setCache(`waiting_trc20_amount_${userId}`, true, 15 * 60 * 1000);
+  // Set cache waiting for TxID / Hash directly or Amount
+  setCache(`waiting_trc20_hash_${userId}`, true, 30 * 60 * 1000);
 
-  const message = L(lang,
-    `💎 **Nạp tiền USDT TRC20**\n\n📍 **Địa chỉ ví:**\n\`${walletAddress}\`\n(Click để copy)\n\n🌐 **Mạng:** TRC20 (TRON)\n\n⚠️ **LƯU Ý QUAN TRỌNG:**\n• Hệ thống đang sử dụng **OKX** để xử lý nạp tiền tự động.\n• Nếu bạn dùng **OKX** để nạp, vui lòng liên hệ admin @tlshop25 để duyệt.\n• Ví khác: Hoàn toàn tự động (không cần duyệt).\n\n💲 **Nhập số tiền USDT** (tối thiểu 1 USDT):`,
-    `� **USDT TRC20 Deposit**\n\n�📍 **Wallet Address:**\n\`${walletAddress}\`\n(Click to copy)\n\n🌐 **Network:** TRC20 (TRON)\n\n⚠️ **IMPORTANT NOTICE:**\n• Our system uses **OKX** for automatic deposit processing.\n• If you are using **OKX** to deposit, please contact admin @tlshop25 for approval.\n• Other wallets: Fully automatic (no approval needed).\n\n💲 **Enter USDT amount** (minimum 1 USDT):`,
-    `💎 **USDT TRC20 充值**\n\n📍 **钱包地址：**\n\`${walletAddress}\`\n(点击复制)\n\n🌐 **网络：** TRC20 (TRON)\n\n⚠️ **重要提示：**\n• 系统使用 **OKX** 自动处理充值。\n• 如果您使用 **OKX** 充值，请联系管理员 @tlshop25 审核。\n• 其他钱包：完全自动（无需审核）。\n\n💲 **输入 USDT 金额**（最低 1 USDT）：`
-  );
+  const exchangeRate = await getExchangeRate();
+  const { getBotTemplate, renderBotTemplate } = await import('../helpers/templateHelper.js');
+  const rawTemplate = await getBotTemplate('template_usdt_deposit', lang);
+  const rawMessage = renderBotTemplate(rawTemplate, {
+    walletAddress,
+    exchangeRate: Number(exchangeRate).toLocaleString('vi-VN')
+  });
 
-  await bot.sendMessage(chatId, message, {
-    parse_mode: 'Markdown',
-    reply_markup: {
+  const inline_keyboard = [
+    [{ text: '🔍 Kiểm tra giao dịch vừa nạp', callback_data: createCallbackData({ action: 'check_recent_trc20' }) }],
+    [{ text: '↩️ Quay lại Menu Nạp', callback_data: createCallbackData({ action: 'back_to_deposit_options' }) }]
+  ];
+
+  const htmlMessage = markdownToTelegramHtml(rawMessage) + 
+    `\n\n👉 <i>Sau khi chuyển tiền xong, bạn chỉ cần copy <b>Mã giao dịch (TxID / Hash)</b> gửi trực tiếp vào tin nhắn này để hệ thống kiểm tra và tự động cộng tiền ngay!</i>`;
+
+  if (messageId) {
+    try {
+      return await bot.editMessageText(htmlMessage, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'HTML',
+        reply_markup: formatReplyMarkup({ inline_keyboard })
+      });
+    } catch (e) {}
+  }
+
+  await bot.sendMessage(chatId, htmlMessage, {
+    parse_mode: 'HTML',
+    reply_markup: formatReplyMarkup({
+      inline_keyboard,
       resize_keyboard: true,
       keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
-    }
+    })
   });
 };
 
-// Handle TRC20 amount input
+// Handle TRC20 amount input (optional amount pre-check)
 export const handleTrc20AmountInput = async (bot, msg, user) => {
   const userId = msg.from.id;
   const isWaiting = getCache(`waiting_trc20_amount_${userId}`);
@@ -470,16 +521,15 @@ export const handleTrc20AmountInput = async (bot, msg, user) => {
   delCache(`waiting_trc20_amount_${userId}`);
 
   // Store amount and wait for hash
-  setCache(`trc20_amount_${userId}`, amount, 15 * 60 * 1000);
-  setCache(`waiting_trc20_hash_${userId}`, true, 15 * 60 * 1000);
+  setCache(`trc20_amount_${userId}`, amount, 30 * 60 * 1000);
+  setCache(`waiting_trc20_hash_${userId}`, true, 30 * 60 * 1000);
 
   const promptMsg = L(lang,
-    `💵 **Số tiền:** ${amount} USDT\n\n📝 **Nhập mã giao dịch (Hash/TxID):**\n\n⚠️ **Lưu ý:** Nhập ĐÚNG số tiền thực nhận (sau khi trừ phí mạng).\nXem ảnh bên dưới để biết cách tìm TxID.`,
-    `💵 **Amount:** ${amount} USDT\n\n📝 **Enter your transaction hash (TxID):**\n\n⚠️ **Important:** Enter the EXACT amount received (after network fees).\nSee the image below for how to find your TxID.`,
-    `💵 **金额：** ${amount} USDT\n\n📝 **输入交易哈希（TxID）：**\n\n⚠️ **注意：** 请输入实际收到的准确金额（扣除网络手续费后）。\n查看下方图片了解如何找到 TxID。`
+    `💵 **Số tiền dự kiến:** ${amount} USDT\n\n📝 **Vui lòng gửi Mã giao dịch (Hash / TxID) của bạn vào đây:**\n\n⚠️ Hệ thống Binance sẽ quét blockchain và tự động cộng tiền ngay sau khi xác nhận.`,
+    `💵 **Expected Amount:** ${amount} USDT\n\n📝 **Please send your Transaction Hash (TxID) here:**\n\n⚠️ Binance will verify on-chain and credit balance automatically.`,
+    `💵 **预计金额：** ${amount} USDT\n\n📝 **请在此发送您的交易哈希（TxID）：**\n\n⚠️ Binance 系统将在区块链确认后自动为您充值。`
   );
 
-  // Send text message first
   await bot.sendMessage(msg.chat.id, promptMsg, {
     parse_mode: 'Markdown',
     reply_markup: {
@@ -488,24 +538,10 @@ export const handleTrc20AmountInput = async (bot, msg, user) => {
     }
   });
 
-  // Send guide image
-  try {
-    const path = await import('path');
-    const fs = await import('fs');
-    const imagePath = path.join(process.cwd(), 'img', '0a08ecfdf6045f969d46dc695ce902c9.png');
-    if (fs.existsSync(imagePath)) {
-      await bot.sendPhoto(msg.chat.id, imagePath, {
-        caption: L(lang, '👆 Cách tìm mã TxID', '👆 How to find your TxID', '👆 如何找到 TxID')
-      });
-    }
-  } catch (e) {
-    console.error('[TRC20] Error sending guide image:', e);
-  }
-
   return true;
 };
 
-// Handle TRC20 hash input and verify via Tronscan API
+// Handle TRC20 hash input and verify via Binance API (with Tronscan fallback)
 export const handleTrc20HashInput = async (bot, msg, user) => {
   const userId = msg.from.id;
   const isWaiting = getCache(`waiting_trc20_hash_${userId}`);
@@ -524,58 +560,35 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
     return true;
   }
 
-  const txHash = text;
-  const expectedAmount = getCache(`trc20_amount_${userId}`);
+  // Bỏ qua nếu tin nhắn là một lệnh bot
+  if (text.startsWith('/')) return false;
 
-  if (!expectedAmount) {
-    delCache(`waiting_trc20_hash_${userId}`);
-    const errorMsg = L(lang,
-      '❌ Phiên đã hết hạn. Vui lòng thực hiện lại.',
-      '❌ Session expired. Please start again.',
-      '❌ 会话已过期，请重新开始。'
-    );
-    await bot.sendMessage(msg.chat.id, errorMsg, { reply_markup: { remove_keyboard: true } });
-    return true;
-  }
+  const txHash = text;
+  const expectedAmount = getCache(`trc20_amount_${userId}`) || null;
 
   // Show processing message
   const processingMsg = await bot.sendMessage(msg.chat.id, L(lang,
-    '⏳ Đang xác minh giao dịch...',
-    '⏳ Verifying transaction...',
-    '⏳ 正在验证交易...'
-  ));
+    '⏳ **Đang kết nối Binance & kiểm tra giao dịch On-Chain TRC20 của bạn...**',
+    '⏳ **Connecting to Binance & verifying your TRC20 On-Chain transaction...**',
+    '⏳ **正在连接 Binance 验证您的 TRC20 链上交易...**'
+  ), { parse_mode: 'Markdown' });
 
   try {
-    // Check if hash already used
-    const { findDepositByTxHash, createTrc20Deposit } = await import('../controllers/depositController.js');
-    const existingDeposit = await findDepositByTxHash(txHash);
+    const { verifyBinanceTrc20Deposit } = await import('../services/binanceService.js');
+    const result = await verifyBinanceTrc20Deposit(txHash, user, expectedAmount, bot);
 
-    if (existingDeposit) {
+    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => {});
+
+    if (result.success) {
       delCache(`waiting_trc20_hash_${userId}`);
       delCache(`trc20_amount_${userId}`);
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      const errorMsg = L(lang,
-        '❌ Mã giao dịch này đã được sử dụng.',
-        '❌ This transaction hash has already been used.',
-        '❌ 此交易哈希已被使用。'
-      );
-      await bot.sendMessage(msg.chat.id, errorMsg, { reply_markup: { remove_keyboard: true } });
+
+      const { sendMenu } = await import('./handleUser.js');
+      await sendMenu(bot, msg.chat.id, user, globalConfig?.TELEGRAM_GROUP_LINKS);
       return true;
-    }
-
-    // Verify via Tronscan API
-    const response = await fetch(`https://apilist.tronscan.org/api/transaction-info?hash=${txHash}`);
-    const data = await response.json();
-
-    // Check if transaction exists and is confirmed
-    if (!data || !data.confirmed) {
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      const errorMsg = L(lang,
-        '❌ Không tìm thấy giao dịch hoặc chưa được xác nhận. Vui lòng đợi và thử lại.',
-        '❌ Transaction not found or not confirmed yet. Please wait and try again.',
-        '❌ 未找到交易或尚未确认，请等待并重试。'
-      );
-      await bot.sendMessage(msg.chat.id, errorMsg, {
+    } else {
+      await bot.sendMessage(msg.chat.id, result.message || '❌ Giao dịch không hợp lệ hoặc chưa được xác nhận.', {
+        parse_mode: 'Markdown',
         reply_markup: {
           resize_keyboard: true,
           keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
@@ -583,153 +596,61 @@ export const handleTrc20HashInput = async (bot, msg, user) => {
       });
       return true;
     }
-
-    // Check TRC20 transfer info
-    const trc20Info = data.trc20TransferInfo?.[0];
-    if (!trc20Info || trc20Info.symbol !== 'USDT') {
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      const errorMsg = L(lang,
-        '❌ Đây không phải là giao dịch USDT TRC20.',
-        '❌ This is not a USDT TRC20 transaction.',
-        '❌ 这不是 USDT TRC20 交易。'
-      );
-      await bot.sendMessage(msg.chat.id, errorMsg, {
-        reply_markup: {
-          resize_keyboard: true,
-          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
-        }
-      });
-      return true;
-    }
-
-    // Verify recipient address matches our wallet
-    const ourWallet = await getTrc20WalletAddress();
-    if (trc20Info.to_address.toLowerCase() !== ourWallet.toLowerCase()) {
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      const errorMsg = L(lang,
-        '❌ Địa chỉ nhận không khớp với ví của chúng tôi.',
-        '❌ The recipient address does not match our wallet.',
-        '❌ 收款地址与我们的钱包不匹配。'
-      );
-      await bot.sendMessage(msg.chat.id, errorMsg, {
-        reply_markup: {
-          resize_keyboard: true,
-          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
-        }
-      });
-      return true;
-    }
-
-    // Calculate USDT amount (divide by 10^6 for 6 decimals)
-    const usdtAmount = Number(trc20Info.amount_str) / 1000000;
-
-    // Verify amount matches expected amount exactly (user should enter amount after fees)
-    if (Math.abs(usdtAmount - expectedAmount) > 0.01) {
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      const errorMsg = L(lang,
-        `❌ Số tiền không khớp!\n\n📝 Bạn đã nhập: ${expectedAmount} USDT\n💰 Thực nhận: ${usdtAmount} USDT\n\n⚠️ Vui lòng nhập ĐÚNG số tiền hiển thị trong giao dịch (số tiền sau khi trừ phí mạng).`,
-        `❌ Amount mismatch!\n\n📝 You entered: ${expectedAmount} USDT\n💰 Actual received: ${usdtAmount} USDT\n\n⚠️ Please enter the EXACT amount shown in your transaction (after network fees).`,
-        `❌ 金额不匹配！\n\n📝 您输入: ${expectedAmount} USDT\n💰 实际收到: ${usdtAmount} USDT\n\n⚠️ 请输入交易中显示的准确金额（扣除网络手续费后）。`
-      );
-      await bot.sendMessage(msg.chat.id, errorMsg, {
-        reply_markup: {
-          resize_keyboard: true,
-          keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
-        }
-      });
-      return true;
-    }
-
-    // Convert to VND
-    const exchangeRate = await getExchangeRate();
-    const amountVnd = Math.round(usdtAmount * exchangeRate);
-
-    // Clear waiting states
-    delCache(`waiting_trc20_hash_${userId}`);
-    delCache(`trc20_amount_${userId}`);
-
-    // Create deposit and credit balance
-    const { updateBalance, getUserByTelegram } = await import('../controllers/userController.js');
-    const { addBalanceLog } = await import('../controllers/balanceLogController.js');
-
-    const dbUser = await getUserByTelegram(userId);
-    if (!dbUser) {
-      await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-      await bot.sendMessage(msg.chat.id, L(lang, '❌ Không tìm thấy người dùng.', '❌ User not found.', '❌ 未找到用户。'), {
-        reply_markup: { remove_keyboard: true }
-      });
-      return true;
-    }
-
-    // Create deposit record
-    const depositId = await createTrc20Deposit(dbUser.id, usdtAmount, amountVnd, txHash);
-
-    // Update balance
-    await updateBalance(dbUser.id, amountVnd);
-
-    // Log balance change
-    await addBalanceLog({
-      userId: dbUser.id,
-      amount: amountVnd,
-      reason: `usdt_trc20_${usdtAmount}`,
-      adminId: null
-    });
-
-    // Get new balance
-    const updatedUser = await getUserByTelegram(userId);
-    const newBalance = Number(updatedUser.balance) || 0;
-
-    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-
-    const successMsg = L(lang,
-      `✅ **Nạp tiền thành công!**\n\n💎 USDT: ${usdtAmount} USDT\n💵 VND: ${formatCurrency(amountVnd)}\n📝 TxID: \`${txHash.substring(0, 20)}...\`\n\n💰 Số dư mới: ${formatCurrency(newBalance)}`,
-      `✅ **Deposit Successful!**\n\n💎 USDT: ${usdtAmount} USDT\n💵 VND: ${formatCurrency(amountVnd)}\n📝 TxID: \`${txHash.substring(0, 20)}...\`\n\n💰 New Balance: ${formatCurrency(newBalance)}`,
-      `✅ **充值成功！**\n\n💎 USDT: ${usdtAmount} USDT\n💵 VND: ${formatCurrency(amountVnd)}\n📝 TxID: \`${txHash.substring(0, 20)}...\`\n\n💰 新余额: ${formatCurrency(newBalance)}`
-    );
-
-    await bot.sendMessage(msg.chat.id, successMsg, {
-      parse_mode: 'Markdown',
-      reply_markup: { remove_keyboard: true }
-    });
-
-    // Notify admin
-    try {
-      const { notifyAdminAboutDeposit, getAdminIds } = await import('./handleNotify.js');
-      const adminIds = await getAdminIds(globalConfig?.ADMIN_IDS || []);
-      if (adminIds.length > 0) {
-        await notifyAdminAboutDeposit(bot, adminIds, {
-          depositId,
-          username: dbUser.username,
-          telegramId: userId,
-          originalAmount: amountVnd,
-          bonusAmount: 0,
-          bonusPercentage: 0,
-          finalAmount: amountVnd,
-          finalBalance: newBalance,
-          note: `TRC20: ${usdtAmount} USDT`
-        });
-      }
-    } catch (e) {
-      console.error('[TRC20_DEPOSIT] Error notifying admin:', e);
-    }
-
-    return true;
-
   } catch (error) {
-    console.error('[TRC20_DEPOSIT] Error verifying hash:', error);
-    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => { });
-    const errorMsg = L(lang,
-      '❌ Lỗi xác minh giao dịch. Vui lòng thử lại sau.',
-      '❌ Error verifying transaction. Please try again later.',
-      '❌ 验证交易出错，请稍后再试。'
-    );
-    await bot.sendMessage(msg.chat.id, errorMsg, {
+    console.error('[TRC20_DEPOSIT] Error in handleTrc20HashInput:', error);
+    await bot.deleteMessage(msg.chat.id, processingMsg.message_id).catch(() => {});
+    await bot.sendMessage(msg.chat.id, '❌ Có lỗi xảy ra khi xác minh giao dịch. Vui lòng thử lại hoặc liên hệ Admin.', {
       reply_markup: {
         resize_keyboard: true,
         keyboard: [[{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]]
       }
     });
     return true;
+  }
+};
+
+// Check recent uncredited Binance Onchain TRC20 deposits for user
+export const checkRecentTrc20DepositForUser = async (bot, chatId, userId, config) => {
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const { getBinanceConfig, fetchBinanceOnchainDeposits, processBinanceOnchainDeposit } = await import('../services/binanceService.js');
+
+  const user = await getUserByTelegram(userId);
+  if (!user) return;
+
+  const binanceConf = await getBinanceConfig();
+  if (!binanceConf || !binanceConf.apiKey || !binanceConf.secretKey) {
+    return bot.sendMessage(chatId, '⚠️ Hệ thống chưa kích hoạt API Key Binance. Vui lòng gửi trực tiếp mã TxID để hệ thống kiểm tra.');
+  }
+
+  await bot.sendMessage(chatId, '🔍 Đang quét các giao dịch USDT TRC20 gần nhất trên Binance...');
+
+  try {
+    const startTime = Date.now() - 24 * 60 * 60 * 1000; // 24 giờ qua
+    const deposits = await fetchBinanceOnchainDeposits(binanceConf, 'USDT', startTime);
+
+    if (!Array.isArray(deposits) || deposits.length === 0) {
+      return bot.sendMessage(chatId, '⏳ **Chưa tìm thấy giao dịch nạp USDT mới nào trên Binance.**\n\n👉 Nếu bạn vừa nạp, vui lòng đợi 1-2 phút cho blockchain xác nhận rồi bấm kiểm tra lại, hoặc dán mã **TxID** trực tiếp vào đây.', { parse_mode: 'Markdown' });
+    }
+
+    // Lọc các giao dịch TRC20 thành công
+    const trc20Success = deposits.filter(d => (d.network === 'TRX' || d.coin === 'USDT') && d.status === 1);
+
+    if (trc20Success.length === 0) {
+      return bot.sendMessage(chatId, '⏳ Các giao dịch gần nhất đang trong quá trình xác nhận từ Binance. Vui lòng đợi 1-2 phút hoặc gửi mã **TxID** của bạn.', { parse_mode: 'Markdown' });
+    }
+
+    // Hiển thị hướng dẫn nhập TxID để đối soát chính xác
+    await bot.sendMessage(chatId, '📝 **Hệ thống tìm thấy giao dịch trên Binance.**\n👉 Vui lòng **copy và gửi mã TxID / Transaction Hash** của bạn vào đây để hệ thống cộng tiền chính xác vào tài khoản của bạn.', {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        resize_keyboard: true,
+        keyboard: [[{ text: '❌ Hủy' }]]
+      }
+    });
+    setCache(`waiting_trc20_hash_${userId}`, true, 30 * 60 * 1000);
+  } catch (err) {
+    console.error('[CHECK_RECENT_TRC20] Error:', err.message);
+    await bot.sendMessage(chatId, '❌ Lỗi khi kiểm tra Binance Onchain. Vui lòng dán trực tiếp mã TxID vào tin nhắn.');
   }
 };
 
@@ -745,15 +666,69 @@ const getMinDepositAmount = async () => {
   }
 };
 
+export const promptForBankDeposit = async (bot, chatId, userId, config) => {
+  const { getUserByTelegram } = await import('../controllers/userController.js');
+  const user = await getUserByTelegram(userId);
+  const lang = user?.language || 'vi';
+
+  const MIN_DEPOSIT_AMOUNT = await getMinDepositAmount();
+  setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
+  setCache(`bank_selection_${userId}`, 'vietqr', 15 * 60 * 1000);
+
+  const promptMsg = L(lang,
+    `🏦 **NẠP TIỀN QUA NGÂN HÀNG (VIETQR / BANK TRANSFER)**\n\n` +
+    `👉 **Vui lòng nhập số tiền VNĐ bạn muốn nạp vào ví:**\n` +
+    `*(Tối thiểu: ${formatCurrency(MIN_DEPOSIT_AMOUNT)})*`,
+    `🏦 **BANK TRANSFER DEPOSIT (VIETQR)**\n\n` +
+    `👉 **Please enter the amount in VND you wish to deposit:**\n` +
+    `*(Minimum: ${formatCurrency(MIN_DEPOSIT_AMOUNT)})*`,
+    `🏦 **银行转账充值 (VIETQR)**\n\n` +
+    `👉 **请输入您想要充值的越南盾金额：**\n` +
+    `*(最低充值: ${formatCurrency(MIN_DEPOSIT_AMOUNT)})*`
+  );
+
+  return bot.sendMessage(chatId, promptMsg, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      resize_keyboard: true,
+      keyboard: [
+        [{ text: L(lang, '❌ Hủy', '❌ Cancel', '❌ 取消') }]
+      ]
+    }
+  });
+};
+
+export const selectBankMethod = async (bot, chatId, userId, bank = 'vietqr') => {
+  setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
+  return promptForBankDeposit(bot, chatId, userId);
+};
+
 export const handleDepositAmount = async (bot, msg, user, config) => {
   // Chỉ xử lý nếu người dùng thực sự đang trong trạng thái chờ nhập số tiền nạp
   const isWaiting = getCache(`waiting_deposit_amount_${msg.from.id}`);
   if (!isWaiting) return false;
 
-  delCache(`waiting_deposit_amount_${msg.from.id}`);
-  let selectedBank = getCache(`bank_selection_${msg.from.id}`);
-
   const lang = user?.language || 'vi';
+  const text = msg.text ? msg.text.trim() : '';
+
+  // Kiểm tra nếu bấm hủy
+  if (text === '❌ Hủy' || text === '❌ Cancel' || text === '❌ 取消' || text === '/cancel') {
+    delCache(`waiting_deposit_amount_${msg.from.id}`);
+    delCache(`bank_selection_${msg.from.id}`);
+    const { sendMenu } = await import('./handleUser.js');
+    await bot.sendMessage(msg.chat.id, L(lang, '❌ Đã hủy nạp tiền.', '❌ Deposit cancelled.', '❌ 已取消充值。'), {
+      reply_markup: { remove_keyboard: true }
+    });
+    await sendMenu(bot, msg.chat.id, user, globalConfig?.TELEGRAM_GROUP_LINKS);
+    return true;
+  }
+
+  // Bỏ qua nếu là lệnh bot khác
+  if (text.startsWith('/')) return false;
+
+  delCache(`waiting_deposit_amount_${msg.from.id}`);
+  let selectedBank = getCache(`bank_selection_${msg.from.id}`) || 'vietqr';
+
   const existing = getCache(qrKey(msg.from.id));
   if (existing) {
     const waitMsg = L(lang,
@@ -832,22 +807,24 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   };
   const bankDisplayName = bankNames[selectedBank] || selectedBank.toUpperCase();
 
-  let caption = L(lang,
-    `Đã tạo yêu cầu nạp ${formatCurrency(amount)}.\n\n🏦 Ngân hàng: **${bankDisplayName}**\n💳 Số TK: \`${accountNo}\` (Click để copy)\n📝 Nội dung: \`${content}\` (Click để copy)\n\n⚠️ **LƯU Ý:** Vui lòng nhập đúng nội dung chuyển khoản để được cộng tiền tự động. QR hết hạn sau 5 phút.`,
-    `Deposit request created: ${formatCurrency(amount)}.\n\n🏦 Bank: **${bankDisplayName}**\n💳 Account: \`${accountNo}\` (Click to copy)\n📝 Content: \`${content}\` (Click to copy)\n\n⚠️ **NOTE:** Please enter the exact transfer content for auto-credit. QR expires in 5 minutes.`,
-    `已创建充值请求: ${formatCurrency(amount)}。\n\n🏦 银行: **${bankDisplayName}**\n💳 账号: \`${accountNo}\` (点击复制)\n📝 内容: \`${content}\` (点击复制)\n\n⚠️ **注意：** 请输入正确的转账内容以自动到账。QR 将在5分钟后过期。`
-  );
+  const { getBotTemplate, renderBotTemplate } = await import('../helpers/templateHelper.js');
+  const rawTemplate = await getBotTemplate('template_bank_deposit', lang);
+  let caption = renderBotTemplate(rawTemplate, {
+    amount: formatCurrency(amount),
+    bankName: bankDisplayName,
+    bankCode,
+    accountNo,
+    accountName,
+    content
+  });
 
   if (promotionResult.bonusAmount > 0) {
-    caption += L(lang,
-      `\n\n🎁 **KHUYẾN MẠI:** Nạp ${formatCurrency(amount)} nhận thêm ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)\n💵 **Tổng thực nhận: ${formatCurrency(promotionResult.finalAmount)}**`,
-      `\n\n🎁 **PROMOTION:** Deposit ${formatCurrency(amount)} get extra ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)\n💵 **Total received: ${formatCurrency(promotionResult.finalAmount)}**`,
-      `\n\n🎁 **优惠活动：** 充值 ${formatCurrency(amount)} 额外获得 ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)\n💵 **总计获得: ${formatCurrency(promotionResult.finalAmount)}**`
-    );
+    caption += `\n\n🎁 **KHUYẾN MẠI:** Nạp ${formatCurrency(amount)} nhận thêm ${formatCurrency(promotionResult.bonusAmount)} (${promotion.bonus_percentage}%)\n💵 **Tổng thực nhận: ${formatCurrency(promotionResult.finalAmount)}**`;
   }
 
-  const confirmBtn = L(lang, '✅ Tôi đã chuyển khoản', '✅ I have transferred', '✅ 我已转账');
-  const cancelBtn = L(lang, '❌ Huỷ QR', '❌ Cancel QR', '❌ 取消 QR');
+  const confirmBtn = L(lang, 'Tôi đã chuyển khoản', 'I have transferred', '我已转账');
+  const cancelBtn = L(lang, 'Huỷ QR', 'Cancel QR', '取消 QR');
+  const reloadBtn = L(lang, 'Tải lại QR (1 lần)', 'Reload QR Code (1x)', '重新加载二维码 (1次)');
 
   const qrMessage = await bot.sendPhoto(msg.chat.id, qrUrl, {
     caption,
@@ -855,7 +832,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     reply_markup: {
       inline_keyboard: [
         [{ text: confirmBtn, callback_data: createCallbackData({ action: 'check_payment' }) }],
-        [{ text: '🔄 Tải lại QR (1 lần)', callback_data: createCallbackData({ action: 'reload_qr' }) }],
+        [{ text: reloadBtn, callback_data: createCallbackData({ action: 'reload_qr' }) }],
         [{ text: cancelBtn, callback_data: createCallbackData({ action: 'cancel_qr' }) }]
       ]
     }

@@ -5,11 +5,9 @@ import TelegramBot from 'node-telegram-bot-api';
 import { initDb, query, closeDb } from './includes/database/index.js';
 import { registerListeners } from './includes/listen.js';
 import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/services/autoDeposit.js';
-import { startGmailCleanup } from './includes/services/gmailCleanup.js';
 import { startAutoRestockScheduler } from './includes/services/autoRestockService.js';
 import { startDriveBackupCron } from './includes/services/driveBackupService.js';
-import { startNetflixQueueWorker } from './includes/services/netflixQueueService.js';
-import { startCanvaQueueWorker } from './includes/services/canvaQueueService.js';
+import { startBinanceWatcher } from './includes/services/binanceWatcher.js';
 
 import { config } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
@@ -77,25 +75,20 @@ const bootstrap = async () => {
   }
 
   await bot.setMyCommands([
-    { command: 'start', description: 'Khởi động và xem hướng dẫn' },
-    { command: 'menu', description: 'Mở menu chính' },
-    { command: 'info', description: 'Xem tài khoản và số dư' },
-    { command: 'netflix', description: 'Tự động nhận Netflix 30 ngày' },
-    { command: 'canva', description: 'Tự động mời Canva Pro' },
-    { command: 'gmail', description: 'Mua Gmail EDU' },
-    { command: 'buymail', description: 'Mua Gmail EDU nhanh theo số lượng' },
-    { command: 'history', description: 'Lịch sử mua hôm nay' },
-    { command: 'getlink', description: 'Tải video, ảnh hoặc audio' },
-    { command: 'checklive', description: 'Kiểm tra tài khoản mạng xã hội' },
-    { command: 'lang', description: 'Đổi ngôn ngữ' }
+    { command: 'start', description: 'Khởi động và xem menu chính' },
+    { command: 'products', description: '🛍️ Danh sách sản phẩm' },
+    { command: 'wallet', description: '👛 Ví & Số dư tài khoản' },
+    { command: 'api', description: '🔗 Kết nối API tự động' },
+    { command: 'warranty', description: '🛡️ Bảo hành đơn hàng' },
+    { command: 'support', description: '💬 Hỗ trợ khách hàng' },
+    { command: 'history', description: '🧾 Lịch sử đơn hàng' },
+    { command: 'lang', description: '🌐 Đổi ngôn ngữ' }
   ]).catch((error) => console.error('⚠️ Không thể cập nhật danh sách lệnh:', error.message));
   startQrExpirationChecker(bot); // Always start QR expiration checker
   startAutoDepositWatcher(bot, config);
-  startGmailCleanup(5, 5); // Check login và cleanup mỗi 5 phút
   startAutoRestockScheduler(bot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
   startDriveBackupCron(); // Khởi động tự động sao lưu dữ liệu CSDL lên Google Drive
-  startNetflixQueueWorker(bot, config); // Khởi động hàng chờ Auto Netflix 30 Days
-  startCanvaQueueWorker(bot, config); // Khởi động hàng chờ Auto Canva Pro Invite
+  startBinanceWatcher(bot, config); // Khởi động tự động quét giao dịch nạp tiền Binance Pay
 
 };
 

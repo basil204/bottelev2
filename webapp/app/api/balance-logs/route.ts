@@ -6,21 +6,24 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
-        const limit = Number(searchParams.get('limit')) || 20;
+        const limit = Number(searchParams.get('limit')) || 30;
 
-        if (!userId) {
-            return NextResponse.json({ data: [] });
-        }
-
-        // Get balance logs with order info if reason contains order ID
-        const [rows] = await pool.query<RowDataPacket[]>(`
+        let query = `
             SELECT bl.*, u.username, u.telegram_id, u.balance as current_balance
             FROM balance_logs bl
             LEFT JOIN users u ON bl.user_id = u.id
-            WHERE bl.user_id = ? OR bl.user_id IN (SELECT id FROM users WHERE telegram_id = ?)
-            ORDER BY bl.created_at DESC
-            LIMIT ?
-        `, [userId, userId, limit]);
+        `;
+        const params: any[] = [];
+
+        if (userId && userId !== 'all') {
+            query += ` WHERE bl.user_id = ? OR bl.user_id IN (SELECT id FROM users WHERE telegram_id = ?)`;
+            params.push(userId, userId);
+        }
+
+        query += ` ORDER BY bl.created_at DESC LIMIT ?`;
+        params.push(limit);
+
+        const [rows] = await pool.query<RowDataPacket[]>(query, params);
 
         return NextResponse.json({ data: rows });
     } catch (error) {

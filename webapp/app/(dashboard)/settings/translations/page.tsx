@@ -56,7 +56,7 @@ export default function TranslationsPage() {
 
         // 2. Nút Bấm Inline Keyboard dính kèm tin nhắn
         const inlineKeys = [
-            'btn_buy_accounts', 'btn_buy_gmail_edu', 'btn_order_history',
+            'btn_buy_accounts', 'btn_order_history',
             'btn_enter_coupon', 'btn_confirm', 'btn_cancel', 'btn_back',
             'buy_now', 'btn_inline'
         ];

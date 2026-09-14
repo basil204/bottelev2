@@ -180,9 +180,13 @@ export async function GET(request: Request) {
       };
     });
 
-    // General counters for compatibility
+    // General counters & wallet metrics
     const [usersCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM users');
-    const [depositsTotal] = await pool.query<RowDataPacket[]>('SELECT SUM(amount) as total FROM deposits WHERE status = "approved"');
+    const [todayUsersCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE DATE(created_at) = CURDATE()');
+    const [walletBalanceTotal] = await pool.query<RowDataPacket[]>('SELECT COALESCE(SUM(balance), 0) as total FROM users');
+    const [depositsTotal] = await pool.query<RowDataPacket[]>('SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE status = "approved"');
+    const [todayDepositsTotal] = await pool.query<RowDataPacket[]>('SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE status = "approved" AND DATE(created_at) = CURDATE()');
+    const [todayOrdersCount] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM orders WHERE status = "completed" AND DATE(created_at) = CURDATE()');
 
     return NextResponse.json({
       success: true,
@@ -209,9 +213,13 @@ export async function GET(request: Request) {
       },
       chartData,
       productProfitability,
-      // General stats
-      totalUsers: usersCount[0]?.count || 0,
-      totalDeposits: depositsTotal[0]?.total || 0,
+      // General & Wallet stats
+      totalUsers: Number(usersCount[0]?.count || 0),
+      todayRegisteredUsers: Number(todayUsersCount[0]?.count || 0),
+      totalWalletBalance: Number(walletBalanceTotal[0]?.total || 0),
+      totalDeposits: Number(depositsTotal[0]?.total || 0),
+      todayDeposits: Number(todayDepositsTotal[0]?.total || 0),
+      todayOrders: Number(todayOrdersCount[0]?.count || 0),
       totalOrders,
     });
   } catch (error: any) {

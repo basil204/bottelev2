@@ -36,7 +36,7 @@ cd $PROJECT_DIR
 # Bot - port 3000 (nội bộ)
 pm2 start main.js --name "telegram-bot"
 
-# Webapp - port 8692
+# Webapp - port 8693
 pm2 start npm --name "webapp" --cwd $PROJECT_DIR/webapp -- run start
 
 # Email EDU Web - port 3000

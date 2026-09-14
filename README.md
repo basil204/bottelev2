@@ -11,7 +11,7 @@ Dự án bao gồm 3 thành phần dịch vụ chính:
 | Thành phần | Mô tả | Cổng mặc định (Port) |
 |------------|-------|----------------------|
 | **Telegram Bot Engine** | Bot bán hàng tự động, xử lý giao hàng instant & dịch vụ Order | - |
-| **Webapp (Next.js Admin)** | Dashboard quản trị viên, quản lý sản phẩm, đơn hàng, người dùng, khuyến mại | **8692** |
+| **Webapp (Next.js Admin)** | Dashboard quản trị viên, quản lý sản phẩm, đơn hàng, người dùng, khuyến mại | **8693** |
 | **Email EDU Web Engine** | Hệ thống tạo và quản lý Email Google Workspace EDU / tMail | **3000** |
 
 ---
@@ -101,12 +101,12 @@ USDT_TRC20_WALLET=T...
 npm run dev
 ```
 
-### Chạy Web Admin Dashboard (Port 8692):
+### Chạy Web Admin Dashboard (Port 8693):
 ```bash
 cd webapp
 npm run dev
 ```
-Truy cập Dashboard tại: `http://localhost:8692`
+Truy cập Dashboard tại: `http://localhost:8693`
 
 ---
 

@@ -80,18 +80,39 @@ export const t = (key, lang = 'vi', params = {}) => {
     return str;
 };
 
-export const formatMoney = async (amount, lang = 'vi') => {
-    if (lang === 'en') {
+export const formatBalanceByLang = async (amountVnd, lang = 'vi') => {
+    const num = Number(amountVnd || 0);
+    if (lang === 'en' || lang === 'zh') {
         const rate = await getExchangeRate();
-        const usd = amount / rate;
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
-    } else if (lang === 'zh') {
-        const rate = await getExchangeRate();
-        const usd = amount / rate;
-        return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' }).format(usd);
-    } else {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        const safeRate = (rate && rate > 0) ? rate : 26000;
+        const usdt = num / safeRate;
+        if (usdt === 0) return '0 USDT';
+        const formattedUsdt = usdt >= 1
+            ? Number(usdt.toFixed(2)).toLocaleString('en-US', { maximumFractionDigits: 2 })
+            : Number(usdt.toFixed(4)).toLocaleString('en-US', { maximumFractionDigits: 4 });
+        return `${formattedUsdt} USDT`;
     }
+    const rounded = Math.round(num);
+    return `${rounded.toLocaleString('vi-VN')} VNĐ`;
+};
+
+export const formatBalanceByLangSync = (amountVnd, lang = 'vi') => {
+    const num = Number(amountVnd || 0);
+    if (lang === 'en' || lang === 'zh') {
+        const safeRate = (exchangeRateCache && exchangeRateCache > 0) ? exchangeRateCache : 26000;
+        const usdt = num / safeRate;
+        if (usdt === 0) return '0 USDT';
+        const formattedUsdt = usdt >= 1
+            ? Number(usdt.toFixed(2)).toLocaleString('en-US', { maximumFractionDigits: 2 })
+            : Number(usdt.toFixed(4)).toLocaleString('en-US', { maximumFractionDigits: 4 });
+        return `${formattedUsdt} USDT`;
+    }
+    const rounded = Math.round(num);
+    return `${rounded.toLocaleString('vi-VN')} VNĐ`;
+};
+
+export const formatMoney = async (amount, lang = 'vi') => {
+    return await formatBalanceByLang(amount, lang);
 };
 
 export const isMatchButton = (text, key, lang = 'vi') => {

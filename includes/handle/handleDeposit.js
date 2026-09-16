@@ -11,6 +11,7 @@ import { formatCurrency, buildPaginationKeyboard, createCallbackData } from '../
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 import { globalConfig } from '../listen.js';
 import { query } from '../database/index.js';
+import { formatBalanceByLang } from '../helpers/langHelper.js';
 
 const qrKey = (telegramId) => `qr_${telegramId}`;
 const qrCancelKey = (telegramId) => `qr_cancel_${telegramId}`;
@@ -966,22 +967,27 @@ export const approveDeposit = async (bot, chatId, depositId, admin) => {
   }
 
   try {
+    const origStr = await formatBalanceByLang(promotionResult.originalAmount, lang);
+    const bonusStr = await formatBalanceByLang(promotionResult.bonusAmount, lang);
+    const finalStr = await formatBalanceByLang(promotionResult.finalAmount, lang);
+    const balanceStr = await formatBalanceByLang(finalBalance, lang);
+
     let userMessage = L(lang,
-      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền gốc: ${formatCurrency(promotionResult.originalAmount)}`,
-      `✅ **Deposit Successful!**\n\n💰 Original amount: ${formatCurrency(promotionResult.originalAmount)}`,
-      `✅ **充值成功！**\n\n💰 原始金额: ${formatCurrency(promotionResult.originalAmount)}`
+      `✅ **Nạp tiền thành công!**\n\n💰 Số tiền gốc: ${origStr}`,
+      `✅ **Deposit Successful!**\n\n💰 Original amount: ${origStr}`,
+      `✅ **充值成功！**\n\n💰 原始金额: ${origStr}`
     );
     if (promotionResult.bonusAmount > 0) {
       userMessage += L(lang,
-        `\n🎁 **Khuyến mại: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
-        `\n🎁 **Bonus: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`,
-        `\n🎁 **优惠: +${formatCurrency(promotionResult.bonusAmount)}** (${promotion.bonus_percentage}%)`
+        `\n🎁 **Khuyến mại: +${bonusStr}** (${promotion.bonus_percentage}%)`,
+        `\n🎁 **Bonus: +${bonusStr}** (${promotion.bonus_percentage}%)`,
+        `\n🎁 **优惠: +${bonusStr}** (${promotion.bonus_percentage}%)`
       );
     }
     userMessage += L(lang,
-      `\n💵 **Tổng nhận: ${formatCurrency(promotionResult.finalAmount)}**\n💵 Số dư mới: ${formatCurrency(finalBalance)}\n📝 Mã giao dịch: #${depositId}`,
-      `\n💵 **Total received: ${formatCurrency(promotionResult.finalAmount)}**\n💵 New balance: ${formatCurrency(finalBalance)}\n📝 Transaction ID: #${depositId}`,
-      `\n� **总计获得: ${formatCurrency(promotionResult.finalAmount)}**\n💵 新余额: ${formatCurrency(finalBalance)}\n📝 交易编号: #${depositId}`
+      `\n💵 **Tổng nhận: ${finalStr}**\n💵 Số dư mới: ${balanceStr}\n📝 Mã giao dịch: #${depositId}`,
+      `\n💵 **Total received: ${finalStr}**\n💵 New balance: ${balanceStr}\n📝 Transaction ID: #${depositId}`,
+      `\n💵 **总计获得: ${finalStr}**\n💵 新余额: ${balanceStr}\n📝 交易编号: #${depositId}`
     );
     await bot.sendMessage(Number(user.telegram_id), userMessage, { parse_mode: 'Markdown' });
   } catch (error) {

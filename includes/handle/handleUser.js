@@ -5,6 +5,7 @@ import { query } from '../database/index.js';
 import { getCache, setCache, delCache } from '../../lib/cache/index.js';
 import { getBotTemplate, renderBotTemplate } from '../helpers/templateHelper.js';
 import { markdownToTelegramHtml, formatReplyMarkup } from '../helpers/telegramFormatHelper.js';
+import { formatBalanceByLang } from '../helpers/langHelper.js';
 
 const menuMessageKey = (chatId) => `active_menu_message_${chatId}`;
 
@@ -145,11 +146,12 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
     else if (config.welcome_text_vi) rawTemplate = config.welcome_text_vi;
 
     const userName = user?.username ? `@${user.username}` : (user?.first_name || user?.telegram_id || 'bạn');
+    const balanceStr = await formatBalanceByLang(user?.balance || 0, lang);
     const messageHtml = markdownToTelegramHtml(renderBotTemplate(rawTemplate, {
       name: userName,
       username: userName,
       id: String(user?.telegram_id || chatId),
-      balance: formatCurrency(user?.balance || 0),
+      balance: balanceStr,
       credit: String(user?.credit || 0),
       shop_name: shopName
     }));
@@ -262,17 +264,18 @@ export const sendWalletMenu = async (bot, chatId, user, config = {}) => {
     totalDeposited = depositStats?.[0]?.total_deposited || 0;
   } catch (_) {}
 
-  const balanceStr = formatCurrency(user.balance || 0);
+  const lang = user?.language || 'vi';
+  const balanceStr = await formatBalanceByLang(user.balance || 0, lang);
+  const totalDepositedStr = await formatBalanceByLang(totalDeposited, lang);
   const customerName = user.username ? `@${user.username}` : (user.first_name || 'Khách hàng');
   const telegramId = String(user.telegram_id || chatId);
 
-  const lang = user?.language || 'vi';
   const rawTemplate = await getBotTemplate('template_wallet_info', lang);
   const text = renderBotTemplate(rawTemplate, {
     customerName,
     telegramId,
     balance: balanceStr,
-    totalDeposited: formatCurrency(totalDeposited),
+    totalDeposited: totalDepositedStr,
     credit: user.credit || 0
   });
 
@@ -374,12 +377,13 @@ export const sendApiMenu = async (bot, chatId, user) => {
     console.error('[sendApiMenu] Error getting api key:', e.message);
   }
 
+  const balanceStr = await formatBalanceByLang(user.balance || 0, lang);
   const rawTemplate = await getBotTemplate('template_api_info', lang);
   const text = renderBotTemplate(rawTemplate, {
     userId: user.id,
     telegramId: user.telegram_id || chatId,
     apiKey: apiKey || 'Chưa khởi tạo',
-    balance: formatCurrency(user.balance || 0),
+    balance: balanceStr,
     statusText: isActive ? '✅ Active' : '❌ Inactive'
   });
 
@@ -578,6 +582,10 @@ export const sendUserInfo = async (bot, chatId, user) => {
     const username = user.username ? `@${user.username}` : (noUsername[lang] || 'Chưa có');
     const credit = user.credit || 0;
 
+    const balanceStr = await formatBalanceByLang(user.balance || 0, lang);
+    const totalSpentStr = await formatBalanceByLang(total_spent || 0, lang);
+    const totalDepositedStr = await formatBalanceByLang(total_deposited || 0, lang);
+
     // Lấy thống kê check-in
     const checkinStats = await query(
       `SELECT COUNT(*) as total_checkins FROM checkins WHERE user_id = ?`,
@@ -605,7 +613,7 @@ export const sendUserInfo = async (bot, chatId, user) => {
 • Created: ${createdDate}
 
 💰 **Balance:**
-• Current balance: ${formatCurrency(user.balance)}
+• Current balance: ${balanceStr}
 • Credit: ${credit}
 
 🎁 **Credit Stats:**
@@ -615,11 +623,11 @@ export const sendUserInfo = async (bot, chatId, user) => {
 
 📦 **Order Stats:**
 • Total orders: ${total_orders}
-• Total spent: ${formatCurrency(total_spent)}
+• Total spent: ${totalSpentStr}
 
 💵 **Deposit Stats:**
 • Total deposits: ${total_deposits}
-• Total deposited: ${formatCurrency(total_deposited)}`,
+• Total deposited: ${totalDepositedStr}`,
       zh: `📊 **账户信息**
 
 👤 **个人信息：**
@@ -628,7 +636,7 @@ export const sendUserInfo = async (bot, chatId, user) => {
 • 创建日期: ${createdDate}
 
 💰 **余额：**
-• 当前余额: ${formatCurrency(user.balance)}
+• 当前余额: ${balanceStr}
 • 积分: ${credit}
 
 🎁 **积分统计：**
@@ -638,11 +646,11 @@ export const sendUserInfo = async (bot, chatId, user) => {
 
 📦 **订单统计：**
 • 总订单: ${total_orders}
-• 总消费: ${formatCurrency(total_spent)}
+• 总消费: ${totalSpentStr}
 
 💵 **充值统计：**
 • 充值次数: ${total_deposits}
-• 充值总额: ${formatCurrency(total_deposited)}`
+• 充值总额: ${totalDepositedStr}`
     };
 
     const infoText = infoTexts[lang] || `📊 **THÔNG TIN TÀI KHOẢN**
@@ -653,7 +661,7 @@ export const sendUserInfo = async (bot, chatId, user) => {
 • Ngày tạo: ${createdDate}
 
 💰 **Số dư:**
-• Số dư hiện tại: ${formatCurrency(user.balance)}
+• Số dư hiện tại: ${balanceStr}
 • Credit: ${credit}
 
 🎁 **Thống kê Credit:**
@@ -663,11 +671,11 @@ export const sendUserInfo = async (bot, chatId, user) => {
 
 📦 **Thống kê đơn hàng:**
 • Tổng đơn hàng: ${total_orders}
-• Tổng đã chi: ${formatCurrency(total_spent)}
+• Tổng đã chi: ${totalSpentStr}
 
 💵 **Thống kê nạp tiền:**
 • Tổng lần nạp: ${total_deposits}
-• Tổng đã nạp: ${formatCurrency(total_deposited)}`;
+• Tổng đã nạp: ${totalDepositedStr}`;
 
     await bot.sendMessage(chatId, infoText, { parse_mode: 'Markdown' });
   } catch (error) {

@@ -23,7 +23,9 @@ const BOT_COMMANDS = [
   { command: 'warranty', description: '🛡️ Bảo hành đơn hàng' },
   { command: 'support', description: '💬 Hỗ trợ khách hàng' },
   { command: 'history', description: '🧾 Lịch sử đơn hàng' },
-  { command: 'lang', description: '🌐 Đổi ngôn ngữ' }
+  { command: 'lang', description: '🌐 Đổi ngôn ngữ' },
+  { command: 'id', description: '🆔 Lấy UID người dùng, ID nhóm (Box) & Kênh' },
+  { command: 'uid', description: '🆔 Lấy UID người dùng, ID nhóm (Box) & Kênh' }
 ];
 
 const botHolder = { bots: [] };

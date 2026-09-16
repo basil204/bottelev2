@@ -39,6 +39,7 @@ interface SystemSettings {
     shop_name: string;
     usdt_trc20_wallet: string;
     telegram_group_link?: string;
+    notification_chat_id?: string;
     // Binance Pay
     binance_api_key?: string;
     binance_secret_key?: string;
@@ -94,6 +95,7 @@ export default function SettingsPage() {
         shop_name: 'DUCVIETSTORE',
         usdt_trc20_wallet: '',
         telegram_group_link: '',
+        notification_chat_id: '',
         binance_api_key: '',
         binance_secret_key: '',
         binance_pay_id: '',
@@ -137,6 +139,32 @@ export default function SettingsPage() {
             setBinanceTestResult({ success: false, message: `Lỗi: ${err.message}` });
         } finally {
             setTestingBinance(false);
+        }
+    };
+
+    const [testingGroup, setTestingGroup] = useState(false);
+    const [groupTestResult, setGroupTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+    const handleTestGroup = async () => {
+        setTestingGroup(true);
+        setGroupTestResult(null);
+        try {
+            const res = await fetch('/api/settings/test-group', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetGroupId: settings.notification_chat_id
+                })
+            });
+            const data = await res.json();
+            setGroupTestResult({
+                success: Boolean(data.success),
+                message: data.message || data.error || (data.success ? 'Đã gửi thành công!' : 'Gửi thất bại')
+            });
+        } catch (err: any) {
+            setGroupTestResult({ success: false, message: `Lỗi kết nối: ${err.message}` });
+        } finally {
+            setTestingGroup(false);
         }
     };
     const [loading, setLoading] = useState(true);
@@ -801,14 +829,53 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="space-y-1.5 md:col-span-2">
-                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">LINK GROUP / CHANNEL HỖ TRỢ TELEGRAM</label>
+                                <label className="font-extrabold uppercase text-zinc-700 text-[11px]">LINK GROUP / CHANNEL HỖ TRỢ TELEGRAM (INVITE LINK)</label>
                                 <input
                                     type="text"
                                     value={settings.telegram_group_link}
                                     onChange={(e) => handleChange('telegram_group_link', e.target.value)}
                                     placeholder="https://t.me/ducvietstore_support"
-                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-medium text-zinc-900 outline-none focus:border-orange-500 transition"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-medium text-zinc-900 outline-none focus:border-orange-500 transition text-xs"
                                 />
+                            </div>
+
+                            {/* Notification Group / Channel ID */}
+                            <div className="space-y-2 md:col-span-2 p-4 rounded-xl border border-orange-200/80 bg-orange-50/40">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div>
+                                        <label className="font-black uppercase text-orange-950 text-xs flex items-center gap-1.5">
+                                            <span>📢</span>
+                                            <span>ID NHÓM / KÊNH TELEGRAM NHẬN THÔNG BÁO TỰ ĐỘNG</span>
+                                        </label>
+                                        <p className="text-[11px] text-orange-800 font-medium mt-0.5">
+                                            Hệ thống sẽ tự động gửi thông báo khi <b>Thêm sản phẩm mới</b>, <b>Thêm số lượng kho (Restock)</b>, và <b>Flash Sale</b> vào đây.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleTestGroup}
+                                        disabled={testingGroup}
+                                        className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 text-xs font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs shrink-0 disabled:opacity-50"
+                                    >
+                                        <span>{testingGroup ? '⏳ ĐANG GỬI THỬ...' : '⚡ GỬI THỬ TIN NHẮN VÀO NHÓM'}</span>
+                                    </button>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={settings.notification_chat_id || ''}
+                                    onChange={(e) => handleChange('notification_chat_id', e.target.value)}
+                                    placeholder="Ví dụ: -1001234567890 hoặc @kenh_thong_bao (Có thể nhập nhiều ID cách nhau bằng dấu phẩy)"
+                                    className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500 transition"
+                                />
+                                <div className="text-[10.5px] text-zinc-500 font-medium">
+                                    💡 <i>Lưu ý: Bạn cần thêm Bot vào Nhóm/Kênh và cấp quyền <b>Gửi tin nhắn (Send Messages / Post Messages)</b> hoặc quyền <b>Quản trị viên (Admin)</b> thì Bot mới có thể đăng bài.</i>
+                                </div>
+
+                                {groupTestResult && (
+                                    <div className={`p-3 rounded-xl text-xs font-semibold ${groupTestResult.success ? 'bg-emerald-100 border border-emerald-300 text-emerald-900' : 'bg-rose-100 border border-rose-300 text-rose-900'}`}>
+                                        {groupTestResult.message}
+                                    </div>
+                                )}
                             </div>
                         </div>
 

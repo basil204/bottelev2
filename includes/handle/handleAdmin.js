@@ -95,7 +95,18 @@ export const adminParseAddProduct = async (bot, msg) => {
   // Kiểm tra type
   const productType = (type && (type.toLowerCase() === 'order' || type.toLowerCase() === 'stock')) ? type.toLowerCase() : 'stock';
 
-  await createProduct({ name, price: priceNum, description: description || '', type: productType });
+  const res = await createProduct({ name, price: priceNum, description: description || '', type: productType });
+  const newProdId = res?.insertId;
+
+  // Thông báo vào nhóm Telegram
+  try {
+    const { notifyGroupAboutNewProduct } = await import('./handleNotify.js');
+    if (newProdId) {
+      await notifyGroupAboutNewProduct(bot, null, newProdId);
+    }
+  } catch (e) {
+    console.error('[ADMIN_ADD_PRODUCT_NOTIFY_ERR]', e);
+  }
 
   await bot.sendMessage(msg.chat.id, `✅ Đã thêm sản phẩm.\n\n📦 Loại: ${productType === 'order' ? 'Order (yêu cầu nhập email/note)' : 'Stock (tự động giao, cần stock > 0)'}`);
 };
@@ -270,11 +281,11 @@ export const adminParseAddAccount = async (bot, msg, productId) => {
   await notifyUsersAboutProductStock(bot, productId, 1);
 
   // Thông báo vào nhóm
-  const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
-  const { globalConfig } = await import('../listen.js');
-  const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
-  if (notificationChatId) {
-    await notifyGroupAboutNewStock(bot, notificationChatId, productId, 1);
+  try {
+    const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
+    await notifyGroupAboutNewStock(bot, null, productId, 1);
+  } catch (e) {
+    console.error('[ADMIN_NOTIFY_GROUP_ERR]', e);
   }
 };
 
@@ -325,11 +336,11 @@ export const adminParseUploadAccounts = async (bot, msg, productId) => {
     await notifyUsersAboutProductStock(bot, productId, result.insertCount);
 
     // Thông báo vào nhóm
-    const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
-    const { globalConfig } = await import('../listen.js');
-    const notificationChatId = globalConfig?.NOTIFICATION_CHAT_ID || null;
-    if (notificationChatId) {
-      await notifyGroupAboutNewStock(bot, notificationChatId, productId, result.insertCount);
+    try {
+      const { notifyGroupAboutNewStock } = await import('./handleNotify.js');
+      await notifyGroupAboutNewStock(bot, null, productId, result.insertCount);
+    } catch (e) {
+      console.error('[ADMIN_NOTIFY_GROUP_ERR]', e);
     }
   }
 };

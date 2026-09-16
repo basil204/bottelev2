@@ -60,6 +60,45 @@ export const getAdminIds = async (configAdminIds = []) => {
   return [...ids];
 };
 
+// Helper function to get notification group/channel IDs from database settings
+export const getNotificationGroupIds = async (fallbackId = null) => {
+  const ids = new Set();
+  if (fallbackId) {
+    String(fallbackId).split(/[\r\n,;|]+/).forEach((id) => {
+      const clean = id.trim();
+      if (clean) ids.add(clean);
+    });
+  }
+
+  try {
+    const rows = await query(
+      "SELECT `key`, `value` FROM settings WHERE `key` IN ('notification_chat_id', 'telegram_notification_group_id', 'telegram_group_id', 'telegram_channel_id', 'auto_restock_channel_id') AND `value` IS NOT NULL AND `value` != ''"
+    );
+    if (rows && Array.isArray(rows)) {
+      rows.forEach((r) => {
+        const raw = String(r.value || '').trim();
+        if (raw) {
+          raw.split(/[\r\n,;|]+/).forEach((id) => {
+            const clean = id.trim();
+            if (clean && !clean.startsWith('http://') && !clean.startsWith('https://')) {
+              ids.add(clean);
+            } else if (clean.includes('t.me/')) {
+              const match = clean.match(/t\.me\/([a-zA-Z0-9_]+)$/i);
+              if (match && !match[1].startsWith('+') && !match[1].startsWith('joinchat')) {
+                ids.add('@' + match[1]);
+              }
+            }
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.error('[getNotificationGroupIds] Error fetching from settings:', e.message);
+  }
+
+  return [...ids];
+};
+
 export const notifyNewProduct = async (bot, chatId, product) => {
   await bot.sendMessage(
     chatId,
@@ -352,8 +391,9 @@ export const notifyAdminAboutIncomingTransfer = async (bot, adminIdsInput, trans
 // Thông báo vào nhóm khi có sản phẩm mới được thêm vào kho
 export const notifyGroupAboutNewStock = async (bot, notificationChatId, productId, accountCount) => {
   try {
-    if (!notificationChatId) {
-      console.log('[NOTIFY_GROUP] Không có notification chat ID');
+    const targetGroupIds = await getNotificationGroupIds(notificationChatId);
+    if (!targetGroupIds || targetGroupIds.length === 0) {
+      console.log('[NOTIFY_GROUP] Không có notification chat ID nào');
       return;
     }
 
@@ -365,22 +405,138 @@ export const notifyGroupAboutNewStock = async (bot, notificationChatId, productI
     }
     const product = productRows[0];
 
-    const message = t('new_stock_notify', 'vi', {
-      name: product.name,
-      price: formatCurrency(product.price),
-      quantity: accountCount,
-      stock: product.stock || 0
-    });
+    const [settingsRows] = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_restock_notify', 'btn_view_and_buy')");
+    const sMap = {};
+    if (settingsRows && Array.isArray(settingsRows)) {
+      settingsRows.forEach(r => { sMap[r.key] = r.value; });
+    }
 
-    try {
-      await bot.sendMessage(notificationChatId, message, { parse_mode: 'Markdown' });
-      console.log(`[NOTIFY_GROUP] ✅ Đã gửi thông báo vào nhóm về sản phẩm #${productId}`);
-    } catch (error) {
-      console.error(`[NOTIFY_GROUP] ❌ Lỗi khi gửi thông báo vào nhóm:`, error.message);
+    let botUsername = (sMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
+    if (!botUsername && bot?.getMe) {
+      try {
+        const me = await bot.getMe();
+        botUsername = me?.username || '';
+      } catch (e) {}
+    }
+
+    const { markdownToTelegramHtml } = await import('../helpers/telegramFormatHelper.js');
+    let rawTpl = await getBotTemplate('template_restock_notify', 'vi');
+    if (!rawTpl) {
+      rawTpl = sMap.template_restock_notify || `🔥 <b>VỪA CẬP NHẬT THÊM HÀNG / BỔ SUNG KHO!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n📦 <b>Vừa nhập thêm:</b> <b>+{quantity} tài khoản</b>\n📊 <b>Hiện có trong kho:</b> <b>{stock} tài khoản</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n⚡ <i>Kho đã được bổ sung đầy đủ, hãy bấm nút bên dưới để sở hữu ngay!</i>`;
+    }
+
+    const formattedPrice = formatCurrency(Number(product.price) || 0);
+    const message = markdownToTelegramHtml(renderBotTemplate(rawTpl, {
+      name: product.name || '',
+      quantity: String(accountCount),
+      stock: String(product.stock || accountCount),
+      price: formattedPrice,
+      shop_name: sMap.shop_name || 'SHOP'
+    }));
+
+    let btnText = await getBotTemplate('btn_view_and_buy', 'vi');
+    if (!btnText) btnText = sMap.btn_view_and_buy || '🛍️ Xem & Mua ngay';
+
+    const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
+    const replyMarkup = buyUrl ? {
+      inline_keyboard: [
+        [{ text: btnText, url: buyUrl }]
+      ]
+    } : undefined;
+
+    const opts = {
+      parse_mode: 'HTML',
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+    };
+
+    for (const gId of targetGroupIds) {
+      try {
+        if (product.image_url && String(product.image_url).trim().startsWith('http')) {
+          await bot.sendPhoto(gId, product.image_url.trim(), { caption: message, ...opts });
+        } else {
+          await bot.sendMessage(gId, message, opts);
+        }
+        console.log(`[NOTIFY_GROUP] ✅ Đã gửi thông báo bổ sung kho vào nhóm/kênh: ${gId}`);
+      } catch (error) {
+        console.error(`[NOTIFY_GROUP] ❌ Lỗi khi gửi thông báo vào nhóm ${gId}:`, error.message);
+      }
     }
 
   } catch (error) {
     console.error('[NOTIFY_GROUP] ❌ Lỗi khi thông báo vào nhóm:', error);
+  }
+};
+
+// Thông báo vào nhóm khi có sản phẩm mới
+export const notifyGroupAboutNewProduct = async (bot, notificationChatId, productId) => {
+  try {
+    const targetGroupIds = await getNotificationGroupIds(notificationChatId);
+    if (!targetGroupIds || targetGroupIds.length === 0) {
+      console.log('[NOTIFY_GROUP_PRODUCT] Không có notification chat ID nào');
+      return;
+    }
+
+    const productRows = await query('SELECT * FROM products WHERE id = ?', [productId]);
+    if (!productRows || productRows.length === 0) return;
+    const product = productRows[0];
+
+    const [settingsRows] = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_new_product_notify', 'btn_view_and_buy')");
+    const sMap = {};
+    if (settingsRows && Array.isArray(settingsRows)) {
+      settingsRows.forEach(r => { sMap[r.key] = r.value; });
+    }
+
+    let botUsername = (sMap.bot_username || '').split(/[\s,]+/)[0].replace(/^@/, '') || '';
+    if (!botUsername && bot?.getMe) {
+      try {
+        const me = await bot.getMe();
+        botUsername = me?.username || '';
+      } catch (e) {}
+    }
+
+    const { markdownToTelegramHtml } = await import('../helpers/telegramFormatHelper.js');
+    let rawTpl = await getBotTemplate('template_new_product_notify', 'vi');
+    if (!rawTpl) {
+      rawTpl = sMap.template_new_product_notify || `🎉 <b>SẢN PHẨM MỚI VỪA LÊN KỆ!</b>\n\n🛍️ <b>Sản phẩm:</b> <b>{name}</b>\n💰 <b>Giá bán:</b> <b>{price}</b>\n\n📝 <b>Mô tả:</b>\n{description}\n\n👉 <i>Bấm nút bên dưới để xem chi tiết và đặt mua ngay!</i>`;
+    }
+
+    const formattedPrice = formatCurrency(Number(product.price) || 0);
+    const message = markdownToTelegramHtml(renderBotTemplate(rawTpl, {
+      name: product.name || '',
+      price: formattedPrice,
+      description: product.description ? product.description.slice(0, 400) : '',
+      shop_name: sMap.shop_name || 'SHOP'
+    }));
+
+    let btnText = await getBotTemplate('btn_view_and_buy', 'vi');
+    if (!btnText) btnText = sMap.btn_view_and_buy || '🛍️ Xem & Mua sản phẩm ngay';
+
+    const buyUrl = botUsername ? `https://t.me/${botUsername}?start=buy_${product.id}` : undefined;
+    const replyMarkup = buyUrl ? {
+      inline_keyboard: [
+        [{ text: btnText, url: buyUrl }]
+      ]
+    } : undefined;
+
+    const opts = {
+      parse_mode: 'HTML',
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+    };
+
+    for (const gId of targetGroupIds) {
+      try {
+        if (product.image_url && String(product.image_url).trim().startsWith('http')) {
+          await bot.sendPhoto(gId, product.image_url.trim(), { caption: message, ...opts });
+        } else {
+          await bot.sendMessage(gId, message, opts);
+        }
+        console.log(`[NOTIFY_GROUP_PRODUCT] ✅ Đã gửi thông báo sản phẩm mới vào nhóm/kênh: ${gId}`);
+      } catch (error) {
+        console.error(`[NOTIFY_GROUP_PRODUCT] ❌ Lỗi khi gửi thông báo vào nhóm ${gId}:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.error('[NOTIFY_GROUP_PRODUCT] ❌ Lỗi:', error);
   }
 };
 

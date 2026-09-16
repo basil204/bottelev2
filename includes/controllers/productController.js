@@ -1,7 +1,7 @@
 import { query } from '../database/index.js';
 
 export const createProduct = async ({ name, price, description, type = 'stock', priority = 0, check_live = 0 }) => {
-  await query('INSERT INTO products (name, price, description, stock, type, priority, check_live) VALUES (?, ?, ?, 0, ?, ?, ?)', [name, price, description, type, priority, check_live]);
+  return await query('INSERT INTO products (name, price, description, stock, type, priority, check_live) VALUES (?, ?, ?, 0, ?, ?, ?)', [name, price, description, type, priority, check_live]);
 };
 
 export const updateProduct = async (id, { name, price, description, type, priority, check_live }) => {

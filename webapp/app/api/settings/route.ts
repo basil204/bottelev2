@@ -37,6 +37,8 @@ export async function GET() {
             shop_name: 'SHOP',
             usdt_trc20_wallet: '',
             telegram_group_link: '',
+            notification_chat_id: '',
+            telegram_notification_group_id: '',
             // Binance Pay settings
             binance_api_key: '',
             binance_secret_key: '',
@@ -129,6 +131,8 @@ export async function POST(request: Request) {
             shop_name,
             usdt_trc20_wallet,
             telegram_group_link,
+            notification_chat_id,
+            telegram_notification_group_id,
             // Binance Pay settings
             binance_api_key,
             binance_secret_key,
@@ -189,6 +193,8 @@ export async function POST(request: Request) {
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
             if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
             if (telegram_group_link !== undefined) await upsertSetting('telegram_group_link', telegram_group_link);
+            if (notification_chat_id !== undefined) await upsertSetting('notification_chat_id', notification_chat_id);
+            if (telegram_notification_group_id !== undefined) await upsertSetting('telegram_notification_group_id', telegram_notification_group_id);
             // Binance Pay settings
             if (binance_api_key !== undefined) await upsertSetting('binance_api_key', binance_api_key);
             if (binance_secret_key !== undefined) await upsertSetting('binance_secret_key', binance_secret_key);

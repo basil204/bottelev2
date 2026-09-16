@@ -45,7 +45,8 @@ const PUBLIC_COMMANDS_TEXT = `📋 CÁC LỆNH CỦA BOT
 /warranty - Trung tâm bảo hành đơn hàng
 /support - Hỗ trợ trực tuyến / CSKH
 /history - Xem lịch sử mua hôm nay
-/lang - Đổi ngôn ngữ`;
+/lang - Đổi ngôn ngữ
+/id - Lấy UID người dùng, ID nhóm (Box) & Kênh`;
 
 const BUTTON_COLOR_PATCHED = Symbol.for('bottele.inline-button-colors');
 
@@ -256,6 +257,20 @@ export const registerListeners = (bot, config) => {
   bot.onText(/^\/checklive(?:@\w+)?(?:\s+([\s\S]+))?$/i, async (msg, match) => {
     await ensureUser(bot, msg);
     await handleCheckLiveCommand(bot, msg, match?.[1] || '');
+  });
+
+  // Lệnh lấy ID / UID người dùng, ID nhóm (Box), Kênh
+  bot.onText(/^\/(id|uid|myid|chatid|boxid|getid|groupid|channelid)(?:@\w+)?(?:\s+.*)?$/i, async (msg) => {
+    const { handleGetId } = await import('./handle/handleId.js');
+    await handleGetId(bot, msg);
+  });
+
+  // Hỗ trợ lấy ID khi đăng lệnh trong Kênh Telegram (Channel Post)
+  bot.on('channel_post', async (msg) => {
+    if (msg.text && /^\/(id|uid|chatid|channelid|getid)(?:@\w+)?/i.test(msg.text.trim())) {
+      const { handleGetId } = await import('./handle/handleId.js');
+      await handleGetId(bot, msg);
+    }
   });
 
   // Lịch sử đơn hàng

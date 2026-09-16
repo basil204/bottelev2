@@ -194,9 +194,9 @@ export async function POST(request: Request) {
             request
         });
 
-        // Broadcast to Telegram users if notify_telegram is enabled
+        // Broadcast to Telegram groups & users if notify_telegram is enabled
         let broadcastStats = null;
-        if (body.notify_telegram) {
+        if (body.notify_telegram || body.notify_group) {
             try {
                 const [botSettings] = await pool.query<RowDataPacket[]>(
                     "SELECT `key`, `value` FROM settings WHERE `key` IN ('bot_username', 'shop_name', 'template_new_product_notify', 'btn_view_and_buy')"
@@ -231,7 +231,9 @@ export async function POST(request: Request) {
                     message: broadcastMessage,
                     imageUrl: image_url || null,
                     customEmojiId: finalCustomEmojiId,
-                    inlineKeyboard
+                    inlineKeyboard,
+                    sendToGroups: true,
+                    sendToUsers: body.notify_telegram !== false
                 });
             } catch (broadcastErr) {
                 console.error('[PRODUCT_BROADCAST_ERR]', broadcastErr);

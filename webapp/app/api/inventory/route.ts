@@ -261,7 +261,7 @@ export async function POST(request: Request) {
             await connection.commit();
 
             let broadcastStats = null;
-            if (body.notify_telegram && addedAccounts.length > 0) {
+            if ((body.notify_telegram || body.notify_group) && addedAccounts.length > 0) {
                 try {
                     const [prodRows] = await pool.query<RowDataPacket[]>(
                         'SELECT name, price, image_url, custom_emoji_id, telegram_custom_emoji_id FROM products WHERE id = ?',
@@ -303,7 +303,9 @@ export async function POST(request: Request) {
                             message: broadcastMessage,
                             imageUrl: prod.image_url || null,
                             customEmojiId: prod.custom_emoji_id || prod.telegram_custom_emoji_id,
-                            inlineKeyboard
+                            inlineKeyboard,
+                            sendToGroups: true,
+                            sendToUsers: body.notify_telegram !== false
                         });
                     }
                 } catch (err) {

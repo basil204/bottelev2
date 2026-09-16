@@ -81,32 +81,11 @@ export const notifyAccounts = async (bot, chatId, product, count) => {
   );
 };
 
-// Kiểm tra lỗi Telegram có phải user đã block/deactivated không
-const isUserBlockedError = (err) => {
-  if (!err) return false;
-  const msg = String(err.message || err).toLowerCase();
-  const code = err.response?.statusCode || err.response?.status || 0;
-  return code === 403 || code === 400 ||
-    msg.includes('blocked') || msg.includes('chat not found') ||
-    msg.includes('user is deactivated') || msg.includes('forbidden');
-};
-
-// Xóa user không còn hoạt động khỏi database
-const removeDeadUser = async (telegramId) => {
-  try {
-    await query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
-    console.log(`[NOTIFY] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
-  } catch (err) {
-    console.error(`[NOTIFY] Lỗi xóa user ${telegramId}:`, err.message);
-  }
-};
-
 // Helper: gửi tin nhắn theo batch song song, tránh rate limit Telegram
-// Tự động xóa user nào không gửi được (blocked/deactivated)
+// Khi gặp lỗi gửi thì bỏ qua, không xóa user
 const sendBatchMessages = async (bot, users, message, options = {}, batchSize = 25, delayMs = 1000) => {
   let successCount = 0;
   let failCount = 0;
-  let removedCount = 0;
 
   for (let i = 0; i < users.length; i += batchSize) {
     const batch = users.slice(i, i + batchSize);
@@ -114,27 +93,16 @@ const sendBatchMessages = async (bot, users, message, options = {}, batchSize = 
     const results = await Promise.allSettled(
       batch.map(user =>
         bot.sendMessage(user.telegram_id, message, options)
-          .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
+          .then(() => ({ ok: true, telegramId: user.telegram_id }))
           .catch(err => {
-            const blocked = isUserBlockedError(err);
-            if (!blocked) {
-              console.error(`[NOTIFY] Lỗi gửi cho ${user.telegram_id}:`, err.message);
-            }
-            return { ok: false, blocked, telegramId: user.telegram_id };
+            return { ok: false, telegramId: user.telegram_id };
           })
       )
     );
 
     for (const result of results) {
-      if (result.status === 'fulfilled') {
-        if (result.value.ok) {
-          successCount++;
-        } else if (result.value.blocked) {
-          await removeDeadUser(result.value.telegramId);
-          removedCount++;
-        } else {
-          failCount++;
-        }
+      if (result.status === 'fulfilled' && result.value.ok) {
+        successCount++;
       } else {
         failCount++;
       }
@@ -146,7 +114,7 @@ const sendBatchMessages = async (bot, users, message, options = {}, batchSize = 
     }
   }
 
-  return { successCount, failCount, removedCount };
+  return { successCount, failCount, removedCount: 0 };
 };
 
 // Thông báo cho tất cả users về sản phẩm có thêm tài khoản mới
@@ -476,31 +444,19 @@ export const broadcastToAllUsers = async (bot, messageText, imageUrl = null) => 
         batch.map(user => {
           if (imageUrl && String(imageUrl).trim().startsWith('http')) {
             return bot.sendPhoto(user.telegram_id, imageUrl.trim(), { caption: messageText, parse_mode: 'Markdown' })
-              .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
-              .catch(err => {
-                const blocked = isUserBlockedError(err);
-                return { ok: false, blocked, telegramId: user.telegram_id };
-              });
+              .then(() => ({ ok: true, telegramId: user.telegram_id }))
+              .catch(() => ({ ok: false, telegramId: user.telegram_id }));
           } else {
             return bot.sendMessage(user.telegram_id, messageText, { parse_mode: 'Markdown' })
-              .then(() => ({ ok: true, blocked: false, telegramId: user.telegram_id }))
-              .catch(err => {
-                const blocked = isUserBlockedError(err);
-                return { ok: false, blocked, telegramId: user.telegram_id };
-              });
+              .then(() => ({ ok: true, telegramId: user.telegram_id }))
+              .catch(() => ({ ok: false, telegramId: user.telegram_id }));
           }
         })
       );
 
       for (const result of results) {
-        if (result.status === 'fulfilled') {
-          if (result.value.ok) successCount++;
-          else if (result.value.blocked) {
-            await removeDeadUser(result.value.telegramId);
-            removedCount++;
-          } else {
-            failCount++;
-          }
+        if (result.status === 'fulfilled' && result.value.ok) {
+          successCount++;
         } else {
           failCount++;
         }
@@ -511,7 +467,7 @@ export const broadcastToAllUsers = async (bot, messageText, imageUrl = null) => 
       }
     }
 
-    return { successCount, failCount, removedCount, totalUsers: userRows.length };
+    return { successCount, failCount, removedCount: 0, totalUsers: userRows.length };
   } catch (error) {
     console.error('[BROADCAST_ERR]', error);
     return { successCount: 0, failCount: 0, error: error.message };

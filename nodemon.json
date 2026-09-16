@@ -11,7 +11,6 @@
   "ignore": [
     "api-server/*",
     "webapp/*",
-    "email-edu-web/*",
     "backups/*",
     "database/*",
     "*.png",

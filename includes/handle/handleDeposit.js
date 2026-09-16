@@ -55,7 +55,8 @@ const getBankConfig = async (defaultConfig, bank) => {
       'tcb_account',
       'vp_account',
       'timo_account',
-      'vietqr_bank_code'
+      'vietqr_bank_code',
+      'active_bank'
     ];
     const rows = await query(`SELECT \`key\`, \`value\` FROM settings WHERE \`key\` IN (${keys.map(k => `'${k}'`).join(',')})`);
     const dbConfig = {};
@@ -65,54 +66,53 @@ const getBankConfig = async (defaultConfig, bank) => {
       });
     }
 
-    const accountName = dbConfig.vietqr_account_name || defaultConfig.VIETQR_ACCOUNT_NAME || '';
+    let targetBank = bank;
+    if (!targetBank || targetBank === 'vietqr' || targetBank === 'default') {
+      targetBank = dbConfig.active_bank || 'vcb';
+    }
+    targetBank = String(targetBank).toLowerCase().trim();
 
-    if (bank === 'viettel') {
+    const accountName = dbConfig.vietqr_account_name || defaultConfig?.VIETQR_ACCOUNT_NAME || '';
+
+    const bankMap = {
+      viettel: { bankCode: 'VIETTELMONEY', accountNo: dbConfig.viettel_account || dbConfig.vietqr_account_no || '', name: 'ViettelPay' },
+      vcb: { bankCode: 'VCB', accountNo: dbConfig.vcb_account || dbConfig.vietqr_account_no || '', name: 'Vietcombank' },
+      tpb: { bankCode: 'TPB', accountNo: dbConfig.tpb_account || dbConfig.vietqr_account_no || '', name: 'TPBank' },
+      mb: { bankCode: 'MB', accountNo: dbConfig.mb_account || dbConfig.vietqr_account_no || '', name: 'MBBank' },
+      acb: { bankCode: 'ACB', accountNo: dbConfig.acb_account || dbConfig.vietqr_account_no || '', name: 'ACB' },
+      tcb: { bankCode: 'TCB', accountNo: dbConfig.tcb_account || dbConfig.vietqr_account_no || '', name: 'Techcombank' },
+      vp: { bankCode: 'VPB', accountNo: dbConfig.vp_account || dbConfig.vietqr_account_no || '', name: 'VPBank' },
+      timo: { bankCode: 'TIMO', accountNo: dbConfig.timo_account || dbConfig.vietqr_account_no || '', name: 'Timo' }
+    };
+
+    if (bankMap[targetBank]) {
       return {
-        bankCode: 'VIETTELMONEY',
-        accountNo: dbConfig.viettel_account || dbConfig.vietqr_account_no || '',
-        accountName
+        bankKey: targetBank,
+        bankCode: bankMap[targetBank].bankCode,
+        accountNo: bankMap[targetBank].accountNo,
+        accountName,
+        bankDisplayName: bankMap[targetBank].name
       };
     }
 
-    let bankCode = 'VCB';
-    let accountNo = '';
-
-    if (bank === 'vcb') {
-      bankCode = 'VCB';
-      accountNo = dbConfig.vcb_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'tpb') {
-      bankCode = 'TPB';
-      accountNo = dbConfig.tpb_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'mb') {
-      bankCode = 'MB';
-      accountNo = dbConfig.mb_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'acb') {
-      bankCode = 'ACB';
-      accountNo = dbConfig.acb_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'tcb') {
-      bankCode = 'TCB';
-      accountNo = dbConfig.tcb_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'vp') {
-      bankCode = 'VPB';
-      accountNo = dbConfig.vp_account || dbConfig.vietqr_account_no || '';
-    } else if (bank === 'timo') {
-      bankCode = 'TIMO';
-      accountNo = dbConfig.timo_account || dbConfig.vietqr_account_no || '';
-    } else {
-      bankCode = dbConfig.vietqr_bank_code || 'VCB';
-      accountNo = dbConfig.vietqr_account_no || '';
-    }
-
-    return { bankCode, accountNo, accountName };
-  } catch (e) {
     return {
-      bankCode: bank === 'vp' ? 'VPB' : bank.toUpperCase(),
+      bankKey: targetBank,
+      bankCode: dbConfig.vietqr_bank_code || 'VCB',
+      accountNo: dbConfig.vietqr_account_no || '',
+      accountName,
+      bankDisplayName: targetBank.toUpperCase()
+    };
+  } catch (e) {
+    console.error('[getBankConfig Error]:', e);
+    return {
+      bankKey: bank || 'vcb',
+      bankCode: bank === 'vp' ? 'VPB' : (bank ? bank.toUpperCase() : 'VCB'),
       accountNo: '',
-      accountName: defaultConfig.VIETQR_ACCOUNT_NAME || ''
+      accountName: defaultConfig?.VIETQR_ACCOUNT_NAME || '',
+      bankDisplayName: (bank || 'VCB').toUpperCase()
     };
   }
-}
+};
 
 export const getDepositButtonsConfig = async () => {
   try {
@@ -666,14 +666,27 @@ const getMinDepositAmount = async () => {
   }
 };
 
-export const promptForBankDeposit = async (bot, chatId, userId, config) => {
+export const promptForBankDeposit = async (bot, chatId, userId, config, bank = null) => {
   const { getUserByTelegram } = await import('../controllers/userController.js');
   const user = await getUserByTelegram(userId);
   const lang = user?.language || 'vi';
 
   const MIN_DEPOSIT_AMOUNT = await getMinDepositAmount();
   setCache(`waiting_deposit_amount_${userId}`, true, 15 * 60 * 1000);
-  setCache(`bank_selection_${userId}`, 'vietqr', 15 * 60 * 1000);
+  
+  let selectedBank = bank;
+  if (!selectedBank) {
+    selectedBank = getCache(`bank_selection_${userId}`);
+  }
+  if (!selectedBank || selectedBank === 'vietqr' || selectedBank === 'default') {
+    try {
+      const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank' LIMIT 1");
+      selectedBank = rows?.[0]?.value || 'vcb';
+    } catch (_) {
+      selectedBank = 'vcb';
+    }
+  }
+  setCache(`bank_selection_${userId}`, selectedBank, 15 * 60 * 1000);
 
   const promptMsg = L(lang,
     `🏦 **NẠP TIỀN QUA NGÂN HÀNG (VIETQR / BANK TRANSFER)**\n\n` +
@@ -698,9 +711,9 @@ export const promptForBankDeposit = async (bot, chatId, userId, config) => {
   });
 };
 
-export const selectBankMethod = async (bot, chatId, userId, bank = 'vietqr') => {
+export const selectBankMethod = async (bot, chatId, userId, bank = 'vcb') => {
   setCache(`bank_selection_${userId}`, bank, 15 * 60 * 1000);
-  return promptForBankDeposit(bot, chatId, userId);
+  return promptForBankDeposit(bot, chatId, userId, null, bank);
 };
 
 export const handleDepositAmount = async (bot, msg, user, config) => {
@@ -727,7 +740,15 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   if (text.startsWith('/')) return false;
 
   delCache(`waiting_deposit_amount_${msg.from.id}`);
-  let selectedBank = getCache(`bank_selection_${msg.from.id}`) || 'vietqr';
+  let selectedBank = getCache(`bank_selection_${msg.from.id}`);
+  if (!selectedBank || selectedBank === 'vietqr' || selectedBank === 'default') {
+    try {
+      const rows = await query("SELECT `value` FROM settings WHERE `key` = 'active_bank' LIMIT 1");
+      selectedBank = rows?.[0]?.value || 'vcb';
+    } catch (_) {
+      selectedBank = 'vcb';
+    }
+  }
 
   const existing = getCache(qrKey(msg.from.id));
   if (existing) {
@@ -790,22 +811,11 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const bankCode = bankConfig.bankCode;
   const accountNo = bankConfig.accountNo;
   const accountName = bankConfig.accountName;
+  const bankDisplayName = bankConfig.bankDisplayName || selectedBank.toUpperCase();
 
   const qrUrl = buildQrUrl(bankCode, accountNo, amount, content, accountName);
   const expiresAt = Date.now() + QR_DURATION_MS;
   const depositId = await createDeposit(user.id, amount, content);
-
-  const bankNames = {
-    viettel: 'ViettelPay',
-    vcb: 'Vietcombank',
-    tpb: 'TPBank',
-    mb: 'MBBank',
-    acb: 'ACB',
-    tcb: 'Techcombank',
-    vp: 'VPBank',
-    timo: 'Timo'
-  };
-  const bankDisplayName = bankNames[selectedBank] || selectedBank.toUpperCase();
 
   const { getBotTemplate, renderBotTemplate } = await import('../helpers/templateHelper.js');
   const rawTemplate = await getBotTemplate('template_bank_deposit', lang);
@@ -838,7 +848,8 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
     }
   });
 
-  const qrState = { userId: user.id, depositId, amount, qrUrl, expiresAt, content, token, bank: selectedBank, messageId: qrMessage.message_id, chatId: msg.chat.id, reloadUsed: false };
+  const actualBankKey = bankConfig.bankKey || selectedBank;
+  const qrState = { userId: user.id, depositId, amount, qrUrl, expiresAt, content, token, bank: actualBankKey, messageId: qrMessage.message_id, chatId: msg.chat.id, reloadUsed: false };
   setCache(qrKey(msg.from.id), qrState, QR_CACHE_TTL_MS);
   setCache(contentKey(token), qrState, QR_CACHE_TTL_MS);
 };

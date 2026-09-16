@@ -1,19 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket } from 'mysql2';
-import { exec } from 'child_process';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
-
-const restartCoba = () => {
-    exec('pm2 restart all', (error, stdout, stderr) => {
-        if (error) {
-            // PM2 might not be installed in dev environment - silently ignore
-            console.log('[Settings] PM2 not available, skip restart');
-            return;
-        }
-        if (stdout) console.log(`[Settings] PM2: ${stdout}`);
-    });
-};
 
 export async function GET() {
     try {
@@ -161,7 +149,6 @@ export async function POST(request: Request) {
         } = body;
 
         const connection = await pool.getConnection();
-        let shouldRestart = false;
         const { ipAddress, userAgent } = getRequestInfo(request);
 
         try {
@@ -197,10 +184,7 @@ export async function POST(request: Request) {
             if (active_bank !== undefined) await upsertSetting('active_bank', active_bank);
             if (min_deposit !== undefined) await upsertSetting('min_deposit', min_deposit);
             if (exchange_rate !== undefined) await upsertSetting('exchange_rate', exchange_rate);
-            if (telegram_bot_token !== undefined) {
-                await upsertSetting('telegram_bot_token', telegram_bot_token);
-                shouldRestart = true;
-            }
+            if (telegram_bot_token !== undefined) await upsertSetting('telegram_bot_token', telegram_bot_token);
             if (bot_username !== undefined) await upsertSetting('bot_username', bot_username);
             if (shop_name !== undefined) await upsertSetting('shop_name', shop_name);
             if (usdt_trc20_wallet !== undefined) await upsertSetting('usdt_trc20_wallet', usdt_trc20_wallet);
@@ -224,10 +208,6 @@ export async function POST(request: Request) {
             if (deposit_rank_promotions !== undefined) await upsertSetting('deposit_rank_promotions', JSON.stringify(deposit_rank_promotions));
 
             await connection.commit();
-
-            if (shouldRestart) {
-                restartCoba();
-            }
 
             // Log admin action
             const adminName = await getAdminFromCookie(request);

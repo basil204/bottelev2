@@ -18,31 +18,7 @@ export interface BroadcastResult {
     removed: number;
 }
 
-// Kiểm tra lỗi Telegram có phải user đã block bot / deactivated không
-function isUserBlockedError(response: Response | null, error: unknown): boolean {
-    if (response && (response.status === 403 || response.status === 400)) {
-        return true;
-    }
-    if (error) {
-        const msg = String(error instanceof Error ? error.message : error).toLowerCase();
-        if (msg.includes('blocked') || msg.includes('chat not found') ||
-            msg.includes('user is deactivated') || msg.includes('forbidden') ||
-            msg.includes('bot was kicked') || msg.includes('bot was blocked')) {
-            return true;
-        }
-    }
-    return false;
-}
 
-// Xóa user không còn hoạt động khỏi database
-async function removeDeadUser(telegramId: string) {
-    try {
-        await pool.query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
-        console.log(`[BROADCAST] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
-    } catch (err) {
-        console.error(`[BROADCAST] Lỗi xóa user ${telegramId}:`, err);
-    }
-}
 
 // Format message text converting animated emoji IDs and markdown to Telegram HTML
 export function formatTelegramText(text: string): string {
@@ -128,14 +104,12 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
     let failed = 0;
     let removed = 0;
 
-    const sendToUser = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
-        let isBlockedOnAll = true;
-
+    const sendToUser = async (telegramId: string): Promise<boolean> => {
         for (const currentToken of botTokens) {
             try {
                 if (imageUrl && imageUrl.trim()) {
                     const ok = await sendPhoto(telegramId, imageUrl.trim(), formattedMessage, currentToken, replyMarkup);
-                    if (ok) return { ok: true, blocked: false };
+                    if (ok) return true;
                 }
 
                 const payload: any = {
@@ -155,20 +129,14 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
 
                 const data = await res.json();
                 if (data.ok) {
-                    return { ok: true, blocked: false };
-                }
-
-                if (!isUserBlockedError(res, data)) {
-                    isBlockedOnAll = false;
+                    return true;
                 }
             } catch (err) {
-                if (!isUserBlockedError(null, err)) {
-                    isBlockedOnAll = false;
-                }
+                // Ignore and try next token
             }
         }
 
-        return { ok: false, blocked: isBlockedOnAll };
+        return false;
     };
 
     for (let i = 0; i < users.length; i += batchSize) {
@@ -176,21 +144,14 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
 
         const results = await Promise.allSettled(
             batch.map(async (user) => {
-                const res = await sendToUser(String(user.telegram_id));
-                return { telegramId: String(user.telegram_id), ...res };
+                const ok = await sendToUser(String(user.telegram_id));
+                return { telegramId: String(user.telegram_id), ok };
             })
         );
 
         for (const r of results) {
-            if (r.status === 'fulfilled') {
-                if (r.value.ok) {
-                    sent++;
-                } else if (r.value.blocked) {
-                    await removeDeadUser(r.value.telegramId);
-                    removed++;
-                } else {
-                    failed++;
-                }
+            if (r.status === 'fulfilled' && r.value.ok) {
+                sent++;
             } else {
                 failed++;
             }
@@ -201,6 +162,6 @@ export async function broadcastToUsers(options: BroadcastOptions): Promise<Broad
         }
     }
 
-    console.log(`[BROADCAST] Hoàn thành: ${sent}/${users.length} thành công, ${failed} lỗi, ${removed} đã xóa`);
-    return { total: users.length, sent, failed, removed };
+    console.log(`[BROADCAST] Hoàn thành: ${sent}/${users.length} thành công, ${failed} lỗi (bỏ qua không xóa user)`);
+    return { total: users.length, sent, failed, removed: 0 };
 }

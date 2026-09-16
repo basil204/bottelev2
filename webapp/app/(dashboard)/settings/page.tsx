@@ -395,7 +395,7 @@ export default function SettingsPage() {
 
             if (res.ok) {
                 setSettings(payload);
-                alert('Đã lưu cấu hình hệ thống thành công! Các Bot Telegram đang hoạt động sẽ tự động cập nhật ngay.');
+                alert('Đã lưu cấu hình hệ thống thành công!');
             } else {
                 alert('Lỗi lưu cấu hình hệ thống!');
             }
@@ -922,7 +922,7 @@ export default function SettingsPage() {
                                     <Banknote className="h-4 w-4 text-orange-600" />
                                     <span>CẤU HÌNH CỔNG NẠP TIỀN TỰ ĐỘNG & BANK GATEWAY</span>
                                 </h2>
-                                <p className="text-[11px] text-zinc-400">Thiết lập kết nối Sieuthicode và ngân hàng nhận tiền</p>
+                                <p className="text-[11px] text-zinc-400">Thiết lập kết nối ngân hàng và số tài khoản nhận tiền</p>
                             </div>
                             <label className="flex items-center gap-2 cursor-pointer font-extrabold text-xs text-zinc-800">
                                 <input
@@ -940,17 +940,21 @@ export default function SettingsPage() {
                                 <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NGÂN HÀNG HOẠT ĐỘNG CHÍNH (ACTIVE BANK)</label>
                                 <select
                                     value={settings.active_bank}
-                                    onChange={(e) => handleChange('active_bank', e.target.value)}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        handleChange('active_bank', val);
+                                        setConfiguringBank(val);
+                                    }}
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 >
-                                    <option value="vcb">Vietcombank & VietQR (Sieuthicode)</option>
-                                    <option value="mb">MBBank & VietQR (Sieuthicode)</option>
-                                    <option value="viettel">ViettelPay (Sieuthicode)</option>
-                                    <option value="tpb">TPBank & VietQR (Sieuthicode)</option>
-                                    <option value="acb">ACB & VietQR (Sieuthicode)</option>
-                                    <option value="tcb">Techcombank & VietQR (Sieuthicode)</option>
-                                    <option value="vp">VPBank & VietQR (Sieuthicode)</option>
-                                    <option value="timo">Timo & VietQR (Sieuthicode)</option>
+                                    <option value="vcb">Vietcombank & VietQR</option>
+                                    <option value="mb">MBBank & VietQR</option>
+                                    <option value="viettel">ViettelPay</option>
+                                    <option value="tpb">TPBank & VietQR</option>
+                                    <option value="acb">ACB & VietQR</option>
+                                    <option value="tcb">Techcombank & VietQR</option>
+                                    <option value="vp">VPBank & VietQR</option>
+                                    <option value="timo">Timo & VietQR</option>
                                 </select>
                             </div>
 
@@ -976,16 +980,16 @@ export default function SettingsPage() {
                         {/* Bank specific token and STK fields */}
                         <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3 text-xs">
                             <span className="font-extrabold uppercase text-orange-600 text-xs block">
-                                🏦 THÔNG TIN CẤU HÌNH {configuringBank.toUpperCase()} (SIEUTHICODE)
+                                🏦 THÔNG TIN CẤU HÌNH {configuringBank.toUpperCase()}
                             </span>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TOKEN SIEUTHICODE</label>
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TOKEN API NẠP TIỀN</label>
                                     <input
                                         type="text"
                                         value={(settings as any)[`${configuringBank}_token`] || ''}
                                         onChange={(e) => handleChange(`${configuringBank}_token` as any, e.target.value)}
-                                        placeholder="Dán API Token từ Sieuthicode..."
+                                        placeholder="Dán API Token ngân hàng..."
                                         className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
                                     />
                                 </div>
@@ -997,6 +1001,16 @@ export default function SettingsPage() {
                                         onChange={(e) => handleChange(`${configuringBank}_account` as any, e.target.value)}
                                         placeholder="Nhập số tài khoản ngân hàng..."
                                         className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN CHỦ TÀI KHOẢN (ACCOUNT NAME)</label>
+                                    <input
+                                        type="text"
+                                        value={settings.vietqr_account_name || ''}
+                                        onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
+                                        placeholder="VD: NGUYEN VAN A"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none uppercase"
                                     />
                                 </div>
                             </div>

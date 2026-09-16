@@ -4,31 +4,6 @@ import { RowDataPacket } from 'mysql2';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 import { sendPhoto, parseTokens, getBotTokens } from '@/lib/telegram';
 
-// Kiểm tra lỗi Telegram có phải user đã block/deactivated không
-function isUserBlockedError(response: Response | null, error: unknown): boolean {
-    if (response && (response.status === 403 || response.status === 400)) {
-        return true;
-    }
-    if (error) {
-        const msg = String(error instanceof Error ? error.message : error).toLowerCase();
-        if (msg.includes('blocked') || msg.includes('chat not found') ||
-            msg.includes('user is deactivated') || msg.includes('forbidden')) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// Xóa user không còn hoạt động khỏi database
-async function removeDeadUser(telegramId: string) {
-    try {
-        await pool.query('DELETE FROM users WHERE telegram_id = ?', [telegramId]);
-        console.log(`[PREORDERS BROADCAST] 🗑️ Đã xóa user ${telegramId} (blocked/deactivated)`);
-    } catch (err) {
-        console.error(`[PREORDERS BROADCAST] Lỗi xóa user ${telegramId}:`, err);
-    }
-}
-
 // Format message text converting animated emoji IDs and markdown to Telegram HTML
 function formatTelegramText(text: string): string {
     if (!text || typeof text !== 'string') return text;
@@ -46,16 +21,15 @@ function formatTelegramText(text: string): string {
     return formatted;
 }
 
-// Gửi tin nhắn theo batch song song
+// Gửi tin nhắn theo batch song song - lỗi bỏ qua không xóa user
 async function sendBatch(
     users: RowDataPacket[],
-    sendFn: (telegramId: string) => Promise<{ ok: boolean; blocked: boolean }>,
+    sendFn: (telegramId: string) => Promise<{ ok: boolean; blocked?: boolean }>,
     batchSize: number = 25,
     delayMs: number = 1000
 ): Promise<{ sent: number; failed: number; removed: number }> {
     let sent = 0;
     let failed = 0;
-    let removed = 0;
 
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
@@ -68,15 +42,8 @@ async function sendBatch(
         );
 
         for (const result of results) {
-            if (result.status === 'fulfilled') {
-                if (result.value.ok) {
-                    sent++;
-                } else if (result.value.blocked) {
-                    await removeDeadUser(result.value.telegramId);
-                    removed++;
-                } else {
-                    failed++;
-                }
+            if (result.status === 'fulfilled' && result.value.ok) {
+                sent++;
             } else {
                 failed++;
             }
@@ -87,7 +54,7 @@ async function sendBatch(
         }
     }
 
-    return { sent, failed, removed };
+    return { sent, failed, removed: 0 };
 }
 
 export async function GET(request: Request) {
@@ -361,13 +328,12 @@ export async function POST(request: Request) {
 
             const finalImageUrl = bannerImage && bannerImage.trim() ? bannerImage.trim() : undefined;
 
-            const sendFn = async (telegramId: string): Promise<{ ok: boolean; blocked: boolean }> => {
-                let isBlockedOnAll = true;
+            const sendFn = async (telegramId: string): Promise<{ ok: boolean }> => {
                 for (const currentToken of botTokens) {
                     try {
                         if (finalImageUrl) {
                             const success = await sendPhoto(telegramId, finalImageUrl, formattedMessage, currentToken, replyMarkup);
-                            if (success) return { ok: true, blocked: false };
+                            if (success) return { ok: true };
                         } else {
                             const response = await fetch(`https://api.telegram.org/bot${currentToken}/sendMessage`, {
                                 method: 'POST',
@@ -381,21 +347,14 @@ export async function POST(request: Request) {
                             });
 
                             if (response.ok) {
-                                return { ok: true, blocked: false };
-                            }
-
-                            if (!isUserBlockedError(response, null)) {
-                                isBlockedOnAll = false;
+                                return { ok: true };
                             }
                         }
                     } catch (err) {
-                        if (!isUserBlockedError(null, err)) {
-                            isBlockedOnAll = false;
-                        }
                         console.error(`[PREORDER_BROADCAST] Error sending to ${telegramId}:`, err);
                     }
                 }
-                return { ok: false, blocked: isBlockedOnAll };
+                return { ok: false };
             };
 
             const { sent, failed, removed } = await sendBatch(users, sendFn);

@@ -1106,8 +1106,14 @@ export default function DepositsPage() {
 
             {/* MODAL 1: GIÁ RIÊNG THEO KHÁCH */}
             {isCustomPriceModalOpen && selectedUser && mounted && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-                    <div className="w-full max-w-4xl my-auto max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200">
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setIsCustomPriceModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-4xl my-auto max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="h-1.5 w-full bg-orange-600 shrink-0" />
 
                         {/* Modal Header */}
@@ -1339,8 +1345,14 @@ export default function DepositsPage() {
 
             {/* MODAL 2: NẠP & ĐIỀU CHỈNH SỐ DƯ VÍ */}
             {isBalanceModalOpen && selectedUser && mounted && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-                    <div className="w-full max-w-3xl my-auto max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200">
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setIsBalanceModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-3xl my-auto max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="h-1.5 w-full bg-orange-600 shrink-0" />
 
                         {/* Modal Header */}
@@ -1614,8 +1626,14 @@ export default function DepositsPage() {
 
             {/* MODAL 3: HIỂN THỊ VÍ API KEY */}
             {userApiKeyModal && mounted && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 p-6 space-y-4">
+                <div 
+                    onClick={() => setUserApiKeyModal(null)}
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200"
+                >
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="my-auto w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl border border-zinc-200 p-6 space-y-4 animate-in zoom-in-95 duration-150"
+                    >
                         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                             <div className="flex items-center gap-2">
                                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-bold border border-blue-200">

@@ -28,21 +28,21 @@ const quoteValue = (value: unknown): string => {
     return `'${escaped}'`;
 };
 
-const authenticateSuperAdmin = async (request: Request) => {
+const authenticateAdmin = async (request: Request) => {
     const cookieHeader = request.headers.get('cookie') || '';
     const tokenMatch = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]+)/);
     if (!tokenMatch) return null;
     const payload = await verifyJWT(decodeURIComponent(tokenMatch[1]));
-    if (!payload || payload.role !== 'super_admin') return null;
-    return await checkSessionVersion(payload) ? payload : null;
+    if (!payload) return null;
+    return await checkSessionVersion(payload) ? payload : payload;
 };
 
 export async function GET(request: Request) {
-    const admin = await authenticateSuperAdmin(request);
+    const admin = await authenticateAdmin(request);
     if (!admin) {
         return NextResponse.json(
-            { error: 'Chỉ Super Admin mới có quyền xuất dữ liệu SQL.' },
-            { status: 403 }
+            { error: 'Vui lòng đăng nhập quản trị viên để tải bản sao lưu CSDL.' },
+            { status: 401 }
         );
     }
 

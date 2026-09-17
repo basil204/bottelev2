@@ -10,6 +10,43 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
+const VIETNAM_BANKS = [
+    { code: 'MB', name: 'MBBank (Ngân hàng Quân Đội)' },
+    { code: 'VCB', name: 'Vietcombank (Ngoại Thương VN)' },
+    { code: 'TCB', name: 'Techcombank (Kỹ Thương VN)' },
+    { code: 'ACB', name: 'ACB (Á Châu)' },
+    { code: 'TPB', name: 'TPBank (Tiên Phong)' },
+    { code: 'VPB', name: 'VPBank (Việt Nam Thịnh Vượng)' },
+    { code: 'BIDV', name: 'BIDV (Đầu Tư và Phát Triển VN)' },
+    { code: 'VBA', name: 'Agribank (Nông Nghiệp & PTNT)' },
+    { code: 'CTG', name: 'VietinBank (Công Thương VN)' },
+    { code: 'TIMO', name: 'Timo by BanVietBank' },
+    { code: 'CAKE', name: 'Cake by VPBank' },
+    { code: 'OCB', name: 'OCB (Phương Đông)' },
+    { code: 'STB', name: 'Sacombank (Sài Gòn Thương Tín)' },
+    { code: 'MSB', name: 'MSB (Hàng Hải)' },
+    { code: 'HDB', name: 'HDBank (Phát Triển TP.HCM)' },
+    { code: 'VIB', name: 'VIB (Quốc Tế)' },
+    { code: 'SHB', name: 'SHB (Sài Gòn - Hà Nội)' },
+    { code: 'SSB', name: 'SeABank (Đông Nam Á)' },
+    { code: 'LPB', name: 'LPBank (Lộc Phát VN)' },
+    { code: 'NAB', name: 'Nam A Bank (Nam Á)' },
+    { code: 'NCB', name: 'NCB (Quốc Dân)' },
+    { code: 'BVB', name: 'BVBank (Bản Việt)' },
+    { code: 'VIETBANK', name: 'VietBank (Việt Nam Thương Tín)' },
+    { code: 'VAB', name: 'VietABank (Việt Á)' },
+    { code: 'BAB', name: 'Bac A Bank (Bắc Á)' },
+    { code: 'SGICB', name: 'Saigonbank (Sài Gòn Công Thương)' },
+    { code: 'SHBVN', name: 'Shinhan Bank' },
+    { code: 'WVN', name: 'Woori Bank' },
+    { code: 'CBB', name: 'CBank (Xây Dựng)' },
+    { code: 'GPB', name: 'GPBank (Dầu Khí Toàn Cầu)' },
+    { code: 'Oceanbank', name: 'OceanBank (Đại Dương)' },
+    { code: 'PGB', name: 'PGBank (Thịnh Vượng & Phát Triển)' },
+    { code: 'PVcomBank', name: 'PVcomBank (Đại Chúng VN)' },
+    { code: 'VIETTELMONEY', name: 'Viettel Money' }
+];
+
 interface SystemSettings {
     mb_auto_deposit: boolean;
     viettel_token: string;
@@ -40,6 +77,13 @@ interface SystemSettings {
     usdt_trc20_wallet: string;
     telegram_group_link?: string;
     notification_chat_id?: string;
+    // SePay Auto Deposit
+    sepay_enabled?: boolean;
+    sepay_api_token?: string;
+    sepay_bank_code?: string;
+    sepay_account_number?: string;
+    sepay_account_name?: string;
+    sepay_webhook_secret?: string;
     // Binance Pay
     binance_api_key?: string;
     binance_secret_key?: string;
@@ -96,6 +140,12 @@ export default function SettingsPage() {
         usdt_trc20_wallet: '',
         telegram_group_link: '',
         notification_chat_id: '',
+        sepay_enabled: false,
+        sepay_api_token: '',
+        sepay_bank_code: 'MB',
+        sepay_account_number: '',
+        sepay_account_name: '',
+        sepay_webhook_secret: '',
         binance_api_key: '',
         binance_secret_key: '',
         binance_pay_id: '',
@@ -139,6 +189,33 @@ export default function SettingsPage() {
             setBinanceTestResult({ success: false, message: `Lỗi: ${err.message}` });
         } finally {
             setTestingBinance(false);
+        }
+    };
+
+    const [testingSepay, setTestingSepay] = useState(false);
+    const [sepayTestResult, setSepayTestResult] = useState<{ success: boolean; message: string; data?: any } | null>(null);
+
+    const handleTestSepay = async () => {
+        setTestingSepay(true);
+        setSepayTestResult(null);
+        try {
+            const res = await fetch('/api/sepay/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apiToken: settings.sepay_api_token
+                })
+            });
+            const data = await res.json();
+            setSepayTestResult({
+                success: Boolean(data.success),
+                message: data.message || (data.success ? 'Kết nối SePay thành công!' : 'Kết nối thất bại'),
+                data: data.data
+            });
+        } catch (err: any) {
+            setSepayTestResult({ success: false, message: `Lỗi kết nối: ${err.message}` });
+        } finally {
+            setTestingSepay(false);
         }
     };
 
@@ -213,6 +290,71 @@ export default function SettingsPage() {
     const [creatingBackup, setCreatingBackup] = useState(false);
     const [savingDriveConfig, setSavingDriveConfig] = useState(false);
     const [uploadingJson, setUploadingJson] = useState(false);
+
+    // SQL Upload / Import State
+    const [importingSql, setImportingSql] = useState(false);
+    const [sqlImportResult, setSqlImportResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [selectedSqlFile, setSelectedSqlFile] = useState<File | null>(null);
+    const [wipeOldData, setWipeOldData] = useState(true);
+
+    const handleSelectSqlFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedSqlFile(file);
+            setSqlImportResult(null);
+        }
+    };
+
+    const handleUploadAndImportSql = async () => {
+        if (!selectedSqlFile) {
+            alert('Vui lòng chọn file .sql trước khi tải lên!');
+            return;
+        }
+
+        const confirmMsg = wipeOldData
+            ? `⚠️ CẢNH BÁO XÓA SẠCH VÀ NẠP MỚI:\n\nBạn đang chọn chế độ "XÓA TOÀN BỘ DATA CŨ VÀ NẠP MỚI TOÀN BỘ".\n\n• Toàn bộ dữ liệu hiện tại trong CSDL sẽ được làm sạch hoàn toàn.\n• Hệ thống sẽ nạp lại 100% dữ liệu mới từ file "${selectedSqlFile.name}".\n\nBạn có chắc chắn muốn tiếp tục?`
+            : `⚠️ CẢNH BÁO NẠP CSDL:\n\nBạn có chắc muốn nạp các câu lệnh từ file "${selectedSqlFile.name}" vào CSDL hiện tại?`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        setImportingSql(true);
+        setSqlImportResult(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', selectedSqlFile);
+            formData.append('wipeOldData', String(wipeOldData));
+
+            const res = await fetch('/api/database/import', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setSqlImportResult({
+                    success: true,
+                    message: data.message || 'Đã nạp file SQL và cập nhật CSDL thành công!'
+                });
+                alert('✅ ' + (data.message || 'Đã nạp file SQL thành công!'));
+                setSelectedSqlFile(null);
+            } else {
+                setSqlImportResult({
+                    success: false,
+                    message: data.error || 'Lỗi khi nạp file SQL vào CSDL!'
+                });
+                alert('❌ Lỗi: ' + (data.error || 'Không thể nạp file SQL!'));
+            }
+        } catch (e: any) {
+            setSqlImportResult({
+                success: false,
+                message: e.message || 'Lỗi kết nối máy chủ khi nạp SQL'
+            });
+            alert('❌ Lỗi kết nối: ' + (e.message || 'Không thể kết nối máy chủ'));
+        } finally {
+            setImportingSql(false);
+        }
+    };
 
     const handleUploadJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -581,15 +723,13 @@ export default function SettingsPage() {
                     <span>👑 QUẢN TRỊ VIÊN</span>
                 </button>
 
-                {adminRole === 'super_admin' && (
-                    <button
-                        onClick={() => setActiveTab('backup')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'backup' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
-                    >
-                        <DatabaseBackup className="h-4 w-4" />
-                        <span>💾 SAO LƯU SQL</span>
-                    </button>
-                )}
+                <button
+                    onClick={() => setActiveTab('backup')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-2 ${activeTab === 'backup' ? 'bg-orange-600 text-white shadow-xs' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+                >
+                    <DatabaseBackup className="h-4 w-4" />
+                    <span>💾 SAO LƯU & CẬP NHẬT CSDL SQL</span>
+                </button>
 
                 <Link
                     href="/start-menu"
@@ -867,8 +1007,19 @@ export default function SettingsPage() {
                                     placeholder="Ví dụ: -1001234567890 hoặc @kenh_thong_bao (Có thể nhập nhiều ID cách nhau bằng dấu phẩy)"
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs text-zinc-900 outline-none focus:border-orange-500 transition"
                                 />
-                                <div className="text-[10.5px] text-zinc-500 font-medium">
-                                    💡 <i>Lưu ý: Bạn cần thêm Bot vào Nhóm/Kênh và cấp quyền <b>Gửi tin nhắn (Send Messages / Post Messages)</b> hoặc quyền <b>Quản trị viên (Admin)</b> thì Bot mới có thể đăng bài.</i>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-orange-200/60">
+                                    <div className="text-[10.5px] text-zinc-500 font-medium">
+                                        💡 <i>Lưu ý: Bạn cần thêm Bot vào Nhóm/Kênh và cấp quyền <b>Gửi tin nhắn (Send Messages / Post Messages)</b> hoặc quyền <b>Quản trị viên (Admin)</b> thì Bot mới có thể đăng bài.</i>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-5 py-2 text-xs font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs shrink-0 disabled:opacity-50"
+                                    >
+                                        <Save className="h-3.5 w-3.5" />
+                                        <span>{saving ? 'ĐANG LƯU...' : '💾 LƯU CẤU HÌNH THÔNG BÁO'}</span>
+                                    </button>
                                 </div>
 
                                 {groupTestResult && (
@@ -1014,6 +1165,7 @@ export default function SettingsPage() {
                                     }}
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 >
+                                    <option value="sepay">⚡ SePay (Tất cả 30+ ngân hàng VN)</option>
                                     <option value="vcb">Vietcombank & VietQR</option>
                                     <option value="mb">MBBank & VietQR</option>
                                     <option value="viettel">ViettelPay</option>
@@ -1032,6 +1184,7 @@ export default function SettingsPage() {
                                     onChange={(e) => setConfiguringBank(e.target.value)}
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 >
+                                    <option value="sepay">⚡ SePay (Tất cả 30+ ngân hàng VN)</option>
                                     <option value="vcb">Vietcombank & VietQR</option>
                                     <option value="mb">MBBank & VietQR</option>
                                     <option value="viettel">ViettelPay</option>
@@ -1045,43 +1198,101 @@ export default function SettingsPage() {
                         </div>
 
                         {/* Bank specific token and STK fields */}
-                        <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3 text-xs">
-                            <span className="font-extrabold uppercase text-orange-600 text-xs block">
-                                🏦 THÔNG TIN CẤU HÌNH {configuringBank.toUpperCase()}
-                            </span>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="space-y-1">
-                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TOKEN API NẠP TIỀN</label>
-                                    <input
-                                        type="text"
-                                        value={(settings as any)[`${configuringBank}_token`] || ''}
-                                        onChange={(e) => handleChange(`${configuringBank}_token` as any, e.target.value)}
-                                        placeholder="Dán API Token ngân hàng..."
-                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TÀI KHOẢN NHẬN TIỀN (STK)</label>
-                                    <input
-                                        type="text"
-                                        value={(settings as any)[`${configuringBank}_account`] || ''}
-                                        onChange={(e) => handleChange(`${configuringBank}_account` as any, e.target.value)}
-                                        placeholder="Nhập số tài khoản ngân hàng..."
-                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN CHỦ TÀI KHOẢN (ACCOUNT NAME)</label>
-                                    <input
-                                        type="text"
-                                        value={settings.vietqr_account_name || ''}
-                                        onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
-                                        placeholder="VD: NGUYEN VAN A"
-                                        className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none uppercase"
-                                    />
+                        {configuringBank === 'sepay' ? (
+                            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3 text-xs">
+                                <span className="font-extrabold uppercase text-blue-700 text-xs flex items-center gap-1.5">
+                                    <span>⚡</span>
+                                    <span>THÔNG TIN CẤU HÌNH SEPAY (TẤT CẢ NGÂN HÀNG)</span>
+                                </span>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NGÂN HÀNG LIÊN KẾT SEPAY</label>
+                                        <select
+                                            value={settings.sepay_bank_code || 'MB'}
+                                            onChange={(e) => handleChange('sepay_bank_code', e.target.value)}
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 text-xs outline-none focus:border-blue-500"
+                                        >
+                                            {VIETNAM_BANKS.map((b) => (
+                                                <option key={b.code} value={b.code}>
+                                                    {b.code} - {b.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SEPAY API TOKEN (BEARER)</label>
+                                        <input
+                                            type="password"
+                                            value={settings.sepay_api_token || ''}
+                                            onChange={(e) => handleChange('sepay_api_token', e.target.value)}
+                                            placeholder="Dán Token từ my.sepay.vn..."
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TÀI KHOẢN (STK)</label>
+                                        <input
+                                            type="text"
+                                            value={settings.sepay_account_number || ''}
+                                            onChange={(e) => handleChange('sepay_account_number', e.target.value)}
+                                            placeholder="Số tài khoản ngân hàng..."
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN CHỦ TÀI KHOẢN</label>
+                                        <input
+                                            type="text"
+                                            value={settings.sepay_account_name || settings.vietqr_account_name || ''}
+                                            onChange={(e) => {
+                                                handleChange('sepay_account_name', e.target.value);
+                                                handleChange('vietqr_account_name', e.target.value);
+                                            }}
+                                            placeholder="VD: NGUYEN VAN A"
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none uppercase focus:border-blue-500"
+                                        />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 space-y-3 text-xs">
+                                <span className="font-extrabold uppercase text-orange-600 text-xs block">
+                                    🏦 THÔNG TIN CẤU HÌNH {configuringBank.toUpperCase()}
+                                </span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TOKEN API NẠP TIỀN</label>
+                                        <input
+                                            type="text"
+                                            value={(settings as any)[`${configuringBank}_token`] || ''}
+                                            onChange={(e) => handleChange(`${configuringBank}_token` as any, e.target.value)}
+                                            placeholder="Dán API Token ngân hàng..."
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TÀI KHOẢN NHẬN TIỀN (STK)</label>
+                                        <input
+                                            type="text"
+                                            value={(settings as any)[`${configuringBank}_account`] || ''}
+                                            onChange={(e) => handleChange(`${configuringBank}_account` as any, e.target.value)}
+                                            placeholder="Nhập số tài khoản ngân hàng..."
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN CHỦ TÀI KHOẢN (ACCOUNT NAME)</label>
+                                        <input
+                                            type="text"
+                                            value={settings.vietqr_account_name || ''}
+                                            onChange={(e) => handleChange('vietqr_account_name', e.target.value)}
+                                            placeholder="VD: NGUYEN VAN A"
+                                            className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-mono text-zinc-900 text-xs outline-none uppercase"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Deposit Limits & Rate */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
@@ -1117,6 +1328,151 @@ export default function SettingsPage() {
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-orange-500 transition"
                                 />
                             </div>
+                        </div>
+
+                        {/* SePay Auto Deposit Dedicated Card */}
+                        <div className="mt-4 rounded-2xl border border-blue-200/90 bg-linear-to-br from-blue-50/70 via-indigo-50/40 to-cyan-50/60 p-5 space-y-4 shadow-2xs">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-blue-200/80 pb-3 gap-2">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-xs shadow-xs">
+                                        ⚡
+                                    </div>
+                                    <div>
+                                        <div className="font-black text-blue-950 text-xs flex items-center gap-2 uppercase tracking-wide">
+                                            <span>CỔNG NẠP TỰ ĐỘNG SEPAY (TẤT CẢ 30+ NGÂN HÀNG VIỆT NAM)</span>
+                                            <span className="rounded-full bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5">SEPAY.VN</span>
+                                        </div>
+                                        <div className="text-[11px] text-blue-800 font-medium">
+                                            Hỗ trợ toàn bộ ngân hàng VN (MB, VCB, TCB, ACB, TPB, VPB, BIDV, Agribank, VietinBank, Timo, Cake, OCB, Sacombank, MSB, HDBank, VIB...)
+                                        </div>
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-blue-950 bg-white/80 px-3 py-1.5 rounded-xl border border-blue-200 shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(settings.sepay_enabled)}
+                                        onChange={() => setSettings(prev => ({ ...prev, sepay_enabled: !prev.sepay_enabled }))}
+                                        className="h-5 w-5 rounded accent-blue-600 cursor-pointer"
+                                    />
+                                    <span>BẬT CỔNG SEPAY</span>
+                                </label>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                                <div className="space-y-1.5 md:col-span-2">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px] flex items-center justify-between">
+                                        <span>SEPAY API TOKEN (BEARER TOKEN) *</span>
+                                        <a href="https://my.sepay.vn" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold text-[10.5px]">
+                                            Lấy Token tại my.sepay.vn →
+                                        </a>
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={settings.sepay_api_token || ''}
+                                        onChange={(e) => handleChange('sepay_api_token', e.target.value)}
+                                        placeholder="Ví dụ: YOUR_API_TOKEN (Bearer Token từ SePay)"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-blue-500 transition"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">NGÂN HÀNG LIÊN KẾT SEPAY</label>
+                                    <select
+                                        value={settings.sepay_bank_code || 'MB'}
+                                        onChange={(e) => handleChange('sepay_bank_code', e.target.value)}
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-semibold text-zinc-900 text-xs outline-none focus:border-blue-500 transition"
+                                    >
+                                        {VIETNAM_BANKS.map((b) => (
+                                            <option key={b.code} value={b.code}>
+                                                {b.code} - {b.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">SỐ TÀI KHOẢN (STK) LIÊN KẾT</label>
+                                    <input
+                                        type="text"
+                                        value={settings.sepay_account_number || ''}
+                                        onChange={(e) => handleChange('sepay_account_number', e.target.value)}
+                                        placeholder="Nhập STK ngân hàng..."
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none focus:border-blue-500 transition"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px]">TÊN CHỦ TÀI KHOẢN (ACCOUNT NAME)</label>
+                                    <input
+                                        type="text"
+                                        value={settings.sepay_account_name || settings.vietqr_account_name || ''}
+                                        onChange={(e) => {
+                                            handleChange('sepay_account_name', e.target.value);
+                                            handleChange('vietqr_account_name', e.target.value);
+                                        }}
+                                        placeholder="VD: NGUYEN VAN A"
+                                        className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-zinc-900 text-xs outline-none uppercase focus:border-blue-500 transition"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="font-extrabold uppercase text-zinc-700 text-[11px] flex items-center justify-between">
+                                        <span>WEBHOOK URL (NHẬN BIẾN ĐỘNG REALTIME)</span>
+                                        <span className="text-zinc-400 font-normal text-[10.5px]">Tùy chọn nhưng khuyến nghị</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={typeof window !== 'undefined' ? `${window.location.origin}/api/sepay/webhook` : '/api/sepay/webhook'}
+                                            className="flex-1 rounded-xl border border-zinc-200 bg-zinc-100/80 p-3 font-mono text-zinc-700 text-xs outline-none select-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') {
+                                                    navigator.clipboard.writeText(`${window.location.origin}/api/sepay/webhook`);
+                                                    alert('Đã sao chép Webhook URL SePay vào bộ nhớ tạm!');
+                                                }
+                                            }}
+                                            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase transition shrink-0 cursor-pointer"
+                                            title="Sao chép Webhook URL"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 gap-3 border-t border-blue-200/60">
+                                <div className="text-[11px] text-zinc-600">
+                                    💡 <i>Bot tự động gọi API <b>https://my.sepay.vn/userapi/transactions/list?limit=20</b> với Header Bearer Token để quét đơn nạp & khớp mã tự động.</i>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleTestSepay}
+                                    disabled={testingSepay}
+                                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 shrink-0 cursor-pointer"
+                                >
+                                    <span>{testingSepay ? '⏳ Đang kiểm tra SePay...' : '⚡ TEST KẾT NỐI API SEPAY'}</span>
+                                </button>
+                            </div>
+
+                            {sepayTestResult && (
+                                <div className={`p-4 rounded-xl text-xs font-semibold space-y-1 ${sepayTestResult.success ? 'bg-emerald-100 border border-emerald-300 text-emerald-900' : 'bg-rose-100 border border-rose-300 text-rose-900'}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span>{sepayTestResult.success ? '✅' : '❌'}</span>
+                                        <span>{sepayTestResult.message}</span>
+                                    </div>
+                                    {sepayTestResult.data && (
+                                        <div className="text-[11px] font-mono text-zinc-700 pt-1 border-t border-zinc-200/60">
+                                            Tìm thấy <b>{sepayTestResult.data.transactionCount || 0}</b> giao dịch gần nhất trên SePay.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Binance Pay Auto Deposit Card */}
@@ -1237,19 +1593,36 @@ export default function SettingsPage() {
                             </button>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            {settings.admin_ids.map(id => (
-                                <span key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1 font-mono text-xs font-bold text-orange-700">
-                                    <span>ID: {id}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
-                                        className="text-orange-700 font-bold hover:text-red-700 ml-1"
-                                    >
-                                        ✕
-                                    </button>
-                                </span>
-                            ))}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-100">
+                            <div className="flex flex-wrap gap-2">
+                                {settings.admin_ids.length === 0 ? (
+                                    <span className="text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                        ⚠️ Chưa cấu hình ID Admin nào
+                                    </span>
+                                ) : (
+                                    settings.admin_ids.map(id => (
+                                        <span key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1 font-mono text-xs font-bold text-orange-700">
+                                            <span>ID: {id}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSettings(prev => ({ ...prev, admin_ids: prev.admin_ids.filter(i => i !== id) }))}
+                                                className="text-orange-700 font-bold hover:text-red-700 ml-1 cursor-pointer"
+                                            >
+                                                ✕
+                                            </button>
+                                        </span>
+                                    ))
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 text-xs font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                            >
+                                <Save className="h-3.5 w-3.5" />
+                                <span>{saving ? 'ĐANG LƯU...' : '💾 LƯU ID ADMIN'}</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1289,21 +1662,21 @@ export default function SettingsPage() {
                 </div>
             )}
 
-            {/* TAB 6: HỆ THỐNG TỰ ĐỘNG SAO LƯU DỮ LIỆU LÊN GOOGLE DRIVE */}
-            {activeTab === 'backup' && adminRole === 'super_admin' && (
+            {/* TAB: SAO LƯU & CẬP NHẬT CSDL SQL */}
+            {activeTab === 'backup' && (
                 <div className="space-y-6 text-xs max-w-5xl mx-auto">
                     {/* Header Banner Status */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent p-5 rounded-2xl border border-emerald-500/20">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-indigo-500/10 via-orange-500/5 to-transparent p-5 rounded-2xl border border-indigo-500/20">
                         <div className="flex items-center gap-3.5">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-500/20 shrink-0">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-500/20 shrink-0">
                                 <DatabaseBackup className="h-6 w-6" />
                             </div>
                             <div>
                                 <h2 className="text-lg font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
-                                    TỰ ĐỘNG SAO LƯU DỮ LIỆU LÊN GOOGLE DRIVE
+                                    QUẢN TRỊ CƠ SỞ DỮ LIỆU (TẢI VỀ & CẬP NHẬT .SQL)
                                 </h2>
                                 <p className="text-xs text-zinc-600 font-medium mt-0.5">
-                                    Hệ thống tự động xuất bản sao lưu SQL CSDL MySQL và tải lên tài khoản Google Drive cá nhân/doanh nghiệp.
+                                    Tải xuống bản sao lưu CSDL MySQL hoặc tải lên file `.sql` để nạp/cập nhật dữ liệu trực tiếp vào hệ thống.
                                 </p>
                             </div>
                         </div>
@@ -1315,60 +1688,171 @@ export default function SettingsPage() {
                                 title="Đăng nhập Google bằng 1-Click để cấp quyền lưu file tự động"
                             >
                                 <Globe className="h-4 w-4" />
-                                <span>🔗 ĐĂNG NHẬP CẤP QUYỀN GOOGLE (1-CLICK)</span>
+                                <span>🔗 KẾT NỐI GOOGLE DRIVE</span>
                             </a>
 
                             {isDriveConnected ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 font-extrabold text-xs">
                                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                                    🟢 ĐÃ KẾT NỐI GOOGLE DRIVE
+                                    🟢 GOOGLE DRIVE KẾT NỐI
                                 </span>
                             ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 font-extrabold text-xs">
-                                    🟡 ĐANG LƯU BẢN SAO LƯU LOCAL
+                                <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-100 border border-zinc-300 text-zinc-700 font-extrabold text-xs">
+                                    💾 LƯU MÁY CHỦ LOCAL
                                 </span>
                             )}
                         </div>
                     </div>
 
-                    {/* Instant Action Buttons */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3 shadow-xs">
-                            <div className="flex items-center gap-2 font-extrabold text-emerald-950 text-xs uppercase">
-                                <CloudUpload className="h-4 w-4 text-emerald-600" />
-                                <span>TẠO BẢN SAO LƯU & TẢI LÊN DRIVER NGAY</span>
+                    {/* Result Notification Banner */}
+                    {sqlImportResult && (
+                        <div className={`p-4 rounded-2xl border flex items-start gap-3 animate-in fade-in duration-200 ${
+                            sqlImportResult.success
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                : 'bg-rose-50 border-rose-200 text-rose-900'
+                        }`}>
+                            {sqlImportResult.success ? (
+                                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                            ) : (
+                                <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                            )}
+                            <div className="space-y-1">
+                                <div className="font-black uppercase text-xs">
+                                    {sqlImportResult.success ? 'NẠP CSDL THÀNH CÔNG' : 'LỖI NẠP CSDL'}
+                                </div>
+                                <div className="text-xs font-medium">
+                                    {sqlImportResult.message}
+                                </div>
                             </div>
-                            <p className="text-[11px] text-emerald-900/80 leading-relaxed font-medium">
-                                Xuất tức thì file `.sql` chứa toàn bộ bảng CSDL MySQL và tự động đồng bộ đẩy file lên thư mục Google Drive của bạn.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleCreateBackupNow}
-                                disabled={creatingBackup}
-                                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase py-3 shadow-md transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                            >
-                                <RefreshCw className={`h-4 w-4 ${creatingBackup ? 'animate-spin' : ''}`} />
-                                <span>{creatingBackup ? 'ĐANG SAO LƯU & TẢI LÊN DRIVER...' : '🚀 TẠO BẢN SAO LƯU NGAY'}</span>
-                            </button>
+                        </div>
+                    )}
+
+                    {/* Instant Action Grid: Download & Upload SQL */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* 1. TẢI XUỐNG CSDL (EXPORT) */}
+                        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-white p-5 space-y-4 shadow-xs flex flex-col justify-between">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 font-black text-emerald-950 text-xs uppercase">
+                                        <Download className="h-5 w-5 text-emerald-600" />
+                                        <span>1. TẢI XUỐNG CƠ SỞ DỮ LIỆU (.SQL)</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                                        UTF-8 MB4
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
+                                    Xuất toàn bộ cấu trúc bảng và toàn bộ dữ liệu người dùng, tài khoản, đơn hàng, cài đặt ra file <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 font-bold text-emerald-800 font-mono">database_backup.sql</code> về máy tính.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleExportSql}
+                                    disabled={exportingSql}
+                                    className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs uppercase py-3 shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                                >
+                                    <Download className={`h-4 w-4 ${exportingSql ? 'animate-bounce' : ''}`} />
+                                    <span>{exportingSql ? 'ĐANG XUẤT SQL...' : '📥 TẢI FILE SQL DATABASE VỀ MÁY'}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleCreateBackupNow}
+                                    disabled={creatingBackup}
+                                    className="w-full rounded-xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 font-extrabold text-xs uppercase py-2.5 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                                >
+                                    <CloudUpload className={`h-4 w-4 ${creatingBackup ? 'animate-spin' : ''}`} />
+                                    <span>{creatingBackup ? 'ĐANG ĐẨY LÊN DRIVE...' : '☁️ SAO LƯU & ĐẨY LÊN GOOGLE DRIVE'}</span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3 shadow-xs">
-                            <div className="flex items-center gap-2 font-extrabold text-zinc-900 text-xs uppercase">
-                                <Download className="h-4 w-4 text-orange-600" />
-                                <span>TẢI THỦ CÔNG FILE SQL MÁY CHỦ</span>
+                        {/* 2. TẢI LÊN & CẬP NHẬT CSDL (IMPORT) */}
+                        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-white p-5 space-y-4 shadow-xs flex flex-col justify-between">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 font-black text-indigo-950 text-xs uppercase">
+                                        <CloudUpload className="h-5 w-5 text-indigo-600" />
+                                        <span>2. TẢI LÊN & CẬP NHẬT CSDL (.SQL)</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold">
+                                        RESTORE / MIGRATE
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
+                                    Chọn file <code className="bg-white px-1.5 py-0.5 rounded border border-indigo-200 font-bold text-indigo-800 font-mono">.sql</code> từ máy tính để nạp lại hoặc cập nhật trực tiếp vào cơ sở dữ liệu MySQL máy chủ.
+                                </p>
                             </div>
-                            <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">
-                                Tải file sao lưu CSDL dạng `.sql` trực tiếp về máy tính cá nhân để lưu giữ hoặc khôi phục thủ công khi cần.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleExportSql}
-                                disabled={exportingSql}
-                                className="w-full rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800 font-extrabold text-xs uppercase py-3 shadow-2xs transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                            >
-                                <Download className="h-4 w-4 text-orange-600" />
-                                <span>{exportingSql ? 'ĐANG XUẤT SQL...' : '📥 TẢI FILE SQL DATABASE'}</span>
-                            </button>
+
+                            <div className="space-y-3 pt-1">
+                                {/* File Picker Area */}
+                                <div className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-white/80 rounded-xl p-3 text-center transition cursor-pointer relative">
+                                    <input
+                                        type="file"
+                                        accept=".sql,.txt"
+                                        onChange={handleSelectSqlFile}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                    />
+                                    {selectedSqlFile ? (
+                                        <div className="flex items-center justify-between px-2">
+                                            <div className="flex items-center gap-2 text-left">
+                                                <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
+                                                <div className="truncate">
+                                                    <div className="font-bold text-zinc-900 text-xs truncate max-w-[220px]">
+                                                        {selectedSqlFile.name}
+                                                    </div>
+                                                    <div className="text-[10px] text-zinc-400 font-mono">
+                                                        {(selectedSqlFile.size / 1024).toFixed(1)} KB
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span className="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 text-[10px] font-bold">
+                                                Đã chọn
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            <FileText className="h-6 w-6 text-indigo-400 mx-auto" />
+                                            <div className="text-xs font-bold text-indigo-900">
+                                                Bấm để chọn file <span className="font-mono text-indigo-600">.sql</span>
+                                            </div>
+                                            <div className="text-[10px] text-zinc-400">
+                                                Hỗ trợ file xuất từ phpMyAdmin, DBeaver, MySQL Dump
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Option: Wipe old data */}
+                                <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={wipeOldData}
+                                        onChange={(e) => setWipeOldData(e.target.checked)}
+                                        className="mt-0.5 h-4 w-4 rounded accent-orange-600 cursor-pointer shrink-0"
+                                    />
+                                    <div className="space-y-0.5 text-[11px]">
+                                        <span className="font-black uppercase text-amber-900 block">
+                                            🧹 Xóa toàn bộ data cũ & nạp mới 100% (Khuyến nghị)
+                                        </span>
+                                        <span className="text-amber-800 text-[10px] block font-medium leading-tight">
+                                            Làm sạch mọi bảng và dữ liệu cũ, thay thế hoàn toàn bằng dữ liệu mới trong file .sql để tránh trùng lặp.
+                                        </span>
+                                    </div>
+                                </label>
+
+                                <button
+                                    type="button"
+                                    onClick={handleUploadAndImportSql}
+                                    disabled={!selectedSqlFile || importingSql}
+                                    className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold text-xs uppercase py-3 shadow-md transition flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${importingSql ? 'animate-spin' : ''}`} />
+                                    <span>{importingSql ? 'ĐANG LÀM SẠCH & NẠP VÀO MYSQL...' : (wipeOldData ? '🚀 XÓA DATA CŨ & NẠP MỚI TOÀN BỘ' : '🚀 NẠP CẬP NHẬT CSDL')}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1594,6 +2078,29 @@ export default function SettingsPage() {
                     </div>
                 </div>
             )}
+
+            {/* Floating Sticky Save Bar */}
+            <div className="fixed bottom-5 right-6 z-40 flex items-center gap-2 bg-zinc-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-zinc-700/80 animate-in fade-in slide-in-from-bottom-3 duration-200">
+                <button
+                    type="button"
+                    onClick={handleRestartBot}
+                    disabled={saving}
+                    className="px-3 py-1.5 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-bold uppercase transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Khởi động lại tiến trình Bot"
+                >
+                    <Power className="h-3.5 w-3.5 text-orange-500" />
+                    <span>Restart Bot</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-black uppercase transition flex items-center gap-1.5 shadow-lg active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                    <Save className="h-3.5 w-3.5" />
+                    <span>{saving ? 'Đang lưu...' : '💾 Lưu cấu hình'}</span>
+                </button>
+            </div>
         </div>
     );
 }

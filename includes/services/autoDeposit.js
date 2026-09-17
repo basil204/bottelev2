@@ -25,6 +25,11 @@ const contentKey = (token) => `content_${token}`;
 
 const getBankToken = async (bank) => {
   try {
+    if (bank === 'sepay') {
+      const rows = await query("SELECT `value` FROM settings WHERE `key` IN ('sepay_api_token', 'sepay_token') ORDER BY FIELD(`key`, 'sepay_api_token', 'sepay_token') LIMIT 1");
+      if (rows?.[0]?.value) return rows[0].value;
+      return '';
+    }
     const key = `${bank}_token`;
     const rows = await query("SELECT `value` FROM settings WHERE `key` = ?", [key]);
     if (rows?.[0]?.value) return rows[0].value;
@@ -36,6 +41,8 @@ const getBankToken = async (bank) => {
 
 const getBankUrl = (bank, token) => {
   switch (bank) {
+    case 'sepay':
+      return `https://my.sepay.vn/userapi/transactions/list?limit=20`;
     case 'viettel':
       return `https://api.sieuthicode.net/historyapiviettel/${token}`;
     case 'vcb':
@@ -58,6 +65,19 @@ const getBankUrl = (bank, token) => {
 };
 
 const normalizeTransaction = (rawTx, bank) => {
+  if (bank === 'sepay') {
+    const rawAmt = rawTx.amount_in || rawTx.amount || 0;
+    const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/,/g, '')) || 0;
+    return {
+      id: rawTx.id ? String(rawTx.id) : (rawTx.reference_number || ''),
+      amount: parsedAmount,
+      description: rawTx.transaction_content || rawTx.description || rawTx.code || '',
+      transDate: rawTx.transaction_date || '',
+      paymentType: parsedAmount > 0 ? 'CREDIT' : 'DEBIT',
+      bank: rawTx.bank_brand_name || 'SEPAY'
+    };
+  }
+
   if (bank === 'viettel') {
     const rawAmt = rawTx.amount || rawTx.transAmount || '0';
     const parsedAmount = typeof rawAmt === 'number' ? rawAmt : parseFloat(rawAmt.toString().replace(/\./g, '')) || 0;
@@ -179,11 +199,14 @@ const checkBankTransaction = async (bot, bank, token, cached, user, promotion) =
     const url = getBankUrl(bank, token);
     if (!url) return false;
 
-    const response = await axios.get(url);
+    const headers = bank === 'sepay' ? { Authorization: `Bearer ${token}` } : {};
+    const response = await axios.get(url, { headers });
     const data = response.data;
 
     let rawTransactions = [];
-    if (bank === 'viettel') {
+    if (bank === 'sepay') {
+      rawTransactions = data.transactions || [];
+    } else if (bank === 'viettel') {
       if (!data || data.status?.code !== '00' || !data.data) return false;
       rawTransactions = data.data.content || data.data.trans || [];
     } else if (bank === 'vcb') {
@@ -467,6 +490,12 @@ export const startAutoDepositWatcher = (bot, config) => {
   };
 
   const extractTransactions = (data, bank) => {
+    if (bank === 'sepay') {
+      if (Array.isArray(data?.transactions)) return data.transactions;
+      if (data?.status === 200 && Array.isArray(data?.transactions)) return data.transactions;
+      if (Array.isArray(data?.data)) return data.data;
+      return [];
+    }
     if (bank === 'viettel' && data?.status?.code === '00' && data.data) {
       return data.data.content || data.data.trans || [];
     }
@@ -514,7 +543,8 @@ export const startAutoDepositWatcher = (bot, config) => {
         if (!url) continue;
 
         try {
-          const response = await axios.get(url);
+          const reqConfig = bank === 'sepay' ? { headers: { Authorization: `Bearer ${token}` } } : {};
+          const response = await axios.get(url, reqConfig);
           const data = response.data;
 
           const rawTransactions = extractTransactions(data, bank);

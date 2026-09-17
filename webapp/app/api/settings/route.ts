@@ -45,6 +45,13 @@ export async function GET() {
             binance_pay_id: '',
             binance_auto_deposit: false,
             binance_min_deposit: 1,
+            // SePay Auto Deposit settings
+            sepay_enabled: false,
+            sepay_api_token: '',
+            sepay_bank_code: 'MB',
+            sepay_account_number: '',
+            sepay_account_name: '',
+            sepay_webhook_secret: '',
             // Admin IDs
             admin_ids: [],
             // Admin login accounts
@@ -60,16 +67,21 @@ export async function GET() {
 
         rows.forEach((row) => {
             // Handle booleans
-            if (['mb_auto_deposit', 'binance_auto_deposit'].includes(row.key)) {
+            if (['mb_auto_deposit', 'binance_auto_deposit', 'sepay_enabled'].includes(row.key)) {
                 settings[row.key] = row.value !== 'false' && row.value !== false && row.value !== '0';
             } else if (['min_deposit', 'exchange_rate', 'binance_min_deposit'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
             } else if (['admin_ids', 'gmail_checker_api_keys', 'deposit_rank_promotions'].includes(row.key)) {
                 // Parse JSON array settings
                 try {
-                    settings[row.key] = JSON.parse(row.value) || [];
+                    const parsed = JSON.parse(row.value);
+                    settings[row.key] = Array.isArray(parsed) ? parsed : [parsed];
                 } catch {
-                    settings[row.key] = [];
+                    if (row.key === 'admin_ids' && typeof row.value === 'string') {
+                        settings[row.key] = row.value.split(/[\r\n,;|]+/).map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+                    } else {
+                        settings[row.key] = [];
+                    }
                 }
             } else {
                 settings[row.key] = row.value;

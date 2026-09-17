@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Wallet, CreditCard, ShieldCheck, RefreshCw, Search, Copy, Check,
     PlusCircle, MinusCircle, Ban, History, Tag, Key, CheckCircle2,
@@ -54,6 +55,7 @@ interface ProductOption {
 
 export default function WalletsManagementPage() {
     const { t } = useLanguage();
+    const [mounted, setMounted] = useState(false);
     const [activeTab, setActiveTab] = useState<'wallets' | 'logs'>('wallets');
     const [wallets, setWallets] = useState<UserWallet[]>([]);
     const [balanceLogs, setBalanceLogs] = useState<BalanceLog[]>([]);
@@ -150,6 +152,7 @@ export default function WalletsManagementPage() {
     };
 
     useEffect(() => {
+        setMounted(true);
         fetchProducts();
     }, []);
 
@@ -795,9 +798,15 @@ export default function WalletsManagementPage() {
             )}
 
             {/* Modal 1: Nạp / Trừ Số Dư */}
-            {isBalanceModalOpen && selectedUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 backdrop-blur-xs p-4">
-                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4">
+            {isBalanceModalOpen && selectedUser && mounted && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setIsBalanceModalOpen(false)}
+                >
+                    <div
+                        className="relative w-full max-w-md my-auto rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                             <div className="flex items-center gap-2">
                                 <Wallet className={`h-5 w-5 ${balanceType === 'add' ? 'text-emerald-600' : 'text-rose-600'}`} />
@@ -805,7 +814,12 @@ export default function WalletsManagementPage() {
                                     {balanceType === 'add' ? 'NẠP TIỀN VÍ THÀNH VIÊN' : 'TRỪ TIỀN VÍ THÀNH VIÊN'}
                                 </h3>
                             </div>
-                            <button onClick={() => setIsBalanceModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+                            <button
+                                onClick={() => setIsBalanceModalOpen(false)}
+                                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 font-bold transition cursor-pointer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
                         </div>
 
                         <div className="rounded-xl bg-zinc-50 p-3 text-xs border border-zinc-100">
@@ -847,27 +861,34 @@ export default function WalletsManagementPage() {
                                 <button
                                     type="button"
                                     onClick={() => setIsBalanceModalOpen(false)}
-                                    className="w-1/2 rounded-xl border border-zinc-200 bg-zinc-100 py-3 font-bold text-zinc-700 hover:bg-zinc-200 transition active:scale-95"
+                                    className="w-1/2 rounded-xl border border-zinc-200 bg-zinc-100 py-3 font-bold text-zinc-700 hover:bg-zinc-200 transition active:scale-95 cursor-pointer"
                                 >
                                     HỦY
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submittingBalance}
-                                    className={`w-1/2 rounded-xl py-3 font-black uppercase text-white transition active:scale-95 disabled:opacity-50 ${balanceType === 'add' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                                    className={`w-1/2 rounded-xl py-3 font-black uppercase text-white transition active:scale-95 disabled:opacity-50 cursor-pointer ${balanceType === 'add' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
                                 >
                                     {submittingBalance ? 'ĐANG XỬ LÝ...' : (balanceType === 'add' ? 'XÁC NHẬN NẠP' : 'XÁC NHẬN TRỪ')}
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal 2: Cấu hình giá riêng (Custom Pricing - Full CRUD) */}
-            {isCustomPriceModalOpen && selectedUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-                    <div className="w-full max-w-2xl rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-zinc-200 space-y-4 max-h-[90vh] flex flex-col my-auto">
+            {isCustomPriceModalOpen && selectedUser && mounted && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setIsCustomPriceModalOpen(false)}
+                >
+                    <div
+                        className="relative w-full max-w-2xl my-auto rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-zinc-200 space-y-4 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                             <div className="flex items-center gap-2.5">
                                 <div className="h-9 w-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
@@ -884,7 +905,7 @@ export default function WalletsManagementPage() {
                             </div>
                             <button
                                 onClick={() => setIsCustomPriceModalOpen(false)}
-                                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition cursor-pointer"
                             >
                                 <X className="h-5 w-5" />
                             </button>
@@ -1104,13 +1125,20 @@ export default function WalletsManagementPage() {
                             </table>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal 3: Lịch sử biến động của 1 ví */}
-            {isUserLogsModalOpen && selectedUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 backdrop-blur-xs p-4">
-                    <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4 max-h-[85vh] flex flex-col">
+            {isUserLogsModalOpen && selectedUser && mounted && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setIsUserLogsModalOpen(false)}
+                >
+                    <div
+                        className="relative w-full max-w-xl my-auto rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                             <div className="flex items-center gap-2">
                                 <History className="h-5 w-5 text-amber-600" />
@@ -1118,7 +1146,12 @@ export default function WalletsManagementPage() {
                                     BIẾN ĐỘNG SỐ DƯ - @{selectedUser.username || selectedUser.id}
                                 </h3>
                             </div>
-                            <button onClick={() => setIsUserLogsModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 font-bold">✕</button>
+                            <button
+                                onClick={() => setIsUserLogsModalOpen(false)}
+                                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 font-bold transition cursor-pointer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
@@ -1154,13 +1187,20 @@ export default function WalletsManagementPage() {
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal 4: API Key */}
-            {apiKeyModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 backdrop-blur-xs p-4">
-                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4">
+            {apiKeyModal && mounted && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+                    onClick={() => setApiKeyModal(null)}
+                >
+                    <div
+                        className="relative w-full max-w-md my-auto rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center gap-2 text-emerald-600">
                             <CheckCircle2 className="h-6 w-6" />
                             <h3 className="text-sm font-black uppercase text-zinc-900">CẤP API KEY VÍ THÀNH CÔNG</h3>
@@ -1172,19 +1212,20 @@ export default function WalletsManagementPage() {
                             <span>{apiKeyModal.apiKey}</span>
                             <button
                                 onClick={() => handleCopy(apiKeyModal.apiKey, 'modal_wallet_key')}
-                                className="shrink-0 p-1 rounded-lg bg-white shadow-2xs hover:bg-zinc-50"
+                                className="shrink-0 p-1 rounded-lg bg-white shadow-2xs hover:bg-zinc-50 cursor-pointer"
                             >
                                 {copiedField === 'modal_wallet_key' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-zinc-600" />}
                             </button>
                         </div>
                         <button
                             onClick={() => setApiKeyModal(null)}
-                            className="w-full rounded-xl bg-zinc-900 py-2.5 text-xs font-bold text-white uppercase hover:bg-zinc-800 transition"
+                            className="w-full rounded-xl bg-zinc-900 py-2.5 text-xs font-bold text-white uppercase hover:bg-zinc-800 transition cursor-pointer"
                         >
                             ĐÓNG
                         </button>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

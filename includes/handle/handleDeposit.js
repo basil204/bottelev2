@@ -57,6 +57,9 @@ const getBankConfig = async (defaultConfig, bank) => {
       'vp_account',
       'timo_account',
       'vietqr_bank_code',
+      'sepay_account_number',
+      'sepay_bank_code',
+      'sepay_account_name',
       'active_bank'
     ];
     const rows = await query(`SELECT \`key\`, \`value\` FROM settings WHERE \`key\` IN (${keys.map(k => `'${k}'`).join(',')})`);
@@ -73,9 +76,16 @@ const getBankConfig = async (defaultConfig, bank) => {
     }
     targetBank = String(targetBank).toLowerCase().trim();
 
-    const accountName = dbConfig.vietqr_account_name || defaultConfig?.VIETQR_ACCOUNT_NAME || '';
+    const accountName = (targetBank === 'sepay' && dbConfig.sepay_account_name)
+      ? dbConfig.sepay_account_name
+      : (dbConfig.vietqr_account_name || defaultConfig?.VIETQR_ACCOUNT_NAME || '');
 
     const bankMap = {
+      sepay: {
+        bankCode: dbConfig.sepay_bank_code || 'MB',
+        accountNo: dbConfig.sepay_account_number || dbConfig.vietqr_account_no || '',
+        name: `SePay (${dbConfig.sepay_bank_code || 'MB'})`
+      },
       viettel: { bankCode: 'VIETTELMONEY', accountNo: dbConfig.viettel_account || dbConfig.vietqr_account_no || '', name: 'ViettelPay' },
       vcb: { bankCode: 'VCB', accountNo: dbConfig.vcb_account || dbConfig.vietqr_account_no || '', name: 'Vietcombank' },
       tpb: { bankCode: 'TPB', accountNo: dbConfig.tpb_account || dbConfig.vietqr_account_no || '', name: 'TPBank' },

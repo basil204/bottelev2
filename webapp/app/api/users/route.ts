@@ -220,3 +220,48 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
+export async function DELETE(request: Request) {
+    try {
+        await dbReady;
+        const { searchParams } = new URL(request.url);
+        let id = searchParams.get('id');
+        if (!id) {
+            const body = await request.json().catch(() => ({}));
+            id = body.id;
+        }
+
+        if (!id) {
+            return NextResponse.json({ error: 'Missing user id' }, { status: 400 });
+        }
+
+        const [userRows] = await pool.query<any[]>('SELECT id, telegram_id, username FROM users WHERE id = ?', [id]);
+        if (!userRows || userRows.length === 0) {
+            return NextResponse.json({ error: 'Người dùng không tồn tại' }, { status: 404 });
+        }
+        const user = userRows[0];
+
+        // Safe cleanup related records
+        try { await pool.query('DELETE FROM user_custom_pricing WHERE user_id = ?', [id]); } catch {}
+        try { await pool.query('DELETE FROM user_api_keys WHERE user_id = ?', [id]); } catch {}
+        try { await pool.query('DELETE FROM balance_logs WHERE user_id = ?', [id]); } catch {}
+        try { await pool.query('DELETE FROM checkins WHERE user_id = ?', [id]); } catch {}
+
+        // Delete user
+        await pool.query('DELETE FROM users WHERE id = ?', [id]);
+
+        await logAdminAction({
+            action: 'DELETE',
+            targetType: 'USER',
+            targetId: Number(id),
+            details: { username: user.username, telegram_id: user.telegram_id },
+            request
+        });
+
+        return NextResponse.json({ success: true, message: 'Đã xóa người dùng thành công' });
+    } catch (error: any) {
+        console.error('Error deleting user:', error);
+        return NextResponse.json({ error: error.message || 'Lỗi xóa người dùng' }, { status: 500 });
+    }
+}
+

@@ -303,28 +303,47 @@ export const registerListeners = (bot, config) => {
     const userLang = user?.language || 'vi';
 
     // Helper kiểm tra xem tin nhắn gửi lên có phải là Nút Bấm Menu / Lệnh điều hướng hay không
-    const isNavMenuButton = (txt) => {
+    const isNavMenuButton = async (txt) => {
       const cleanTxt = (txt || '').replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?\d+\}/gi, '').trim();
+      if (!cleanTxt) return false;
+      if (cleanTxt.startsWith('/')) return true;
+
+      // Kiểm tra trực tiếp các nút động cấu hình từ Web Admin / database
+      try {
+        const { getMainKeyboardConfig } = await import('./handle/handleUser.js');
+        const customButtons = await getMainKeyboardConfig();
+        const cleanMsgText = cleanTxt.replace(/^[^\p{L}\p{N}]+/gu, '').trim().toLowerCase();
+        const isCustomMatch = Array.isArray(customButtons) && customButtons.some((b) => {
+          if (b.is_active === false) return false;
+          const candidates = [b.text, b.text_vi, b.text_en, b.text_zh].filter(Boolean);
+          if (candidates.includes(txt) || candidates.includes(cleanTxt)) return true;
+          return candidates.some((c) => {
+            const cleanC = (c || '').replace(/\{(?:emoji_id|emoji|id|tg_emoji)?:?\d+\}/gi, '').replace(/^[^\p{L}\p{N}]+/gu, '').trim().toLowerCase();
+            return cleanC && cleanMsgText && (cleanC === cleanMsgText);
+          });
+        });
+        if (isCustomMatch) return true;
+      } catch (e) {}
+
       return (
-        cleanTxt.startsWith('/') ||
         cleanTxt === '❌ Huỷ' || cleanTxt === '❌ Hủy' || cleanTxt === '❌ Cancel' || cleanTxt === '❌ 取消' || isMatchButton(cleanTxt, 'cancel', userLang) ||
-        cleanTxt === '🛍️ Sản phẩm' || cleanTxt === '🛍 Sản phẩm' || cleanTxt === 'Sản phẩm' || cleanTxt === '🛒 Mua hàng' || cleanTxt === 'Mua hàng' || cleanTxt === '🛒 Mua sản phẩm' || cleanTxt === 'Mua sản phẩm' || cleanTxt === '🛒 Mua tài khoản' || cleanTxt === 'Mua tài khoản' || cleanTxt === '🛒 Buy Products' || cleanTxt === 'Buy Products' || cleanTxt === '产品' || cleanTxt === '🛍️ 产品' || isMatchButton(cleanTxt, 'btn_buy_menu', userLang) || isMatchButton(cleanTxt, 'buy_product', userLang) || isMatchButton(cleanTxt, 'product_list', userLang) || isMatchButton(cleanTxt, 'btn_buy_accounts', userLang) ||
-        cleanTxt === '💬 Hỗ trợ' || cleanTxt === 'Hỗ trợ' || cleanTxt === '💬 Support' || cleanTxt === 'Support' || cleanTxt === '客服支持' || cleanTxt === '💬 客服支持' || cleanTxt === '🛟 Hỗ trợ / Bảo hành' || cleanTxt === 'Hỗ trợ / Bảo hành' || isMatchButton(cleanTxt, 'btn_support', userLang) ||
-        cleanTxt === '👛 Ví' || cleanTxt === 'Ví' || cleanTxt === '👛 Wallet' || cleanTxt === 'Wallet' || cleanTxt === '钱包' || cleanTxt === '👛 钱包' || cleanTxt === '➕ Nạp tiền' || cleanTxt === 'Nạp tiền' || cleanTxt === '➕ Deposit' || cleanTxt === 'Deposit' || cleanTxt === '充值' || isMatchButton(cleanTxt, 'btn_deposit', userLang) || isMatchButton(cleanTxt, 'deposit', userLang) ||
-        cleanTxt === '🔗 API' || cleanTxt === 'API' || cleanTxt === '🔗 Tích hợp API' ||
-        cleanTxt === '🛡️ Bảo hành' || cleanTxt === '🛡 Bảo hành' || cleanTxt === 'Bảo hành' || cleanTxt === '🛡️ Warranty' || cleanTxt === 'Warranty' || cleanTxt === '售后保修' || cleanTxt === '🛡️ 售后保修' ||
-        cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
-        cleanTxt === '🧾 Lịch sử mua' || cleanTxt === 'Lịch sử mua' || cleanTxt === '🧾 History' || cleanTxt === 'History' || cleanTxt === '购买记录' || isMatchButton(cleanTxt, 'btn_order_history', userLang) ||
-        cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '语言' || cleanTxt === '语言切换' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
-        cleanTxt === '🎁 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === 'Check-in' || cleanTxt === '每日签到' ||
+        cleanTxt === '🛍️ Sản phẩm' || cleanTxt === '🛍 Sản phẩm' || cleanTxt === 'Sản phẩm' || cleanTxt === '🛒 Mua hàng' || cleanTxt === 'Mua hàng' || cleanTxt === '🛒 Mua sản phẩm' || cleanTxt === 'Mua sản phẩm' || cleanTxt === '🛒 Mua tài khoản' || cleanTxt === 'Mua tài khoản' || cleanTxt === '🛒 Buy Products' || cleanTxt === 'Buy Products' || cleanTxt === 'Products' || cleanTxt === '🛍️ Products' || cleanTxt === '🛍 Products' || cleanTxt === '🛒 Products' || cleanTxt === 'Buy' || cleanTxt === '🛒 Buy' || cleanTxt === '产品' || cleanTxt === '🛍️ 产品' || cleanTxt === '🛒 产品' || cleanTxt === '购买' || cleanTxt === '🛒 购买' || cleanTxt === '商品' || cleanTxt === '🛍️ 商品' || isMatchButton(cleanTxt, 'btn_buy_menu', userLang) || isMatchButton(cleanTxt, 'buy_product', userLang) || isMatchButton(cleanTxt, 'product_list', userLang) || isMatchButton(cleanTxt, 'btn_buy_accounts', userLang) ||
+        cleanTxt === '💬 Hỗ trợ' || cleanTxt === 'Hỗ trợ' || cleanTxt === '💬 Support' || cleanTxt === 'Support' || cleanTxt === '客服支持' || cleanTxt === '💬 客服支持' || cleanTxt === '客服' || cleanTxt === '🛟 Hỗ trợ / Bảo hành' || cleanTxt === 'Hỗ trợ / Bảo hành' || isMatchButton(cleanTxt, 'btn_support', userLang) ||
+        cleanTxt === '👛 Ví' || cleanTxt === 'Ví' || cleanTxt === '👛 Wallet' || cleanTxt === 'Wallet' || cleanTxt === '钱包' || cleanTxt === '👛 钱包' || cleanTxt === '➕ Nạp tiền' || cleanTxt === 'Nạp tiền' || cleanTxt === '➕ Deposit' || cleanTxt === 'Deposit' || cleanTxt === '充值' || cleanTxt === '➕ 充值' || isMatchButton(cleanTxt, 'btn_deposit', userLang) || isMatchButton(cleanTxt, 'deposit', userLang) ||
+        cleanTxt === '🔗 API' || cleanTxt === 'API' || cleanTxt === '🔗 Tích hợp API' || cleanTxt === 'Tích hợp API' ||
+        cleanTxt === '🛡️ Bảo hành' || cleanTxt === '🛡 Bảo hành' || cleanTxt === 'Bảo hành' || cleanTxt === '🛡️ Warranty' || cleanTxt === 'Warranty' || cleanTxt === '售后保修' || cleanTxt === '🛡️ 售后保修' || cleanTxt === '保修' ||
+        cleanTxt === '↩️ Menu chính' || cleanTxt === 'Menu chính' || cleanTxt === '↩️ Main Menu' || cleanTxt === 'Main Menu' || cleanTxt === '主菜单' || cleanTxt === '↩️ 主菜单' || isMatchButton(cleanTxt, 'btn_main_menu', userLang) ||
+        cleanTxt === '🧾 Lịch sử mua' || cleanTxt === 'Lịch sử mua' || cleanTxt === '🧾 History' || cleanTxt === 'History' || cleanTxt === '购买记录' || cleanTxt === '🧾 购买记录' || isMatchButton(cleanTxt, 'btn_order_history', userLang) ||
+        cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '语言' || cleanTxt === '🌐 语言' || cleanTxt === '语言切换' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
+        cleanTxt === '🎁 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === 'Check-in' || cleanTxt === 'Checkin' || cleanTxt === '每日签到' || cleanTxt === '签到' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
         cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
-        cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组'
+        cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组' || cleanTxt === 'Group' || cleanTxt === '群组' || cleanTxt === 'Nhóm'
       );
     };
 
     // Nếu người dùng bấm bất kỳ Nút Menu nào -> Tự động xoá tất cả trạng thái chờ trước đó và xử lý Menu ngay
-    if (isNavMenuButton(text)) {
+    if (await isNavMenuButton(text)) {
       const { delCache } = await import('../lib/cache/index.js');
       const { manualOrderState, waitingForProductQuantity, waitingForCouponState } = await import('./handle/handleBuy.js');
       manualOrderState?.delete(String(msg.from.id));
@@ -431,6 +450,9 @@ export const registerListeners = (bot, config) => {
         text === '🛍️ Sản phẩm' || text === '🛍 Sản phẩm' || text === 'Sản phẩm' ||
         text === '🛒 Mua sản phẩm' || text === 'Mua sản phẩm' || text === '🛒 Mua tài khoản' || text === 'Mua tài khoản' ||
         text === '🛒 Mua hàng' || text === 'Mua hàng' || text === '🛒 Buy Products' || text === 'Buy Products' ||
+        text === 'Products' || text === '🛍️ Products' || text === '🛍 Products' || text === '🛒 Products' ||
+        text === 'Buy' || text === '🛒 Buy' ||
+        text === '产品' || text === '🛍️ 产品' || text === '🛒 产品' || text === '购买' || text === '🛒 购买' || text === '商品' || text === '🛍️ 商品' ||
         isMatchButton(text, 'btn_buy_menu', userLang) || isMatchButton(text, 'buy_product', userLang) || isMatchButton(text, 'product_list', userLang) || isMatchButton(text, 'btn_buy_accounts', userLang)
       ) {
         return sendCategoryList(bot, msg.chat.id, user);

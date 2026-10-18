@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import pool, { query, execute } from './db.js';
 import { sendCanvaInviteApi, inviteMemberApi, batchInvite, getTeamInfo, getInviteHistory, getCanvaSession, saveCanvaSession, ROLE_NAME_MAP } from './canva_service.js';
+import { createEduAccount, generateRandomPassword, generateRandomUsername, DEFAULT_EDU_DOMAIN } from '../includes/services/googleAdminService.js';
 
 const app = express();
 const PORT = process.env.PORT || 1568;
@@ -654,35 +655,6 @@ app.get('/api/v1/orders', authenticateApiKey, async (req, res) => {
   }
 });
 
-// Helper functions for Gmail EDU ordering
-function generatePassword() {
-  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-  const numbers = '0123456789';
-  const special = '!@#$%&*';
-  let password = '';
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += special[Math.floor(Math.random() * special.length)];
-  const all = uppercase + lowercase + numbers + special;
-  for (let i = 0; i < 8; i++) {
-    password += all[Math.floor(Math.random() * all.length)];
-  }
-  return password.split('').sort(() => Math.random() - 0.5).join('');
-}
-
-function generateUsername(prefix) {
-  if (prefix && String(prefix).trim()) {
-    const cleanPrefix = String(prefix).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (cleanPrefix) return `${cleanPrefix}${Math.floor(Math.random() * 899 + 100)}`;
-  }
-  const chars = 'abcdefghijklmnopqrstuvwxyz';
-  let str = '';
-  for (let i = 0; i < 7; i++) str += chars[Math.floor(Math.random() * chars.length)];
-  return `${str}${Math.floor(Math.random() * 89 + 10)}`;
-}
-
 // G. API Order Gmail EDU Endpoint
 app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('order_edu'), async (req, res) => {
   const connection = await pool.getConnection();
@@ -708,13 +680,13 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('orde
 
     // 2. Fetch Settings
     const [settingsRows] = await connection.query(
-      "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled')"
+      "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled', 'buy_gmail_edu')"
     );
 
     const settingsMap = {};
     settingsRows.forEach(r => { settingsMap[r.key] = r.value; });
 
-    const isEnabled = settingsMap.gmail_edu_enabled !== 'false';
+    const isEnabled = settingsMap.gmail_edu_enabled !== 'false' && settingsMap.buy_gmail_edu !== 'false';
     if (!isEnabled) {
       await connection.rollback();
       return res.status(400).json({ success: false, error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin.' });
@@ -741,7 +713,7 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('orde
 
     const defaultDomain = req.body.domain && String(req.body.domain).trim() 
       ? String(req.body.domain).trim() 
-      : (settingsMap.gmail_edu_domain || 'nttp.edu.pl');
+      : (settingsMap.gmail_edu_domain || DEFAULT_EDU_DOMAIN || 'nttp.edu.pl');
 
     const rawQuantity = req.body.quantity;
     const quantity = Math.min(Math.max(1, parseInt(rawQuantity, 10) || 1), 50);
@@ -760,36 +732,77 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('orde
       });
     }
 
-    // 3. Create Accounts (Default: Auto delete 1h after creation)
+    // 3. Create Accounts via Google Workspace Admin API
     const createdAccounts = [];
+    const failedAccounts = [];
+
     for (let i = 0; i < quantity; i++) {
-      const username = generateUsername(req.body.prefix || req.body.username);
-      const email = `${username}@${domain}`;
-      const password = customPassword || generatePassword();
+      const username = generateRandomUsername(req.body.prefix || req.body.username);
+      const password = customPassword || generateRandomPassword(12);
 
+      const result = await createEduAccount(username, domain, password);
+
+      if (!result.success) {
+        console.error(`[API_ORDER_EDU] Lỗi tạo tài khoản Google Workspace (${username}@${domain}):`, result.error);
+        failedAccounts.push({ username, domain, error: result.error });
+        continue;
+      }
+
+      const email = result.email;
+      const finalPass = result.password || password;
+
+      // Lưu vào bảng gmail_accounts
       await connection.query(`
-        INSERT INTO gmail_accounts (email, password, type, domain, status, delete_at, created_at)
-        VALUES (?, ?, ?, ?, 'available', DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())
-      `, [email, password, type, domain]);
+        INSERT INTO gmail_accounts (email, password, type, domain, status, sold_to_user_id, sold_price, delete_at, created_at)
+        VALUES (?, ?, ?, ?, 'sold', ?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())
+      `, [email, finalPass, type, domain, user.id, pricePerUnit]);
 
-      createdAccounts.push({ email, password, type, domain, auto_delete: '1h_after_login' });
+      createdAccounts.push({
+        email,
+        password: finalPass,
+        type,
+        domain,
+        google_id: result.id,
+        auto_delete: '1h_after_login'
+      });
+
+      if (i < quantity - 1) {
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
 
+    if (createdAccounts.length === 0) {
+      await connection.rollback();
+      return res.status(500).json({
+        success: false,
+        error: `Không thể tạo tài khoản trên Google Admin API: ${failedAccounts[0]?.error || 'Lỗi hệ thống Google'}`
+      });
+    }
+
+    const actualTotalCost = pricePerUnit * createdAccounts.length;
+
     // 4. Deduct User Balance
-    await connection.query('UPDATE users SET balance = balance - ? WHERE id = ?', [totalCost, user.id]);
+    await connection.query('UPDATE users SET balance = balance - ? WHERE id = ?', [actualTotalCost, user.id]);
     await connection.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
-      user.id, -totalCost, `buy_gmail_edu_api_${quantity}_items`
+      user.id, -actualTotalCost, `buy_gmail_edu_api_${createdAccounts.length}_items`
     ]);
 
     // 5. Create Order Record
     const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
     const [orderRes] = await connection.query(
       "INSERT INTO orders (user_id, price, email, note, status) VALUES (?, ?, ?, ?, 'completed')",
-      [user.id, totalCost, accountsFormatted, `API Order Gmail EDU (${quantity} tài khoản)`]
+      [user.id, actualTotalCost, accountsFormatted, `API Order Gmail EDU (${createdAccounts.length} tài khoản)`]
     );
 
     const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
     await connection.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
+
+    // Cập nhật order_id vào gmail_accounts
+    try {
+      await connection.query('UPDATE gmail_accounts SET order_id = ? WHERE sold_to_user_id = ? AND order_id IS NULL', [
+        invoiceCode, user.id
+      ]);
+    } catch (e) {}
 
     await connection.commit();
 
@@ -797,10 +810,10 @@ app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('orde
       success: true,
       message: 'Đặt Gmail EDU qua API thành công!',
       invoice_code: invoiceCode,
-      quantity,
-      total_cost: totalCost,
+      quantity: createdAccounts.length,
+      total_cost: actualTotalCost,
       price_per_unit: pricePerUnit,
-      remaining_balance: currentBalance - totalCost,
+      remaining_balance: currentBalance - actualTotalCost,
       data: createdAccounts
     });
   } catch (err) {

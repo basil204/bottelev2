@@ -9,7 +9,7 @@ export interface MainKeyboardButton {
   text_vi?: string;
   text_en?: string;
   text_zh?: string;
-  action: 'products' | 'support' | 'wallet' | 'deposit' | 'api' | 'warranty' | 'checkin' | 'lang' | 'history' | 'start' | 'custom_text';
+  action: 'products' | 'buyedu' | 'support' | 'wallet' | 'deposit' | 'api' | 'warranty' | 'checkin' | 'lang' | 'history' | 'start' | 'custom_text';
   custom_text?: string;
   custom_text_vi?: string;
   custom_text_en?: string;
@@ -34,7 +34,8 @@ export interface BotMenuInlineButton {
 export const DEFAULT_WALLET_BUTTONS: BotMenuInlineButton[] = [
   { id: 'btn_wal_deposit', text: 'Nạp tiền vào ví', text_vi: 'Nạp tiền vào ví', text_en: 'Deposit Funds', text_zh: '充值到钱包', type: 'callback', callback_data: 'start_deposit', row: 1, is_active: true },
   { id: 'btn_wal_history', text: 'Lịch sử nạp tiền', text_vi: 'Lịch sử nạp tiền', text_en: 'Deposit History', text_zh: '充值记录', type: 'callback', callback_data: 'deposit_history', row: 1, is_active: true },
-  { id: 'btn_wal_products', text: 'Danh mục sản phẩm', text_vi: 'Danh mục sản phẩm', text_en: 'View Products', text_zh: '查看商品分类', type: 'callback', callback_data: 'list_categories', row: 2, is_active: true }
+  { id: 'btn_wal_products', text: 'Danh mục sản phẩm', text_vi: 'Danh mục sản phẩm', text_en: 'View Products', text_zh: '查看商品分类', type: 'callback', callback_data: 'list_categories', row: 2, is_active: true },
+  { id: 'btn_wal_buy_edu', text: 'Mua Gmail EDU', text_vi: 'Mua Gmail EDU', text_en: 'Buy Gmail EDU', text_zh: '购买 Gmail EDU', type: 'callback', callback_data: 'buy_edu_menu', row: 2, is_active: true }
 ];
 
 export const DEFAULT_DEPOSIT_BUTTONS: BotMenuInlineButton[] = [
@@ -43,11 +44,21 @@ export const DEFAULT_DEPOSIT_BUTTONS: BotMenuInlineButton[] = [
   { id: 'btn_dep_usdt', text: '💲 USDT TRC20', text_vi: '💲 USDT TRC20', text_en: '💲 USDT TRC20', text_zh: '💲 USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
 ];
 
+export const DEFAULT_GMAIL_EDU_BUTTONS: BotMenuInlineButton[] = [
+  { id: 'btn_edu_fast_1', text: '⚡ Mua nhanh 1 Edu', text_vi: '⚡ Mua nhanh 1 Edu', text_en: '⚡ Fast Buy 1 Edu', text_zh: '⚡ 快速购买 1 个', type: 'callback', callback_data: 'buy_edu_fast_1', row: 1, is_active: true },
+  { id: 'btn_edu_fast_2', text: '🔢 Mua 2 Edu', text_vi: '🔢 Mua 2 Edu', text_en: '🔢 Buy 2 Edu', text_zh: '🔢 购买 2 个', type: 'callback', callback_data: 'buy_edu_fast_2', row: 1, is_active: true },
+  { id: 'btn_edu_fast_5', text: '🔢 Mua 5 Edu', text_vi: '🔢 Mua 5 Edu', text_en: '🔢 Buy 5 Edu', text_zh: '🔢 购买 5 个', type: 'callback', callback_data: 'buy_edu_fast_5', row: 1, is_active: true },
+  { id: 'btn_edu_prompt_qty', text: '🔢 Nhập số lượng khác', text_vi: '🔢 Nhập số lượng khác', text_en: '🔢 Custom Quantity', text_zh: '🔢 自定义数量', type: 'callback', callback_data: 'buy_edu_prompt_qty', row: 2, is_active: true },
+  { id: 'btn_edu_prompt_prefix', text: '✍️ Đặt theo tên Prefix', text_vi: '✍️ Đặt theo tên Prefix', text_en: '✍️ Custom Username Prefix', text_zh: '✍️ 自定义前缀', type: 'callback', callback_data: 'buy_edu_prompt_prefix', row: 2, is_active: true },
+  { id: 'btn_edu_back', text: '↩️ Quay lại sản phẩm', text_vi: '↩️ Quay lại sản phẩm', text_en: '↩️ Back to Products', text_zh: '↩️ 返回商品列表', type: 'callback', callback_data: 'back_to_categories', row: 3, is_active: true }
+];
+
 export const DEFAULT_KEYBOARD_BUTTONS: MainKeyboardButton[] = [
   { id: 'btn_products', text: 'Sản phẩm', text_vi: 'Sản phẩm', text_en: 'Products', text_zh: '产品', action: 'products', row: 1, is_active: true },
-  { id: 'btn_support', text: 'Hỗ trợ', text_vi: 'Hỗ trợ', text_en: 'Support', text_zh: '客服支持', action: 'support', row: 1, is_active: true },
+  { id: 'btn_buyedu', text: 'Gmail EDU', text_vi: 'Gmail EDU', text_en: 'Gmail EDU', text_zh: 'Gmail EDU', action: 'buyedu', row: 1, is_active: true },
+  { id: 'btn_support', text: 'Hỗ trợ', text_vi: 'Hỗ trợ', text_en: 'Support', text_zh: '客服支持', action: 'support', row: 2, is_active: true },
   { id: 'btn_wallet', text: 'Ví', text_vi: 'Ví', text_en: 'Wallet', text_zh: '钱包', action: 'wallet', row: 2, is_active: true },
-  { id: 'btn_api', text: 'API', text_vi: 'API', text_en: 'API', text_zh: 'API', action: 'api', row: 2, is_active: true },
+  { id: 'btn_api', text: 'API', text_vi: 'API', text_en: 'API', text_zh: 'API', action: 'api', row: 3, is_active: true },
   { id: 'btn_warranty', text: 'Bảo hành', text_vi: 'Bảo hành', text_en: 'Warranty', text_zh: '售后保修', action: 'warranty', row: 3, is_active: true },
   { id: 'btn_checkin', text: 'Điểm danh', text_vi: 'Điểm danh', text_en: 'Check-in', text_zh: '每日签到', action: 'checkin', row: 3, is_active: false },
   { id: 'btn_lang', text: 'Ngôn ngữ', text_vi: 'Ngôn ngữ', text_en: 'Language', text_zh: '语言切换', action: 'lang', row: 3, is_active: false }
@@ -125,6 +136,33 @@ export const DEFAULT_TEMPLATES: Record<string, { label: string; group: string; d
     default_val: `**THÔNG TIN KẾT NỐI API TỰ ĐỘNG**\n\n**ID Khách hàng:** \`{userId}\`\n**Telegram ID:** \`{telegramId}\`\n\n**API Key của bạn:**\n\`{apiKey}\`\n\n**Số dư API:** **{balance}**\n**Trạng thái:** {statusText}\n\n**Tài liệu API:**\n• Endpoint mua tài khoản tự động:\n\`POST /api/v1/order-edu\`\n• Header xác thực:\n\`x-api-key: {apiKey}\`\n\n*Vui lòng bảo mật API Key, không chia sẻ cho người khác!*`,
     default_val_en: `**API INTEGRATION INFORMATION**\n\n**Customer ID:** \`{userId}\`\n**Telegram ID:** \`{telegramId}\`\n\n**Your API Key:**\n\`{apiKey}\`\n\n**API Balance:** **{balance}**\n**Status:** {statusText}\n\n**API Documentation:**\n• Endpoint:\n\`POST /api/v1/order-edu\`\n• Header:\n\`x-api-key: {apiKey}\`\n\n*Keep your API key private!*`,
     default_val_zh: `**API 自动化对接信息**\n\n**客户 ID:** \`{userId}\`\n**Telegram ID:** \`{telegramId}\`\n\n**您的 API Key:**\n\`{apiKey}\`\n\n**API 余额:** **{balance}**\n**状态:** {statusText}\n\n**API 文档:**\n• 接口地址:\n\`POST /api/v1/order-edu\`\n• 请求头:\n\`x-api-key: {apiKey}\`\n\n*请妥善保管您的 API Key，切勿泄露给他人！*`
+  },
+  template_gmail_edu_info: {
+    label: 'Menu Mua Gmail EDU Tự Động',
+    group: 'gmail_edu',
+    description: 'Hiển thị khi khách bấm nút Mua Gmail EDU từ bàn phím hoặc danh mục.',
+    vars: ['{domain}', '{price}', '{balance}'],
+    default_val: `🎓 **MUA TÀI KHOẢN GMAIL EDU TỰ ĐỘNG**\n\n🌐 **Domain:** \`{domain}\`\n💰 **Đơn giá:** **{price}** / 1 tài khoản\n👛 **Số dư hiện có:** **{balance}**\n\n⚡ **Ưu điểm tài khoản:**\n• Khởi tạo trực tiếp qua Google Workspace Admin API\n• Mật khẩu bảo mật cao, tài khoản live 100%\n• Nhận tài khoản tức thì kèm hóa đơn đơn hàng\n\n👇 *Vui lòng chọn hình thức mua bên dưới:*`,
+    default_val_en: `🎓 **BUY GMAIL EDU ACCOUNT (AUTO)**\n\n🌐 **Domain:** \`{domain}\`\n💰 **Unit Price:** **{price}** / account\n👛 **Your Balance:** **{balance}**\n\n⚡ **Account Highlights:**\n• Instant Google Workspace Admin API provisioning\n• 100% active & secure random password\n• Instant delivery with official invoice\n\n👇 *Please choose a purchase option below:*`,
+    default_val_zh: `🎓 **自动购买 Gmail EDU 账号**\n\n🌐 **域名:** \`{domain}\`\n💰 **单价:** **{price}** / 个\n👛 **当前余额:** **{balance}**\n\n⚡ **账号特色:**\n• 直接通过 Google Workspace Admin API 实时创建\n• 高强随机密码，100% 官方正版活跃\n• 自动交付并生成订单明细\n\n👇 *请在下方选择购买方式:*`
+  },
+  template_gmail_edu_success: {
+    label: 'Bàn Giao Đơn Gmail EDU Thành Công',
+    group: 'gmail_edu',
+    description: 'Gửi cho khách ngay khi tạo thành công tài khoản Gmail EDU trên Google Workspace.',
+    vars: ['{invoice_code}', '{quantity}', '{total_price}', '{new_balance}', '{data}'],
+    default_val: `🎉 **MUA GMAIL EDU THÀNH CÔNG!**\n\n🧾 **Mã đơn hàng:** \`{invoice_code}\`\n📦 **Số lượng:** **{quantity}** tài khoản\n💰 **Tổng thanh toán:** **{total_price}**\n👛 **Số dư còn lại:** **{new_balance}**\n\n📋 **DANH SÁCH TÀI KHOẢN (Email|Password):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **Đăng nhập tại:** https://accounts.google.com\n⚠️ *Vui lòng sao chép mật khẩu và đăng nhập kiểm tra ngay.*`,
+    default_val_en: `🎉 **GMAIL EDU PURCHASE SUCCESSFUL!**\n\n🧾 **Invoice Code:** \`{invoice_code}\`\n📦 **Quantity:** **{quantity}** account(s)\n💰 **Total Paid:** **{total_price}**\n👛 **Remaining Balance:** **{new_balance}**\n\n📋 **ACCOUNT LIST (Email|Password):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **Login at:** https://accounts.google.com\n⚠️ *Please save your password and log in immediately.*`,
+    default_val_zh: `🎉 **GMAIL EDU 购买成功！**\n\n🧾 **订单编号:** \`{invoice_code}\`\n📦 **购买数量:** **{quantity}** 个账号\n💰 **实付金额:** **{total_price}**\n👛 **剩余余额:** **{new_balance}**\n\n📋 **账号列表 (账号|密码):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **登录入口:** https://accounts.google.com\n⚠️ *请妥善保存密码并尽快登录验证。*`
+  },
+  template_gmail_edu_insufficient_balance: {
+    label: 'Thông Báo Số Dư Không Đủ (Gmail EDU)',
+    group: 'gmail_edu',
+    description: 'Hiển thị khi số dư ví của khách không đủ để thanh toán số lượng Gmail EDU yêu cầu.',
+    vars: ['{quantity}', '{total_cost}', '{current_balance}', '{lack_amount}'],
+    default_val: `❌ **Số dư không đủ!**\n\n📦 Số lượng: **{quantity}** tài khoản Gmail EDU\n💰 Tổng tiền: **{total_cost}**\n👛 Số dư hiện tại: **{current_balance}**\n⚠️ Cần nạp thêm: **{lack_amount}**`,
+    default_val_en: `❌ **Insufficient Balance!**\n\n📦 Quantity: **{quantity}** Gmail EDU account(s)\n💰 Total Cost: **{total_cost}**\n👛 Current Balance: **{current_balance}**\n⚠️ Needed Deposit: **{lack_amount}**`,
+    default_val_zh: `❌ **余额不足！**\n\n📦 购买数量: **{quantity}** 个 Gmail EDU\n💰 总费用: **{total_cost}**\n👛 当前余额: **{current_balance}**\n⚠️ 需充值: **{lack_amount}**`
   },
   msg_template_purchase: {
     label: 'Bàn Giao Đơn Hàng Tự Động',
@@ -574,6 +612,19 @@ export async function GET() {
       }
     }
 
+    // Parse Gmail EDU buttons
+    let gmailEduButtons: BotMenuInlineButton[] = DEFAULT_GMAIL_EDU_BUTTONS;
+    if (settingsMap.gmail_edu_buttons_config) {
+      try {
+        const parsed = JSON.parse(settingsMap.gmail_edu_buttons_config);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          gmailEduButtons = parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing gmail_edu_buttons_config:', e);
+      }
+    }
+
     // Build templates map
     const templates: Record<string, { label: string; group: string; description: string; vars: string[]; value: string; value_vi: string; value_en: string; value_zh: string }> = {};
     for (const [key, meta] of Object.entries(DEFAULT_TEMPLATES)) {
@@ -598,6 +649,7 @@ export async function GET() {
       main_keyboard: mainKeyboard,
       wallet_buttons: walletButtons,
       deposit_buttons: depositButtons,
+      gmail_edu_buttons: gmailEduButtons,
       templates
     });
   } catch (error: any) {
@@ -610,7 +662,7 @@ export async function POST(request: Request) {
   try {
     await dbReady;
     const body = await request.json();
-    const { main_keyboard, wallet_buttons, deposit_buttons, templates } = body;
+    const { main_keyboard, wallet_buttons, deposit_buttons, gmail_edu_buttons, templates } = body;
     const { ipAddress, userAgent } = getRequestInfo(request);
     const adminName = await getAdminFromCookie(request);
 
@@ -639,6 +691,14 @@ export async function POST(request: Request) {
         await connection.query(
           'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?',
           ['deposit_menu_buttons_config', jsonStr, jsonStr]
+        );
+      }
+
+      if (gmail_edu_buttons && Array.isArray(gmail_edu_buttons)) {
+        const jsonStr = JSON.stringify(gmail_edu_buttons);
+        await connection.query(
+          'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?',
+          ['gmail_edu_buttons_config', jsonStr, jsonStr]
         );
       }
 

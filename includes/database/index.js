@@ -217,30 +217,75 @@ export const initDb = async (config) => {
       console.error('Migration error for coupons:', e.message);
     }
 
-    // ensure delete_at column exists for gmail_accounts table
+    // Ensure gmail_accounts table and default settings exist
     try {
-      // Thử thêm cột (sẽ bỏ qua nếu đã tồn tại)
-      await pool.execute('ALTER TABLE gmail_accounts ADD COLUMN delete_at TIMESTAMP NULL DEFAULT NULL');
-      console.log('✅ Added delete_at column to gmail_accounts table');
-
-      // Thử thêm index
-      try {
-        await pool.execute('ALTER TABLE gmail_accounts ADD INDEX idx_delete_at (delete_at)');
-        console.log('✅ Added index idx_delete_at to gmail_accounts table');
-      } catch (idxError) {
-        // Index đã tồn tại hoặc có lỗi khác (không phải lỗi nghiêm trọng)
-        if (!idxError.message.includes('Duplicate') && !idxError.message.includes('already exists')) {
-          console.warn('⚠️ Could not add index idx_delete_at:', idxError.message);
-        }
-      }
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS gmail_accounts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          type VARCHAR(50) DEFAULT 'edu',
+          domain VARCHAR(255) DEFAULT 'nttp.edu.pl',
+          status VARCHAR(50) DEFAULT 'available',
+          sold_to_user_id INT DEFAULT NULL,
+          sold_price DECIMAL(15, 2) DEFAULT NULL,
+          order_id VARCHAR(50) DEFAULT NULL,
+          delete_at TIMESTAMP NULL DEFAULT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_gmail_status (status),
+          INDEX idx_gmail_domain (domain),
+          INDEX idx_gmail_sold_user (sold_to_user_id),
+          INDEX idx_gmail_delete_at (delete_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      console.log('✅ Ensured gmail_accounts table exists');
     } catch (e) {
-      // Nếu lỗi là do cột đã tồn tại hoặc bảng chưa tồn tại thì bỏ qua
-      if (e.message.includes('Duplicate column name') || e.message.includes('already exists')) {
-        // Cột đã tồn tại, không cần làm gì
-      } else if (e.message.includes('doesn\'t exist')) {
-        // Bảng chưa tồn tại, sẽ được tạo bởi schema.sql
-      } else {
-        console.error('Migration error for gmail_accounts.delete_at:', e.message);
+      if (!e.message.includes('already exists')) {
+        console.error('Migration error for gmail_accounts table:', e.message);
+      }
+    }
+
+    // Ensure columns for login tracking in gmail_accounts
+    for (const gCol of [
+      'ALTER TABLE gmail_accounts ADD COLUMN first_login_at TIMESTAMP NULL DEFAULT NULL',
+      'ALTER TABLE gmail_accounts ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL',
+      'ALTER TABLE gmail_accounts ADD COLUMN is_logged_in TINYINT(1) DEFAULT 0',
+      'ALTER TABLE gmail_accounts ADD INDEX idx_gmail_is_logged_in (is_logged_in)'
+    ]) {
+      try {
+        await pool.execute(gCol);
+      } catch (colErr) {
+        // ignore duplicate column / index error
+      }
+    }
+
+    try {
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_enabled', 'true')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('buy_gmail_edu', 'true')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_price', '10000')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_domain', 'nttp.edu.pl')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_delete_hours', '1')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_password_type', 'random')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_custom_password', '')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_user_limit', '0')");
+      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_order_qty', '20')");
+    } catch (e) {}
+
+    // Ensure name, first_name and edu_limit columns exist in users table
+    for (const userCol of [
+      'ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL',
+      'ALTER TABLE users ADD COLUMN first_name VARCHAR(255) NULL',
+      'ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL',
+      'ALTER TABLE users ADD COLUMN admin_note TEXT NULL',
+      'ALTER TABLE users ADD COLUMN edu_limit INT DEFAULT NULL'
+    ]) {
+      try {
+        await pool.execute(userCol);
+      } catch (colErr) {
+        if (!colErr.message.includes('Duplicate') && !colErr.message.includes('already exists')) {
+          // ignore duplicate column error
+        }
       }
     }
 
@@ -545,6 +590,44 @@ export const initDb = async (config) => {
       await pool.execute(`INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('chatgpt_slot_days', '30')`);
     } catch (e) {
       // ignore
+    }
+
+    // API Workflows table (Luồng mua hàng qua API bên thứ ba tự cấu hình)
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS api_workflows (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          code VARCHAR(100) NOT NULL UNIQUE,
+          icon VARCHAR(50) DEFAULT '⚡',
+          category_id INT NULL,
+          description TEXT NULL,
+          price_vnd DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          price_usdt DECIMAL(15, 4) NOT NULL DEFAULT 0,
+          api_url TEXT NOT NULL,
+          http_method VARCHAR(10) NOT NULL DEFAULT 'POST',
+          headers_json TEXT NULL,
+          body_template LONGTEXT NULL,
+          input_fields_json LONGTEXT NULL,
+          response_type VARCHAR(20) DEFAULT 'json',
+          response_data_path VARCHAR(255) DEFAULT 'data',
+          response_success_condition VARCHAR(255) DEFAULT 'status == 200',
+          success_message_template LONGTEXT NULL,
+          show_in_menu TINYINT(1) DEFAULT 1,
+          menu_row INT DEFAULT 1,
+          is_active TINYINT(1) DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_wf_code (code),
+          INDEX idx_wf_active (is_active),
+          INDEX idx_wf_category (category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('✅ api_workflows table ready');
+    } catch (e) {
+      if (!e.message.includes('already exists')) {
+        console.error('Migration error for api_workflows:', e.message);
+      }
     }
     }
   } catch (err) {

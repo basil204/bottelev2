@@ -15,6 +15,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { createEduAccount, generateRandomPassword, generateRandomUsername, DEFAULT_EDU_DOMAIN } from '../services/googleAdminService.js';
+
 // Helper for 3-lang text
 const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
 
@@ -30,6 +32,21 @@ export const waitingForCouponState = new Map();
 // Map lưu Mã Giảm Giá đã áp dụng cho user
 export const appliedCouponsMap = new Map();
 
+// Map lưu state user đang nhập Prefix Gmail EDU
+export const waitingForEduPrefixState = new Map();
+
+// Map lưu state user đang nhập Số lượng Gmail EDU
+export const waitingForEduQuantityState = new Map();
+
+// Map lưu state user đang nhập Mật khẩu Gmail EDU theo yêu cầu
+export const waitingForEduPasswordState = new Map();
+
+// Map lưu Mật khẩu Gmail EDU tùy chọn do user chỉ định
+export const userEduCustomPasswordState = new Map();
+
+// Map lưu state user đang nhập dữ liệu theo từng bước cho API Workflow
+export const waitingForWorkflowInputState = new Map();
+
 export const isOrderProduct = (product) => {
   if (!product) return false;
   const pType = String(product.type || '').toLowerCase();
@@ -43,9 +60,46 @@ export const isOrderProduct = (product) => {
 export const sendCategoryList = async (bot, chatId, user, messageId = null) => {
   const lang = user?.language || 'vi';
 
+  // Lấy cấu hình Gmail EDU
+  let isEduEnabled = true;
+  let eduPriceFormatted = '';
+  try {
+    const settingsRows = await query(
+      "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_enabled', 'buy_gmail_edu')"
+    );
+    const settings = {};
+    if (Array.isArray(settingsRows)) {
+      settingsRows.forEach(r => settings[r.key] = r.value);
+    }
+    isEduEnabled = settings.gmail_edu_enabled !== 'false' && settings.buy_gmail_edu !== 'false';
+    const priceVal = Number(settings.gmail_edu_price) || 10000;
+    eduPriceFormatted = ` (${formatCurrency(priceVal)})`;
+  } catch (err) {
+    console.error('[sendCategoryList] Error checking edu settings:', err.message);
+  }
+
   // Fetch all active categories from categories table
   const categories = await query('SELECT * FROM categories WHERE (is_active IS NULL OR is_active = 1) ORDER BY priority DESC, id DESC');
   if (!categories || !categories.length) {
+    if (isEduEnabled) {
+      const eduBtnText = L(
+        lang,
+        `🎓 Mua Gmail EDU Tự Động${eduPriceFormatted}`,
+        `🎓 Buy Gmail EDU (Auto)${eduPriceFormatted}`,
+        `🎓 自动购买 Gmail EDU${eduPriceFormatted}`
+      );
+      const selectMsg = t('select_category', lang);
+      const inline_keyboard = [
+        [{ text: eduBtnText, callback_data: createCallbackData({ action: 'buy_edu_menu' }) }]
+      ];
+      if (messageId) {
+        try {
+          return await bot.editMessageText(selectMsg, { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard } });
+        } catch (e) {}
+      }
+      return bot.sendMessage(chatId, selectMsg, { reply_markup: { inline_keyboard } });
+    }
+
     const noCatMsg = L(lang, 'Chưa có thư mục nào.', 'No categories yet.', '暂无分类。');
     if (messageId) {
       try {
@@ -95,6 +149,43 @@ export const sendCategoryList = async (bot, chatId, user, messageId = null) => {
   const inline_keyboard = [];
   for (let i = 0; i < buttons.length; i += 3) {
     inline_keyboard.push(buttons.slice(i, i + 3));
+  }
+
+  // Gắn nút Mua Gmail EDU lên đầu nếu tính năng đang bật
+  if (isEduEnabled) {
+    const eduBtnText = L(
+      lang,
+      `🎓 Mua Gmail EDU Tự Động${eduPriceFormatted}`,
+      `🎓 Buy Gmail EDU (Auto)${eduPriceFormatted}`,
+      `🎓 自动购买 Gmail EDU${eduPriceFormatted}`
+    );
+    inline_keyboard.unshift([
+      {
+        text: eduBtnText,
+        callback_data: createCallbackData({ action: 'buy_edu_menu' })
+      }
+    ]);
+  }
+
+  // Gắn các nút API Workflows cấp danh mục (show_in_menu = 1 và category_id IS NULL)
+  try {
+    const { getActiveApiWorkflows } = await import('../services/apiWorkflowService.js');
+    const rootWorkflows = await getActiveApiWorkflows(null);
+    if (rootWorkflows && rootWorkflows.length > 0) {
+      for (const wf of rootWorkflows) {
+        if (!wf.category_id && wf.show_in_menu) {
+          const priceDisplay = Number(wf.price_vnd) > 0 ? ` (${formatCurrency(Number(wf.price_vnd))})` : '';
+          inline_keyboard.push([
+            {
+              text: `${wf.icon || '⚡'} ${wf.name}${priceDisplay}`,
+              callback_data: createCallbackData({ action: 'wf_view', wfId: wf.id })
+            }
+          ]);
+        }
+      }
+    }
+  } catch (wfErr) {
+    console.error('[sendCategoryList] Error loading workflows:', wfErr.message);
   }
 
   const selectMsg = t('select_category', lang);
@@ -1400,3 +1491,967 @@ export const handleCouponInput = async (bot, msg, userId) => {
   await showProductDetail(bot, msg.chat.id, product.id, userId);
   return true;
 };
+
+/**
+ * ============================================================================
+ * GMAIL EDU PURCHASE TELEGRAM FLOW
+ * ============================================================================
+ */
+
+/**
+ * Gửi giao diện mua Gmail EDU
+ */
+export const sendBuyEduMenu = async (bot, chatId, user, messageId = null) => {
+  const lang = user?.language || 'vi';
+
+  // Lấy cài đặt hệ thống
+  const settingsRows = await query(
+    "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled', 'buy_gmail_edu', 'gmail_edu_password_type', 'gmail_edu_custom_password', 'gmail_edu_max_user_limit', 'gmail_edu_max_order_qty', 'gmail_edu_delete_hours')"
+  );
+  const settings = {};
+  if (Array.isArray(settingsRows)) {
+    settingsRows.forEach(r => settings[r.key] = r.value);
+  }
+
+  const isEnabled = settings.gmail_edu_enabled !== 'false' && settings.buy_gmail_edu !== 'false';
+  if (!isEnabled) {
+    const disabledMsg = L(
+      lang,
+      '❌ **Tính năng Mua Gmail EDU hiện đang tạm khóa.**\nVui lòng quay lại sau hoặc liên hệ hỗ trợ!',
+      '❌ **Gmail EDU purchasing is currently disabled.**\nPlease check back later or contact support!',
+      '❌ **Gmail EDU 购买功能目前已暂停。**\n请稍后再试或联系客服！'
+    );
+    if (messageId) {
+      try {
+        return await bot.editMessageText(disabledMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+      } catch (e) {}
+    }
+    return bot.sendMessage(chatId, disabledMsg, { parse_mode: 'Markdown' });
+  }
+
+  let price = Number(settings.gmail_edu_price) || 10000;
+  try {
+    const cpRows = await query(
+      `SELECT custom_price FROM custom_pricing 
+       WHERE (user_id = ? OR user_id = ?)
+         AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
+         AND is_active = 1
+       ORDER BY id DESC LIMIT 1`,
+      [user.id, user.telegram_id]
+    );
+    if (cpRows && cpRows[0]?.custom_price) {
+      price = Number(cpRows[0].custom_price);
+    }
+  } catch (e) {}
+
+  const domain = settings.gmail_edu_domain || DEFAULT_EDU_DOMAIN || 'nttp.edu.pl';
+  const balance = Number(user?.balance) || 0;
+  const deleteHours = parseInt(settings.gmail_edu_delete_hours, 10) || 1;
+  const maxOrderQty = Math.max(1, parseInt(settings.gmail_edu_max_order_qty, 10) || 20);
+
+  // Kiểm tra hạn mức user
+  const userLimit = (user.edu_limit !== null && user.edu_limit !== undefined)
+    ? Number(user.edu_limit)
+    : (Number(settings.gmail_edu_max_user_limit) || 0);
+
+  let limitDisplay = '';
+  if (userLimit > 0) {
+    let totalBought = 0;
+    try {
+      const countRes = await query("SELECT COUNT(*) AS total FROM gmail_accounts WHERE sold_to_user_id = ? AND status != 'error'", [user.id]);
+      totalBought = countRes[0]?.total || 0;
+    } catch (e) {}
+    limitDisplay = `\n📊 **Hạn mức mua của bạn:** \`${totalBought}/${userLimit} tài khoản\``;
+  }
+
+  // Mật khẩu hiện tại
+  const userCustomPass = userEduCustomPasswordState.get(String(user?.telegram_id || chatId));
+  let passDisplay = '';
+  if (userCustomPass) {
+    passDisplay = `\n🔑 **Mật khẩu đã đặt:** \`${userCustomPass}\``;
+  } else if (settings.gmail_edu_password_type === 'custom' && settings.gmail_edu_custom_password) {
+    passDisplay = `\n🔑 **Mật khẩu:** \`${settings.gmail_edu_custom_password}\` *(Cố định hệ thống)*`;
+  } else {
+    passDisplay = `\n🔑 **Mật khẩu:** \`Ngẫu nhiên bảo mật cao\``;
+  }
+
+  const liveNotice = deleteHours > 0
+    ? `\n⏰ **Thời gian live:** \`${deleteHours} giờ\` *(Chỉ bắt đầu tính sau khi bạn đăng nhập Google lần đầu)*`
+    : `\n⏰ **Thời gian live:** \`Vĩnh viễn (Không tự xóa)\``;
+
+  // Render template nội dung menu Gmail EDU
+  const defaultInfoTpl = `🎓 **MUA TÀI KHOẢN GMAIL EDU TỰ ĐỘNG**\n\n🌐 **Domain:** \`{domain}\`\n💰 **Đơn giá:** **{price}** / 1 tài khoản\n👛 **Số dư hiện có:** **{balance}**{pass_info}{live_info}{limit_info}\n\n⚡ **Ưu điểm tài khoản:**\n• Khởi tạo trực tiếp qua Google Workspace Admin API\n• Mua 1 tài khoản gửi thông tin trực tiếp, mua nhiều gửi kèm file TXT\n• **Lưu ý:** Tài khoản chỉ tự động xóa sau khi bạn đã đăng nhập vào Google!\n\n👇 *Vui lòng chọn hình thức mua bên dưới:*`;
+  const tplInfo = await getBotTemplate('template_gmail_edu_info', defaultInfoTpl, lang);
+  let message = renderBotTemplate(tplInfo || defaultInfoTpl, {
+    domain,
+    price: formatCurrency(price),
+    balance: formatCurrency(balance),
+    pass_info: passDisplay,
+    live_info: liveNotice,
+    limit_info: limitDisplay
+  });
+  if (!message || !message.trim()) {
+    message = renderBotTemplate(defaultInfoTpl, {
+      domain,
+      price: formatCurrency(price),
+      balance: formatCurrency(balance),
+      pass_info: passDisplay,
+      live_info: liveNotice,
+      limit_info: limitDisplay
+    });
+  }
+
+  // Lấy cấu hình nút bấm mua Gmail EDU
+  let inline_keyboard = [];
+  try {
+    const btnRow = await query("SELECT value FROM settings WHERE `key` = 'gmail_edu_buttons_config'");
+    if (btnRow && btnRow[0]?.value) {
+      const parsedBtns = JSON.parse(btnRow[0].value);
+      if (Array.isArray(parsedBtns) && parsedBtns.length > 0) {
+        const activeBtns = parsedBtns.filter(b => b.is_active !== false);
+        const rowsMap = new Map();
+        activeBtns.forEach(btn => {
+          const r = Number(btn.row) || 1;
+          if (!rowsMap.has(r)) rowsMap.set(r, []);
+          const btnLabel = (lang === 'en' ? btn.text_en : (lang === 'zh' ? btn.text_zh : btn.text_vi)) || btn.text || '';
+          
+          if (btn.type === 'url' && btn.url) {
+            rowsMap.get(r).push({ text: btnLabel, url: btn.url });
+            return;
+          }
+          
+          const rawCb = btn.callback_data || '';
+          let cbData = rawCb;
+          if (rawCb === 'buy_edu_fast_1' || rawCb.startsWith('buy_edu_fast_')) {
+            const q = parseInt(rawCb.replace('buy_edu_fast_', ''), 10) || 1;
+            cbData = createCallbackData({ action: 'buy_edu_fast', qty: q });
+          } else if (rawCb === 'buy_edu_prompt_qty') {
+            cbData = createCallbackData({ action: 'buy_edu_prompt_qty' });
+          } else if (rawCb === 'buy_edu_prompt_prefix') {
+            cbData = createCallbackData({ action: 'buy_edu_prompt_prefix' });
+          } else if (rawCb === 'buy_edu_prompt_password') {
+            cbData = createCallbackData({ action: 'buy_edu_prompt_password' });
+          } else if (rawCb === 'buy_edu_reset_password') {
+            cbData = createCallbackData({ action: 'buy_edu_reset_password' });
+          } else if (rawCb === 'back_to_categories' || rawCb === 'list_categories') {
+            cbData = createCallbackData({ action: 'back_to_categories' });
+          }
+          rowsMap.get(r).push({ text: btnLabel, callback_data: cbData });
+        });
+        const sortedRowKeys = Array.from(rowsMap.keys()).sort((a, b) => a - b);
+        inline_keyboard = sortedRowKeys.map(k => rowsMap.get(k));
+      }
+    }
+  } catch (e) {
+    console.error('[sendBuyEduMenu] Error loading buttons config:', e);
+  }
+
+  if (inline_keyboard.length === 0) {
+    const passBtns = [];
+    if (userCustomPass) {
+      passBtns.push({ text: `🔑 Đổi MK (${userCustomPass})`, callback_data: createCallbackData({ action: 'buy_edu_prompt_password' }) });
+      passBtns.push({ text: `🎲 Dùng MK ngẫu nhiên`, callback_data: createCallbackData({ action: 'buy_edu_reset_password' }) });
+    } else {
+      passBtns.push({ text: '🔑 Đặt Mật Khẩu Theo Ý Muốn', callback_data: createCallbackData({ action: 'buy_edu_prompt_password' }) });
+    }
+
+    inline_keyboard = [
+      [
+        { text: '⚡ Mua nhanh 1 Edu', callback_data: createCallbackData({ action: 'buy_edu_fast', qty: 1 }) },
+        { text: '🔢 Mua 2 Edu', callback_data: createCallbackData({ action: 'buy_edu_fast', qty: 2 }) },
+        { text: '🔢 Mua 5 Edu', callback_data: createCallbackData({ action: 'buy_edu_fast', qty: 5 }) }
+      ],
+      [
+        { text: '🔢 Nhập số lượng khác', callback_data: createCallbackData({ action: 'buy_edu_prompt_qty' }) },
+        { text: '✍️ Đặt theo tên Prefix', callback_data: createCallbackData({ action: 'buy_edu_prompt_prefix' }) }
+      ],
+      passBtns,
+      [
+        { text: '↩️ Quay lại sản phẩm', callback_data: createCallbackData({ action: 'back_to_categories' }) }
+      ]
+    ];
+  }
+
+  if (messageId) {
+    try {
+      return await bot.editMessageText(message, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {
+      console.warn('[sendBuyEduMenu] editMessageText failed, falling back to sendMessage:', e.message);
+    }
+  }
+
+  try {
+    return await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard }
+    });
+  } catch (err) {
+    console.error('[sendBuyEduMenu] sendMessage error:', err.message);
+  }
+};
+
+/**
+ * Xử lý tiến trình mua Gmail EDU
+ */
+export const handleBuyEduPurchase = async (bot, chatId, user, options = {}, messageId = null) => {
+  const lang = user?.language || 'vi';
+  const prefix = options.prefix || null;
+
+  // 1. Kiểm tra ban
+  if (user?.is_banned) {
+    return bot.sendMessage(chatId, '❌ Tài khoản của bạn đã bị khóa.');
+  }
+
+  // 2. Lấy cấu hình & tính giá
+  const settingsRows = await query(
+    "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled', 'buy_gmail_edu', 'gmail_edu_password_type', 'gmail_edu_custom_password', 'gmail_edu_max_user_limit', 'gmail_edu_max_order_qty', 'gmail_edu_delete_hours')"
+  );
+  const settings = {};
+  if (Array.isArray(settingsRows)) {
+    settingsRows.forEach(r => settings[r.key] = r.value);
+  }
+
+  const isEnabled = settings.gmail_edu_enabled !== 'false' && settings.buy_gmail_edu !== 'false';
+  if (!isEnabled) {
+    return bot.sendMessage(chatId, '❌ Tính năng Mua Gmail EDU hiện đang tạm khóa.');
+  }
+
+  // Giới hạn số lượng mua tối đa cho mỗi đơn
+  const maxOrderQty = Math.max(1, parseInt(settings.gmail_edu_max_order_qty, 10) || 20);
+  const requestedQty = parseInt(options.quantity, 10) || 1;
+  if (requestedQty > maxOrderQty) {
+    return bot.sendMessage(
+      chatId,
+      `❌ **Số lượng vượt quá giới hạn!**\nMỗi đơn hàng chỉ được phép mua tối đa **${maxOrderQty}** tài khoản Gmail EDU.`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+  const quantity = Math.min(Math.max(1, requestedQty), maxOrderQty);
+
+  // Giới hạn số lượng mua cho từng User
+  const userLimit = (user.edu_limit !== null && user.edu_limit !== undefined)
+    ? Number(user.edu_limit)
+    : (Number(settings.gmail_edu_max_user_limit) || 0);
+
+  if (userLimit > 0) {
+    let totalBought = 0;
+    try {
+      const countRes = await query(
+        "SELECT COUNT(*) AS total FROM gmail_accounts WHERE sold_to_user_id = ? AND status != 'error'",
+        [user.id]
+      );
+      totalBought = Number(countRes[0]?.total || 0);
+    } catch (e) {}
+
+    if (totalBought + quantity > userLimit) {
+      const remaining = Math.max(0, userLimit - totalBought);
+      return bot.sendMessage(
+        chatId,
+        `❌ **Vượt quá giới hạn mua tài khoản!**\n\nBạn đã mua **${totalBought}/${userLimit}** tài khoản Gmail EDU.\nHiện tại bạn chỉ có thể mua thêm tối đa **${remaining}** tài khoản.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  }
+
+  let pricePerUnit = Number(settings.gmail_edu_price) || 10000;
+  try {
+    const cpRows = await query(
+      `SELECT custom_price FROM custom_pricing 
+       WHERE (user_id = ? OR user_id = ?)
+         AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
+         AND is_active = 1
+       ORDER BY id DESC LIMIT 1`,
+      [user.id, user.telegram_id]
+    );
+    if (cpRows && cpRows[0]?.custom_price) {
+      pricePerUnit = Number(cpRows[0].custom_price);
+    }
+  } catch (e) {}
+
+  const domain = settings.gmail_edu_domain || DEFAULT_EDU_DOMAIN || 'nttp.edu.pl';
+  const totalCost = pricePerUnit * quantity;
+  const currentBalance = Number(user?.balance) || 0;
+
+  if (currentBalance < totalCost) {
+    const lackAmount = totalCost - currentBalance;
+    const defaultLackTpl = `❌ **Số dư không đủ!**\n\n📦 Số lượng: **{quantity}** tài khoản Gmail EDU\n💰 Tổng tiền: **{total_cost}**\n👛 Số dư hiện tại: **{current_balance}**\n⚠️ Cần nạp thêm: **{lack_amount}**`;
+    const tplLack = await getBotTemplate('template_gmail_edu_insufficient_balance', defaultLackTpl, lang);
+    let lackMsg = renderBotTemplate(tplLack || defaultLackTpl, {
+      quantity,
+      total_cost: formatCurrency(totalCost),
+      current_balance: formatCurrency(currentBalance),
+      lack_amount: formatCurrency(lackAmount)
+    });
+    if (!lackMsg || !lackMsg.trim()) {
+      lackMsg = renderBotTemplate(defaultLackTpl, {
+        quantity,
+        total_cost: formatCurrency(totalCost),
+        current_balance: formatCurrency(currentBalance),
+        lack_amount: formatCurrency(lackAmount)
+      });
+    }
+
+    const depositKeyboard = [
+      [{ text: '➕ Nạp tiền ngay', callback_data: createCallbackData({ action: 'deposit_prompt' }) }],
+      [{ text: '↩️ Quay lại', callback_data: createCallbackData({ action: 'buy_edu_menu' }) }]
+    ];
+
+    if (messageId) {
+      try {
+        return await bot.editMessageText(lackMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: depositKeyboard } });
+      } catch (e) {}
+    }
+    try {
+      return await bot.sendMessage(chatId, lackMsg, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: depositKeyboard } });
+    } catch (e) {
+      console.error('[handleBuyEduPurchase] Error sending lackMsg:', e.message);
+    }
+    return;
+  }
+
+  // Thông báo tiến trình
+  let statusMsg = null;
+  try {
+    statusMsg = await bot.sendMessage(
+      chatId,
+      `⏳ **Đang xử lý đơn hàng...**\nĐang kết nối Google Admin SDK để tạo **${quantity}** tài khoản Gmail EDU. Vui lòng đợi trong giây lát!`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (e) {}
+
+  // Xác định mật khẩu: Ưu tiên mật khẩu user tự đặt -> mật khẩu cố định Admin -> ngẫu nhiên
+  const userCustomPass = userEduCustomPasswordState.get(String(user.telegram_id || chatId));
+  const configuredPass = (settings.gmail_edu_password_type === 'custom' && settings.gmail_edu_custom_password)
+    ? settings.gmail_edu_custom_password.trim()
+    : null;
+  const staticPass = userCustomPass || configuredPass || null;
+
+  // 3. Tạo tài khoản trên Google Admin
+  const createdAccounts = [];
+  const failedAccounts = [];
+
+  for (let i = 0; i < quantity; i++) {
+    const username = generateRandomUsername(prefix);
+    const password = staticPass || generateRandomPassword(12);
+
+    const result = await createEduAccount(username, domain, password);
+    if (!result.success) {
+      console.error(`[BUY_EDU_BOT] Lỗi tạo tài khoản ${username}@${domain}:`, result.error);
+      failedAccounts.push({ username, error: result.error });
+      continue;
+    }
+
+    const email = result.email;
+    const finalPass = result.password || password;
+
+    // Lưu vào bảng gmail_accounts: is_logged_in = 0, first_login_at = NULL, delete_at = NULL
+    // Hệ thống chỉ kích hoạt tính giờ xóa sau khi khách đã đăng nhập Google lần đầu!
+    try {
+      await query(`
+        INSERT INTO gmail_accounts (
+          email, password, type, domain, status, sold_to_user_id, sold_price, 
+          is_logged_in, first_login_at, delete_at, created_at
+        )
+        VALUES (?, ?, 'edu', ?, 'sold', ?, ?, 0, NULL, NULL, NOW())
+      `, [email, finalPass, domain, user.id, pricePerUnit]);
+    } catch (dbErr) {
+      console.error('[BUY_EDU_BOT] Lỗi lưu gmail_accounts:', dbErr.message);
+    }
+
+    createdAccounts.push({ email, password: finalPass });
+
+    if (i < quantity - 1) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  // Xóa mật khẩu custom tạm thời của user sau khi đã mua xong
+  userEduCustomPasswordState.delete(String(user.telegram_id || chatId));
+
+  // Xóa tin nhắn trạng thái
+  if (statusMsg?.message_id) {
+    try { await bot.deleteMessage(chatId, statusMsg.message_id); } catch (e) {}
+  }
+
+  if (createdAccounts.length === 0) {
+    const errMsg = `❌ **Không thể tạo tài khoản Google Workspace!**\n\nLý do: \`${failedAccounts[0]?.error || 'Lỗi hệ thống Google'}\`\n\n*Số dư của bạn chưa bị trừ.*`;
+    return bot.sendMessage(chatId, errMsg, { parse_mode: 'Markdown' });
+  }
+
+  const actualTotalCost = pricePerUnit * createdAccounts.length;
+
+  // 4. Trừ tiền người dùng & ghi log
+  await updateBalance(user.id, -actualTotalCost);
+  await addBalanceLog(user.id, -actualTotalCost, `buy_gmail_edu_${createdAccounts.length}_items`);
+
+  const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
+
+  // 5. Tạo đơn hàng orders
+  let invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+  try {
+    const orderRes = await query(
+      "INSERT INTO orders (user_id, price, email, note, status) VALUES (?, ?, ?, ?, 'completed')",
+      [user.id, actualTotalCost, accountsFormatted, `Mua Gmail EDU (${createdAccounts.length} tài khoản)`]
+    );
+    if (orderRes?.insertId) {
+      invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
+      await query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
+      await query('UPDATE gmail_accounts SET order_id = ? WHERE sold_to_user_id = ? AND order_id IS NULL', [invoiceCode, user.id]);
+    }
+  } catch (e) {
+    console.error('[BUY_EDU_BOT] Order insert error:', e.message);
+  }
+
+  const updatedUser = await getUserByTelegram(user.telegram_id || chatId);
+  const newBalance = Number(updatedUser?.balance) || 0;
+  const deleteHours = parseInt(settings.gmail_edu_delete_hours, 10) || 1;
+  const liveStr = deleteHours > 0 ? `${deleteHours} giờ` : 'Vĩnh viễn';
+
+  const doneKeyboard = [
+    [{ text: '🎓 Mua thêm Gmail EDU', callback_data: createCallbackData({ action: 'buy_edu_menu' }) }],
+    [{ text: '🧾 Xem lịch sử đơn', callback_data: createCallbackData({ action: 'order_history' }) }]
+  ];
+
+  // 6. Giao hàng cho người dùng:
+  // - Mua 1 tài khoản: gửi trực tiếp tin nhắn thông tin tài khoản & mật khẩu
+  // - Mua nhiều tài khoản (>1): tạo file .txt và gửi kèm qua bot.sendDocument
+  if (createdAccounts.length === 1) {
+    const acc = createdAccounts[0];
+    const singleSuccessMsg = 
+      `🎉 *MUA GMAIL EDU THÀNH CÔNG!*\n\n` +
+      `🧾 *Mã đơn hàng:* \`${invoiceCode}\`\n` +
+      `📧 *Email:* \`${acc.email}\`\n` +
+      `🔑 *Mật khẩu:* \`${acc.password}\`\n` +
+      `⏳ *Thời gian live:* \`${liveStr}\` _(Chỉ bắt đầu tính sau khi bạn đăng nhập Google lần đầu)_\n` +
+      `💰 *Tổng thanh toán:* \`${formatCurrency(actualTotalCost)}\`\n` +
+      `👛 *Số dư còn lại:* \`${formatCurrency(newBalance)}\`\n\n` +
+      `🔗 *Đăng nhập tại:* https://accounts.google.com\n` +
+      `⚠️ *Lưu ý: Hệ thống sẽ tự động xóa tài khoản sau ${liveStr} kể từ khi bạn đăng nhập lần đầu vào Google.*`;
+
+    try {
+      await bot.sendMessage(chatId, singleSuccessMsg, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: doneKeyboard }
+      });
+      console.log(`[BUY_EDU_BOT] ✅ Đã gửi tài khoản Gmail EDU trực tiếp (số lượng: 1)`);
+    } catch (err) {
+      console.error('[handleBuyEduPurchase] Error sending singleSuccessMsg:', err.message);
+    }
+  } else {
+    // Mua nhiều tài khoản: tạo file .txt gửi đính kèm
+    const fileHeader = 
+      `# ========================================================\n` +
+      `# DON HANG GMAIL EDU: ${invoiceCode}\n` +
+      `# SO LUONG: ${createdAccounts.length} TAI KHOAN\n` +
+      `# THOI GIAN LIVE: ${liveStr} (BAT DAU TINH SAU KHI DANG NHAP LAN DAU)\n` +
+      `# DINH DANG: EMAIL|PASSWORD\n` +
+      `# ========================================================\n\n`;
+
+    const fileContent = fileHeader + createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
+    const fileName = `Gmail_EDU_${invoiceCode}_${createdAccounts.length}acc.txt`;
+    const tempFilePath = path.join(__dirname, '../../temp', fileName);
+
+    const tempDir = path.dirname(tempFilePath);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+
+    try {
+      const caption = 
+        `🎉 *MUA GMAIL EDU THÀNH CÔNG!*\n\n` +
+        `🧾 *Mã đơn hàng:* \`${invoiceCode}\`\n` +
+        `📦 *Số lượng:* *${createdAccounts.length}* tài khoản\n` +
+        `⏳ *Thời gian live:* \`${liveStr}\` _(Chỉ bắt đầu tính sau khi đăng nhập)_\n` +
+        `💰 *Tổng thanh toán:* \`${formatCurrency(actualTotalCost)}\`\n` +
+        `👛 *Số dư còn lại:* \`${formatCurrency(newBalance)}\`\n\n` +
+        `📁 *Danh sách ${createdAccounts.length} tài khoản đính kèm trong file .txt bên dưới!*`;
+
+      await bot.sendDocument(chatId, tempFilePath, {
+        caption,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: doneKeyboard }
+      });
+      console.log(`[BUY_EDU_BOT] ✅ Đã gửi file TXT cho đơn mua Gmail EDU (số lượng: ${createdAccounts.length})`);
+    } catch (sendErr) {
+      console.error('[BUY_EDU_BOT] ❌ Lỗi khi gửi file txt, fallback sang gửi tin nhắn:', sendErr);
+      const fallbackMsg = 
+        `🎉 *MUA GMAIL EDU THÀNH CÔNG!*\n\n` +
+        `🧾 *Mã đơn hàng:* \`${invoiceCode}\`\n` +
+        `📦 *Số lượng:* *${createdAccounts.length}* tài khoản\n` +
+        `💰 *Tổng thanh toán:* \`${formatCurrency(actualTotalCost)}\`\n` +
+        `👛 *Số dư còn lại:* \`${formatCurrency(newBalance)}\`\n\n` +
+        `📋 *Danh sách tài khoản (Email|Password):*\n\`\`\`\n${accountsFormatted}\n\`\`\`\n\n` +
+        `🔗 *Đăng nhập tại:* https://accounts.google.com`;
+
+      await bot.sendMessage(chatId, fallbackMsg, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: doneKeyboard }
+      });
+    } finally {
+      if (fs.existsSync(tempFilePath)) {
+        try { fs.unlinkSync(tempFilePath); } catch (e) {}
+      }
+    }
+  }
+
+  // 7. Thông báo cho Admin
+  try {
+    const adminIds = await getAdminIds();
+    const adminNotice = `🔔 **ĐƠN HÀNG GMAIL EDU MỚI**\n\n` +
+      `👤 Người mua: \`${user.name || user.username || user.id}\` (ID: \`${user.id}\`)\n` +
+      `🧾 Mã đơn: \`${invoiceCode}\`\n` +
+      `📦 Số lượng: ${createdAccounts.length} tài khoản\n` +
+      `💰 Số tiền: ${formatCurrency(actualTotalCost)}\n` +
+      `🕒 Thời gian: ${new Date().toLocaleString('vi-VN')}`;
+
+    for (const aId of adminIds) {
+      try {
+        await bot.sendMessage(aId, adminNotice, { parse_mode: 'Markdown' });
+      } catch (e) {}
+    }
+  } catch (e) {}
+};
+
+/**
+ * Xử lý khi người dùng nhập Prefix để mua Gmail EDU
+ */
+export const handleEduPrefixInput = async (bot, msg, user) => {
+  const userIdStr = String(msg.from.id);
+  const state = waitingForEduPrefixState.get(userIdStr);
+  if (!state) return false;
+
+  waitingForEduPrefixState.delete(userIdStr);
+  const rawPrefix = msg.text ? msg.text.trim() : '';
+
+  if (!rawPrefix || rawPrefix.length < 2) {
+    await bot.sendMessage(msg.chat.id, '❌ Tiền tố (Prefix) quá ngắn. Vui lòng nhập từ 2-15 ký tự chữ/số.');
+    return true;
+  }
+
+  const cleanPrefix = rawPrefix
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+  if (!cleanPrefix) {
+    await bot.sendMessage(msg.chat.id, '❌ Tiền tố không hợp lệ. Chỉ chấp nhận chữ cái không dấu và số (a-z, 0-9).');
+    return true;
+  }
+
+  await handleBuyEduPurchase(bot, msg.chat.id, user, { quantity: 1, prefix: cleanPrefix });
+  return true;
+};
+
+/**
+ * Xử lý khi người dùng nhập Số lượng để mua Gmail EDU
+ */
+export const handleEduQuantityInput = async (bot, msg, user) => {
+  const userIdStr = String(msg.from.id);
+  const state = waitingForEduQuantityState.get(userIdStr);
+  if (!state) return false;
+
+  waitingForEduQuantityState.delete(userIdStr);
+
+  let maxQty = 20;
+  try {
+    const row = await query("SELECT `value` FROM settings WHERE `key` = 'gmail_edu_max_order_qty'");
+    if (row && row[0]?.value) {
+      maxQty = Math.max(1, parseInt(row[0].value, 10) || 20);
+    }
+  } catch (e) {}
+
+  const rawQty = parseInt(msg.text.trim(), 10);
+
+  if (isNaN(rawQty) || rawQty < 1 || rawQty > maxQty) {
+    await bot.sendMessage(msg.chat.id, `❌ Số lượng không hợp lệ! Vui lòng nhập số lượng từ 1 đến ${maxQty}.`);
+    return true;
+  }
+
+  await handleBuyEduPurchase(bot, msg.chat.id, user, { quantity: rawQty });
+  return true;
+};
+
+/**
+ * Xử lý khi người dùng nhập Mật khẩu theo yêu cầu cho Gmail EDU
+ */
+export const handleEduPasswordInput = async (bot, msg, user) => {
+  const userIdStr = String(msg.from.id);
+  const state = waitingForEduPasswordState.get(userIdStr);
+  if (!state) return false;
+
+  waitingForEduPasswordState.delete(userIdStr);
+  const rawPass = msg.text ? msg.text.trim() : '';
+
+  if (!rawPass || rawPass.length < 8) {
+    await bot.sendMessage(
+      msg.chat.id,
+      '❌ **Mật khẩu không hợp lệ!**\nGoogle Workspace yêu cầu mật khẩu phải có tối thiểu **8 ký tự**.\nVui lòng nhấn đặt lại mật khẩu và thử lại.',
+      { parse_mode: 'Markdown' }
+    );
+    return true;
+  }
+
+  if (/\s/.test(rawPass)) {
+    await bot.sendMessage(
+      msg.chat.id,
+      '❌ **Mật khẩu không được chứa khoảng trắng (dấu cách)!**\nVui lòng nhấn đặt lại mật khẩu và thử lại.',
+      { parse_mode: 'Markdown' }
+    );
+    return true;
+  }
+
+  userEduCustomPasswordState.set(userIdStr, rawPass);
+
+  const keyboard = [
+    [
+      { text: '⚡ Mua nhanh 1 Edu', callback_data: createCallbackData({ action: 'buy_edu_fast', qty: 1 }) },
+      { text: '🎓 Menu Gmail EDU', callback_data: createCallbackData({ action: 'buy_edu_menu' }) }
+    ],
+    [
+      { text: '🔄 Hủy mật khẩu riêng', callback_data: createCallbackData({ action: 'buy_edu_reset_password' }) }
+    ]
+  ];
+
+  await bot.sendMessage(
+    msg.chat.id,
+    `✅ **Đã thiết lập mật khẩu mong muốn:** \`${rawPass}\`\n\nTài khoản Gmail EDU bạn mua tiếp theo sẽ được tạo với mật khẩu này!`,
+    { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } }
+  );
+  return true;
+};
+
+/**
+ * Hiển thị thông tin chi tiết của Luồng Mua Hàng Qua API
+ */
+export const sendWorkflowDetail = async (bot, chatId, wfId, user, messageId = null) => {
+  const { getApiWorkflowById } = await import('../services/apiWorkflowService.js');
+  const workflow = await getApiWorkflowById(wfId);
+
+  if (!workflow || !workflow.is_active) {
+    const errorMsg = '❌ Luồng dịch vụ này hiện không khả dụng hoặc đã tạm dừng!';
+    if (messageId) {
+      try { return await bot.editMessageText(errorMsg, { chat_id: chatId, message_id: messageId }); } catch (e) {}
+    }
+    return bot.sendMessage(chatId, errorMsg);
+  }
+
+  const priceVnd = Number(workflow.price_vnd || 0);
+  const priceUsdt = Number(workflow.price_usdt || 0);
+  const priceDisplay = priceVnd > 0 ? `${priceVnd.toLocaleString('vi-VN')} VNĐ` : (priceUsdt > 0 ? `${priceUsdt} USDT` : 'Miễn phí');
+
+  let fieldsCount = 0;
+  try {
+    const fields = typeof workflow.input_fields_json === 'string' ? JSON.parse(workflow.input_fields_json || '[]') : workflow.input_fields_json;
+    fieldsCount = Array.isArray(fields) ? fields.length : 0;
+  } catch {}
+
+  const detailText =
+    `${workflow.icon || '⚡'} *${workflow.name}*\n\n` +
+    `📝 *Mô tả:* ${workflow.description || 'Dịch vụ tự động qua API'}\n` +
+    `💰 *Giá dịch vụ:* \`${priceDisplay}\`\n` +
+    `👤 *Số dư hiện có:* \`${Number(user?.balance || 0).toLocaleString('vi-VN')} VNĐ\`\n` +
+    (fieldsCount > 0 ? `📋 *Thông tin cần cung cấp:* ${fieldsCount} trường dữ liệu\n` : '') +
+    `\n_Nhấn nút bên dưới để bắt đầu đặt hàng!_`;
+
+  const inline_keyboard = [
+    [
+      {
+        text: `🚀 Mua Ngay (${priceDisplay})`,
+        callback_data: createCallbackData({ action: 'wf_start', wfId: workflow.id })
+      }
+    ],
+    [
+      {
+        text: '🔙 Quay lại danh mục',
+        callback_data: createCallbackData({ action: 'list_categories' })
+      }
+    ]
+  ];
+
+  if (messageId) {
+    try {
+      return await bot.editMessageText(detailText, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+    } catch (e) {}
+  }
+
+  return bot.sendMessage(chatId, detailText, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard }
+  });
+};
+
+/**
+ * Bắt đầu chạy luồng mua hàng API (yêu cầu nhập thông tin hoặc chạy trực tiếp)
+ */
+export const startWorkflowExecution = async (bot, chatId, wfId, user, messageId = null) => {
+  const { getApiWorkflowById, executeApiWorkflow } = await import('../services/apiWorkflowService.js');
+  const workflow = await getApiWorkflowById(wfId);
+
+  if (!workflow || !workflow.is_active) {
+    return bot.sendMessage(chatId, '❌ Luồng dịch vụ này hiện không khả dụng!');
+  }
+
+  const cost = Number(workflow.price_vnd || 0);
+  if (Number(user?.balance || 0) < cost) {
+    const lack = cost - Number(user?.balance || 0);
+    const inline_keyboard = [
+      [{ text: '💳 Nạp Tiền Ngay', callback_data: createCallbackData({ action: 'deposit' }) }]
+    ];
+    return bot.sendMessage(
+      chatId,
+      `⚠️ *Số dư tài khoản không đủ!*\n\n` +
+      `Dịch vụ: *${workflow.name}*\n` +
+      `Giá: \`${cost.toLocaleString('vi-VN')} VNĐ\`\n` +
+      `Số dư hiện tại: \`${Number(user?.balance || 0).toLocaleString('vi-VN')} VNĐ\`\n` +
+      `Còn thiếu: \`${lack.toLocaleString('vi-VN')} VNĐ\`\n\nVui lòng nạp thêm tiền để tiếp tục.`,
+      { parse_mode: 'Markdown', reply_markup: { inline_keyboard } }
+    );
+  }
+
+  // Parse input fields
+  let inputFields = [];
+  try {
+    inputFields = typeof workflow.input_fields_json === 'string'
+      ? JSON.parse(workflow.input_fields_json || '[]')
+      : (workflow.input_fields_json || []);
+  } catch (e) {
+    console.error('Error parsing workflow input fields:', e);
+  }
+
+  // If no input fields required, show confirmation dialog first instead of auto-executing
+  if (!Array.isArray(inputFields) || inputFields.length === 0) {
+    const userIdStr = String(user.telegram_id || chatId);
+    waitingForWorkflowInputState.set(userIdStr, {
+      wfId: workflow.id,
+      workflow,
+      currentStepIndex: 0,
+      fields: [],
+      collectedValues: {}
+    });
+
+    const currentBalance = Number(user?.balance || 0);
+    const remainingBalance = currentBalance - cost;
+
+    const confirmText =
+      `🛒 *XÁC NHẬN ĐƠN HÀNG [${workflow.name}]*\n\n` +
+      `📦 *Dịch vụ:* ${workflow.name}\n` +
+      `💰 *Tổng thanh toán:* \`${cost.toLocaleString('vi-VN')} VNĐ\`\n` +
+      `👤 *Số dư hiện tại:* \`${currentBalance.toLocaleString('vi-VN')} VNĐ\`\n` +
+      `💳 *Số dư sau khi mua:* \`${remainingBalance.toLocaleString('vi-VN')} VNĐ\`\n\n` +
+      `_Nhấn nút xác nhận bên dưới để gửi yêu cầu và thanh toán:_`;
+
+    const inline_keyboard = [
+      [
+        { text: '✅ Xác Nhận Mua Ngay', callback_data: createCallbackData({ action: 'wf_confirm' }) }
+      ],
+      [
+        { text: '❌ Hủy Bỏ', callback_data: createCallbackData({ action: 'wf_cancel' }) }
+      ]
+    ];
+
+    if (messageId) {
+      try {
+        return await bot.editMessageText(confirmText, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard }
+        });
+      } catch (e) {}
+    }
+
+    return bot.sendMessage(chatId, confirmText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
+  }
+
+  // Set user state to collect first field
+  const userIdStr = String(user.telegram_id || chatId);
+  waitingForWorkflowInputState.set(userIdStr, {
+    wfId: workflow.id,
+    workflow,
+    currentStepIndex: 0,
+    fields: inputFields,
+    collectedValues: {}
+  });
+
+  const firstField = inputFields[0];
+  const progressDots = inputFields.map((_, i) => (i === 0 ? '🟢' : '⚪')).join('');
+  const promptText =
+    `📝 *[Bước 1/${inputFields.length}] ${progressDots} ${workflow.name}*\n\n` +
+    `👉 Vui lòng nhập: *${firstField.label || firstField.name}*\n` +
+    (firstField.description ? `_${firstField.description}_\n` : '') +
+    (firstField.placeholder ? `_(Ví dụ: \`${firstField.placeholder}\`)_` : '');
+
+  const inline_keyboard = [
+    [{ text: '❌ Hủy Bỏ Giao Dịch', callback_data: createCallbackData({ action: 'wf_cancel' }) }]
+  ];
+
+  return bot.sendMessage(chatId, promptText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
+};
+
+/**
+ * Xử lý tin nhắn text khi người dùng đang ở trong flow nhập liệu API Workflow
+ */
+export const handleWorkflowStepInput = async (bot, msg, user) => {
+  const userIdStr = String(msg.from.id);
+  const state = waitingForWorkflowInputState.get(userIdStr);
+  if (!state) return false;
+
+  const rawText = msg.text ? msg.text.trim() : '';
+
+  // Nếu người dùng gửi lệnh (/start, /menu...) -> Huỷ flow và để listener xử lý lệnh
+  if (rawText.startsWith('/')) {
+    waitingForWorkflowInputState.delete(userIdStr);
+    return false;
+  }
+
+  // Nếu người dùng gửi từ khoá huỷ
+  if (['hủy', 'huỷ', 'cancel', '❌', 'exit', 'quit', 'dung'].includes(rawText.toLowerCase())) {
+    waitingForWorkflowInputState.delete(userIdStr);
+    await bot.sendMessage(msg.chat.id, '🚫 Đã hủy bỏ giao dịch hiện tại.');
+    return true;
+  }
+
+  const { wfId, workflow, currentStepIndex, fields, collectedValues } = state;
+
+  // Trường hợp không có fields (đang ở màn hình chờ confirm)
+  if (!Array.isArray(fields) || fields.length === 0) {
+    return false;
+  }
+
+  const currentField = fields[currentStepIndex];
+  const inputValue = rawText;
+
+  if (!inputValue && currentField.required !== false) {
+    await bot.sendMessage(msg.chat.id, `❌ Vui lòng không để trống trường *${currentField.label || currentField.name}*!`, { parse_mode: 'Markdown' });
+    return true;
+  }
+
+  // Store collected value
+  collectedValues[currentField.name] = inputValue;
+
+  // Check if there are more steps
+  const nextStepIndex = currentStepIndex + 1;
+  if (nextStepIndex < fields.length) {
+    state.currentStepIndex = nextStepIndex;
+    waitingForWorkflowInputState.set(userIdStr, state);
+
+    const nextField = fields[nextStepIndex];
+    const progressDots = fields.map((_, i) => (i === nextStepIndex ? '🟢' : (i < nextStepIndex ? '🔵' : '⚪'))).join('');
+    const nextPrompt =
+      `📝 *[Bước ${nextStepIndex + 1}/${fields.length}] ${progressDots} ${workflow.name}*\n\n` +
+      `👉 Vui lòng nhập: *${nextField.label || nextField.name}*\n` +
+      (nextField.description ? `_${nextField.description}_\n` : '') +
+      (nextField.placeholder ? `_(Ví dụ: \`${nextField.placeholder}\`)_` : '');
+
+    const inline_keyboard = [
+      [{ text: '❌ Hủy Bỏ Giao Dịch', callback_data: createCallbackData({ action: 'wf_cancel' }) }]
+    ];
+
+    await bot.sendMessage(msg.chat.id, nextPrompt, { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
+    return true;
+  }
+
+  // All inputs collected -> Show CONFIRMATION SUMMARY before executing
+  const cost = Number(workflow.price_vnd || 0);
+  const currentBalance = Number(user?.balance || 0);
+  const remainingBalance = currentBalance - cost;
+
+  let summaryFieldsText = '';
+  fields.forEach(f => {
+    summaryFieldsText += `• *${f.label || f.name}:* \`${collectedValues[f.name] || 'N/A'}\`\n`;
+  });
+
+  const confirmText =
+    `🛒 *XÁC NHẬN ĐƠN HÀNG [${workflow.name}]*\n\n` +
+    `📋 *Thông tin bạn đã cung cấp:*\n` +
+    summaryFieldsText +
+    `\n💰 *Tổng thanh toán:* \`${cost.toLocaleString('vi-VN')} VNĐ\`\n` +
+    `👤 *Số dư hiện tại:* \`${currentBalance.toLocaleString('vi-VN')} VNĐ\`\n` +
+    `💳 *Số dư sau khi mua:* \`${remainingBalance.toLocaleString('vi-VN')} VNĐ\`\n\n` +
+    `_Vui lòng kiểm tra kỹ thông tin trước khi xác nhận trừ tiền!_`;
+
+  const inline_keyboard = [
+    [
+      { text: '✅ Xác Nhận Mua Ngay', callback_data: createCallbackData({ action: 'wf_confirm' }) }
+    ],
+    [
+      { text: '❌ Hủy Bỏ', callback_data: createCallbackData({ action: 'wf_cancel' }) }
+    ]
+  ];
+
+  await bot.sendMessage(msg.chat.id, confirmText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard } });
+  return true;
+};
+
+/**
+ * Xử lý khi người dùng nhấn Xác Nhận Mua trên Confirmation Screen
+ */
+export const handleWorkflowConfirm = async (bot, chatId, user, messageId = null) => {
+  const userIdStr = String(user.telegram_id || chatId);
+  const state = waitingForWorkflowInputState.get(userIdStr);
+
+  if (!state) {
+    return bot.sendMessage(chatId, '⚠️ Phiên giao dịch đã hết hạn hoặc không tồn tại. Vui lòng thử lại!');
+  }
+
+  const { workflow, collectedValues } = state;
+  waitingForWorkflowInputState.delete(userIdStr);
+
+  if (messageId) {
+    try {
+      await bot.editMessageText(`⏳ *Đang gửi yêu cầu và xử lý đơn hàng [${workflow.name}] qua API...*`, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown'
+      });
+    } catch {}
+  } else {
+    await bot.sendMessage(chatId, `⏳ *Đang gửi yêu cầu và xử lý đơn hàng [${workflow.name}] qua API...*`, { parse_mode: 'Markdown' });
+  }
+
+  const { executeApiWorkflow } = await import('../services/apiWorkflowService.js');
+  const result = await executeApiWorkflow(workflow, collectedValues, user);
+
+  if (!result.success) {
+    return bot.sendMessage(chatId, result.error || '❌ Đã có lỗi xảy ra trong quá trình gọi API!');
+  }
+
+  const successKeyboard = [
+    [
+      { text: '🛍️ Mua Thêm Dịch Vụ', callback_data: createCallbackData({ action: 'list_categories' }) }
+    ]
+  ];
+
+  return bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: successKeyboard } });
+};
+
+/**
+ * Xử lý khi người dùng nhấn Hủy Bỏ Giao Dịch
+ */
+export const handleWorkflowCancel = async (bot, chatId, user, messageId = null) => {
+  const userIdStr = String(user.telegram_id || chatId);
+  waitingForWorkflowInputState.delete(userIdStr);
+
+  const cancelText = '🚫 **Đã hủy bỏ giao dịch.** Bạn có thể chọn dịch vụ khác trong menu!';
+  if (messageId) {
+    try {
+      return await bot.editMessageText(cancelText, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+    } catch {}
+  }
+  return bot.sendMessage(chatId, cancelText, { parse_mode: 'Markdown' });
+};
+
+

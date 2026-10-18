@@ -229,6 +229,12 @@ export const registerListeners = (bot, config) => {
     await sendCategoryList(bot, msg.chat.id, user);
   });
 
+  bot.onText(/^\/(buyedu|edu|gmailedu|buygmail|gmail)(?:@\w+)?$/i, async (msg) => {
+    const user = await ensureUser(bot, msg);
+    const { sendBuyEduMenu } = await import('./handle/handleBuy.js');
+    await sendBuyEduMenu(bot, msg.chat.id, user);
+  });
+
   bot.onText(/^\/(wallet|vi|balance)(?:@\w+)?$/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     await sendWalletMenu(bot, msg.chat.id, user, config);
@@ -318,7 +324,7 @@ export const registerListeners = (bot, config) => {
         cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '语言' || cleanTxt === '语言切换' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
         cleanTxt === '🎁 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === 'Check-in' || cleanTxt === '每日签到' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
-        cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
+        cleanTxt === '🎓 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || cleanTxt === '🎓 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '🎓 Mua Gmail' || cleanTxt === 'Mua Gmail' || cleanTxt === 'Gmail' || cleanTxt === '🎓 Buy Gmail EDU' || cleanTxt === 'Buy Gmail EDU' || cleanTxt === '🎓 购买 Gmail EDU' || cleanTxt === '购买 Gmail EDU' ||
         cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组'
       );
     };
@@ -326,10 +332,14 @@ export const registerListeners = (bot, config) => {
     // Nếu người dùng bấm bất kỳ Nút Menu nào -> Tự động xoá tất cả trạng thái chờ trước đó và xử lý Menu ngay
     if (isNavMenuButton(text)) {
       const { delCache } = await import('../lib/cache/index.js');
-      const { manualOrderState, waitingForProductQuantity, waitingForCouponState } = await import('./handle/handleBuy.js');
+      const { manualOrderState, waitingForProductQuantity, waitingForCouponState, waitingForWorkflowInputState, waitingForEduPrefixState, waitingForEduQuantityState, waitingForEduPasswordState } = await import('./handle/handleBuy.js');
       manualOrderState?.delete(String(msg.from.id));
       waitingForProductQuantity?.delete(String(msg.from.id));
       waitingForCouponState?.delete(String(msg.from.id));
+      waitingForWorkflowInputState?.delete(String(msg.from.id));
+      waitingForEduPrefixState?.delete(String(msg.from.id));
+      waitingForEduQuantityState?.delete(String(msg.from.id));
+      waitingForEduPasswordState?.delete(String(msg.from.id));
       delCache(`waiting_usdt_amount_${msg.from.id}`);
       delCache(`chatgpt_waiting_${msg.from.id}`);
       delCache(`waiting_trc20_amount_${msg.from.id}`);
@@ -363,6 +373,14 @@ export const registerListeners = (bot, config) => {
           switch (matchedBtn.action) {
             case 'products':
               return sendCategoryList(bot, msg.chat.id, user);
+            case 'buyedu':
+            case 'buy_edu':
+            case 'gmail_edu':
+            case 'gmail':
+              {
+                const { sendBuyEduMenu } = await import('./handle/handleBuy.js');
+                return sendBuyEduMenu(bot, msg.chat.id, user);
+              }
             case 'support':
               return sendSupportMenu(bot, msg.chat.id, user);
             case 'wallet':
@@ -468,6 +486,18 @@ export const registerListeners = (bot, config) => {
         text === '🛡️ Warranty' || text === 'Warranty' || text === '/warranty'
       ) {
         return sendWarrantyMenu(bot, msg.chat.id, user);
+      }
+
+      // Nút 🎓 Mua Gmail EDU / Mua Gmail
+      if (
+        text === '🎓 Mua Gmail EDU' || text === 'Mua Gmail EDU' || text === '🎓 Mua Gmail Edu' ||
+        text === 'Mua Gmail Edu' || text === 'Gmail EDU' || text === 'Gmail Edu' || text === '🎓 Gmail EDU' ||
+        text === '🎓 Mua Gmail' || text === 'Mua Gmail' || text === 'Gmail' || text === '🎓 Gmail' ||
+        text === '🎓 Buy Gmail EDU' || text === 'Buy Gmail EDU' || text === '🎓 购买 Gmail EDU' || text === '购买 Gmail EDU' ||
+        text === '/buyedu' || text === '/gmail' || text === '/buygmail' || text === '/edu'
+      ) {
+        const { sendBuyEduMenu } = await import('./handle/handleBuy.js');
+        return sendBuyEduMenu(bot, msg.chat.id, user);
       }
 
       if (isMatchButton(text, 'btn_main_menu', userLang) || text === '↩️ Menu chính' || text === 'Menu chính') {
@@ -581,6 +611,13 @@ export const registerListeners = (bot, config) => {
     if (await handleTrc20AmountInput(bot, msg, user)) return;
     if (await handleTrc20HashInput(bot, msg, user)) return;
     if (await handleUsdtAmountInput(bot, msg, user, config)) return;
+
+    // Xử lý nhập Prefix hoặc Số lượng hoặc Mật khẩu khi mua Gmail EDU
+    const { handleEduPrefixInput, handleEduQuantityInput, handleEduPasswordInput, handleWorkflowStepInput } = await import('./handle/handleBuy.js');
+    if (await handleEduPrefixInput(bot, msg, user)) return;
+    if (await handleEduQuantityInput(bot, msg, user)) return;
+    if (await handleEduPasswordInput(bot, msg, user)) return;
+    if (await handleWorkflowStepInput(bot, msg, user)) return;
 
     // Nếu không phải input quantity cho Gmail/Mail, xử lý như deposit amount
     const handledDeposit = await handleDepositAmount(bot, msg, user, config);
@@ -873,6 +910,89 @@ export const registerListeners = (bot, config) => {
           await sendOrderHistory(bot, chatId, user.id, 1, config.PAGE_SIZE);
           await bot.answerCallbackQuery(query.id);
           return;
+
+        case 'buy_edu_menu':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { sendBuyEduMenu } = await import('./handle/handleBuy.js');
+            return sendBuyEduMenu(bot, chatId, user, query.message?.message_id);
+          }
+
+        case 'buy_edu_fast':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { handleBuyEduPurchase } = await import('./handle/handleBuy.js');
+            return handleBuyEduPurchase(bot, chatId, user, { quantity: data.qty || 1 }, query.message?.message_id);
+          }
+
+        case 'buy_edu_prompt_qty':
+          {
+            const { waitingForEduQuantityState } = await import('./handle/handleBuy.js');
+            waitingForEduQuantityState.set(String(query.from.id), true);
+            let maxQty = 20;
+            try {
+              const { query: dbQuery } = await import('./database/index.js');
+              const row = await dbQuery("SELECT `value` FROM settings WHERE `key` = 'gmail_edu_max_order_qty'");
+              if (row && row[0]?.value) maxQty = Math.max(1, parseInt(row[0].value, 10) || 20);
+            } catch (e) {}
+            await bot.sendMessage(chatId, `🔢 **Vui lòng nhập số lượng tài khoản Gmail EDU muốn mua (1 - ${maxQty}):**`, { parse_mode: 'Markdown' });
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+
+        case 'buy_edu_prompt_prefix':
+          {
+            const { waitingForEduPrefixState } = await import('./handle/handleBuy.js');
+            waitingForEduPrefixState.set(String(query.from.id), true);
+            await bot.sendMessage(chatId, '✍️ **Vui lòng nhập tiền tố (Prefix) mong muốn cho tài khoản Gmail EDU:**\n*(Ví dụ: `hoanganh` -> bot sẽ tạo `hoanganh123@domain`)*', { parse_mode: 'Markdown' });
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+
+        case 'buy_edu_prompt_password':
+          {
+            const { waitingForEduPasswordState } = await import('./handle/handleBuy.js');
+            waitingForEduPasswordState.set(String(query.from.id), true);
+            await bot.sendMessage(chatId, '🔑 **Vui lòng nhập mật khẩu bạn muốn đặt cho Gmail EDU:**\n*(Tối thiểu 8 ký tự, không chứa khoảng trắng. Ví dụ: `Pass@123456`)*', { parse_mode: 'Markdown' });
+            await bot.answerCallbackQuery(query.id);
+            return;
+          }
+
+        case 'buy_edu_reset_password':
+          {
+            const { userEduCustomPasswordState, sendBuyEduMenu } = await import('./handle/handleBuy.js');
+            userEduCustomPasswordState.delete(String(query.from.id));
+            try { await bot.answerCallbackQuery(query.id, { text: '🎲 Đã chuyển về chế độ mật khẩu ngẫu nhiên!' }); } catch (e) {}
+            return sendBuyEduMenu(bot, chatId, user, query.message?.message_id);
+          }
+
+        case 'wf_view':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { sendWorkflowDetail } = await import('./handle/handleBuy.js');
+            return sendWorkflowDetail(bot, chatId, data.wfId, user, query.message?.message_id);
+          }
+
+        case 'wf_start':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { startWorkflowExecution } = await import('./handle/handleBuy.js');
+            return startWorkflowExecution(bot, chatId, data.wfId, user, query.message?.message_id);
+          }
+
+        case 'wf_confirm':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { handleWorkflowConfirm } = await import('./handle/handleBuy.js');
+            return handleWorkflowConfirm(bot, chatId, user, query.message?.message_id);
+          }
+
+        case 'wf_cancel':
+          {
+            try { await bot.answerCallbackQuery(query.id); } catch (e) {}
+            const { handleWorkflowCancel } = await import('./handle/handleBuy.js');
+            return handleWorkflowCancel(bot, chatId, user, query.message?.message_id);
+          }
 
         case 'products':
           return sendProductList(bot, chatId, data.page || 1, config.PAGE_SIZE, user, data.catId, query.message?.message_id);

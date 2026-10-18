@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { createEduAccount, generateRandomPassword, generateRandomUsername } from '@/lib/googleAdminService';
+import { createEduAccount, generateRandomPassword, generateRandomUsername, DEFAULT_EDU_DOMAIN } from '@/lib/googleAdminService';
 
 // Handler POST đặt Gmail EDU bằng User API Key
 export async function POST(request: Request) {
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         // Validate API Key
         const cleanApiKey = String(apiKey).trim();
         const [keyRows] = await pool.query<RowDataPacket[]>(`
-            SELECT k.id as key_id, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance
+            SELECT k.id as key_id, k.is_active, k.permissions, u.id as user_id, u.telegram_id, u.username, u.name, u.balance, u.is_banned, u.edu_limit
             FROM user_api_keys k
             INNER JOIN users u ON (k.user_id = u.id OR k.user_id = u.telegram_id)
             WHERE LOWER(TRIM(k.api_key)) = LOWER(TRIM(?)) LIMIT 1
@@ -56,6 +56,13 @@ export async function POST(request: Request) {
             }, { status: 403 });
         }
 
+        if (keyInfo.is_banned) {
+            return NextResponse.json({
+                success: false,
+                error: 'Tài khoản người dùng đã bị khóa.'
+            }, { status: 403 });
+        }
+
         // Check Permissions (Scope)
         const userPerms = keyInfo.permissions || 'all';
         if (userPerms !== 'all') {
@@ -70,29 +77,78 @@ export async function POST(request: Request) {
 
         // Get Gmail EDU settings
         const [settingsRows] = await pool.query<RowDataPacket[]>(
-            "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled')"
+            "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled', 'buy_gmail_edu', 'gmail_edu_password_type', 'gmail_edu_custom_password', 'gmail_edu_max_user_limit', 'gmail_edu_max_order_qty', 'gmail_edu_delete_hours')"
         );
 
         const settingsMap: Record<string, string> = {};
         settingsRows.forEach(r => { settingsMap[r.key] = r.value; });
 
-        const isEnabled = settingsMap.gmail_edu_enabled !== 'false';
+        const isEnabled = settingsMap.gmail_edu_enabled !== 'false' && settingsMap.buy_gmail_edu !== 'false';
         if (!isEnabled) {
             return NextResponse.json({
                 success: false,
-                error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin'
+                error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin.'
             }, { status: 400 });
         }
 
-        const pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+        let pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
+        try {
+            const [cpRows] = await pool.query<RowDataPacket[]>(
+                `SELECT custom_price, scope FROM custom_pricing 
+                 WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
+                   AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
+                   AND is_active = 1
+                 ORDER BY id DESC LIMIT 1`,
+                [keyInfo.user_id, keyInfo.user_id]
+            );
+            if (cpRows && cpRows.length > 0) {
+                pricePerUnit = Number(cpRows[0].custom_price);
+            }
+        } catch (cpErr: any) {
+            if (cpErr.code !== 'ER_NO_SUCH_TABLE') {
+                console.error('[GMAIL_EDU_NEXTJS_CUSTOM_PRICE_ERR]', cpErr.message);
+            }
+        }
+
         const defaultDomain = (body.domain && String(body.domain).trim())
             ? String(body.domain).trim()
-            : (settingsMap.gmail_edu_domain || 'suafpoly.app');
+            : (settingsMap.gmail_edu_domain || DEFAULT_EDU_DOMAIN || 'nttp.edu.pl');
 
-        const quantity = Math.min(Math.max(1, Number(body.quantity) || 1), 50);
+        const maxOrderQty = Math.max(1, Number(settingsMap.gmail_edu_max_order_qty) || 20);
+        const reqQty = Number(body.quantity) || 1;
+        if (reqQty > maxOrderQty) {
+            return NextResponse.json({
+                success: false,
+                error: `Số lượng đặt vượt quá giới hạn tối đa (${maxOrderQty} tài khoản/đơn).`
+            }, { status: 400 });
+        }
+        const quantity = Math.min(Math.max(1, reqQty), maxOrderQty);
+
+        // Kiểm tra giới hạn mua tài khoản cho người dùng
+        const userLimit = (keyInfo.edu_limit !== null && keyInfo.edu_limit !== undefined)
+            ? Number(keyInfo.edu_limit)
+            : (Number(settingsMap.gmail_edu_max_user_limit) || 0);
+
+        if (userLimit > 0) {
+            const [countRows] = await pool.query<RowDataPacket[]>(
+                "SELECT COUNT(*) as total FROM gmail_accounts WHERE sold_to_user_id = ? AND status != 'error'",
+                [keyInfo.user_id]
+            );
+            const totalBought = Number(countRows[0]?.total || 0);
+            if (totalBought + quantity > userLimit) {
+                return NextResponse.json({
+                    success: false,
+                    error: `Vượt quá giới hạn mua tài khoản Gmail EDU. Bạn đã mua ${totalBought}/${userLimit} tài khoản.`
+                }, { status: 400 });
+            }
+        }
+
         const domain = defaultDomain;
         const type = body.type === 'non' ? 'non' : 'edu';
-        const customPassword = body.password ? String(body.password).trim() : null;
+        const defaultPass = (settingsMap.gmail_edu_password_type === 'custom' && settingsMap.gmail_edu_custom_password)
+            ? settingsMap.gmail_edu_custom_password.trim()
+            : null;
+        const customPassword = body.password ? String(body.password).trim() : defaultPass;
 
         const totalCost = pricePerUnit * quantity;
         const currentBalance = Number(keyInfo.balance) || 0;
@@ -110,7 +166,7 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < quantity; i++) {
             const username = generateRandomUsername(body.prefix || body.username);
-            const password = customPassword || generateRandomPassword();
+            const password = customPassword || generateRandomPassword(12);
 
             // Call Google Admin API
             const createRes = await createEduAccount(username, domain, password);
@@ -122,23 +178,25 @@ export async function POST(request: Request) {
             }
 
             const email = createRes.email;
+            const finalPass = createRes.password || password;
 
-            // Insert into gmail_accounts DB table
+            // Insert into gmail_accounts DB table with delayed deletion (active on first login)
             await pool.query(`
-                INSERT INTO gmail_accounts (email, password, type, domain, status, delete_at, created_at)
-                VALUES (?, ?, ?, ?, 'available', DATE_ADD(NOW(), INTERVAL 1 HOUR), NOW())
-            `, [email, password, type, domain]);
+                INSERT INTO gmail_accounts (email, password, type, domain, status, sold_to_user_id, sold_price, is_logged_in, first_login_at, delete_at, created_at)
+                VALUES (?, ?, ?, ?, 'sold', ?, ?, 0, NULL, NULL, NOW())
+            `, [email, finalPass, type, domain, keyInfo.user_id, pricePerUnit]);
 
             createdAccounts.push({
                 email,
-                password,
+                password: finalPass,
                 type,
                 domain,
-                auto_delete: '1h_after_login'
+                google_id: createRes.id,
+                auto_delete: 'after_first_login'
             });
 
             if (i < quantity - 1) {
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 500));
             }
         }
 
@@ -175,6 +233,7 @@ export async function POST(request: Request) {
 
         try {
             await pool.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
+            await pool.query('UPDATE gmail_accounts SET order_id = ? WHERE sold_to_user_id = ? AND order_id IS NULL', [invoiceCode, keyInfo.user_id]);
         } catch (e) { }
 
         const newBalance = currentBalance - actualTotalCost;

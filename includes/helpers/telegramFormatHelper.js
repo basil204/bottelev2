@@ -141,9 +141,14 @@ export function installTelegramFormatHelper(bot) {
         }
 
         if (typeof text === 'string') {
+            const trimmed = text.trim();
+            if (!trimmed) {
+                console.warn(`[telegramFormatHelper] Blocked sending empty text to chatId: ${chatId}`);
+                return Promise.resolve({ ok: false, description: 'Bad Request: message text is empty (prevented by helper)' });
+            }
             const formattedText = markdownToTelegramHtml(text);
             newOptions.parse_mode = 'HTML';
-            return originalSendMessage(chatId, formattedText, newOptions);
+            return originalSendMessage(chatId, formattedText || trimmed, newOptions);
         }
         return originalSendMessage(chatId, text, newOptions);
     };
@@ -193,9 +198,14 @@ export function installTelegramFormatHelper(bot) {
         }
 
         if (typeof text === 'string') {
+            const trimmed = text.trim();
+            if (!trimmed) {
+                console.warn('[telegramFormatHelper] Blocked editing message with empty text');
+                return Promise.resolve({ ok: false, description: 'Bad Request: message text is empty (prevented by helper)' });
+            }
             const formattedText = markdownToTelegramHtml(text);
             newOptions.parse_mode = 'HTML';
-            return originalEditMessageText(formattedText, newOptions);
+            return originalEditMessageText(formattedText || trimmed, newOptions);
         }
         return originalEditMessageText(text, newOptions);
     };

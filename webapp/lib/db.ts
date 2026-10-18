@@ -104,6 +104,8 @@ async function initAccountStorageTables() {
     );
 
     for (const migration of [
+      "ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL",
+      "ALTER TABLE users ADD COLUMN first_name VARCHAR(255) NULL",
       "ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL",
       "ALTER TABLE users ADD COLUMN admin_note TEXT NULL",
       "ALTER TABLE user_api_keys ADD COLUMN permissions VARCHAR(255) DEFAULT 'all'"
@@ -582,6 +584,92 @@ async function initAccountStorageTables() {
       console.log('[DB] Canva Pro tables initialized successfully');
     } catch (e: any) {
       console.error('[DB] Error initializing Canva tables:', e?.message || e);
+    }
+
+    // Gmail EDU accounts table
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS gmail_accounts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          type VARCHAR(50) DEFAULT 'edu',
+          domain VARCHAR(255) DEFAULT 'nttp.edu.pl',
+          status VARCHAR(50) DEFAULT 'available',
+          sold_to_user_id INT DEFAULT NULL,
+          sold_price DECIMAL(15, 2) DEFAULT NULL,
+          order_id VARCHAR(50) DEFAULT NULL,
+          delete_at TIMESTAMP NULL DEFAULT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_gmail_status (status),
+          INDEX idx_gmail_domain (domain),
+          INDEX idx_gmail_sold_user (sold_to_user_id),
+          INDEX idx_gmail_delete_at (delete_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      for (const colSql of [
+        'ALTER TABLE gmail_accounts ADD COLUMN first_login_at TIMESTAMP NULL DEFAULT NULL',
+        'ALTER TABLE gmail_accounts ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL',
+        'ALTER TABLE gmail_accounts ADD COLUMN is_logged_in TINYINT(1) DEFAULT 0',
+        'ALTER TABLE gmail_accounts ADD INDEX idx_gmail_is_logged_in (is_logged_in)',
+        'ALTER TABLE users ADD COLUMN edu_limit INT DEFAULT NULL'
+      ]) {
+        try {
+          await pool.query(colSql);
+        } catch {}
+      }
+
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_enabled', 'true')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('buy_gmail_edu', 'true')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_price', '10000')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_domain', 'nttp.edu.pl')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_delete_hours', '1')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_password_type', 'random')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_custom_password', '')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_user_limit', '0')");
+      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_order_qty', '20')");
+
+      console.log('[DB] Gmail accounts table and settings initialized');
+    } catch (e: any) {
+      console.error('[DB] Error initializing gmail_accounts table:', e?.message || e);
+    }
+
+    // API Workflows table (Luồng mua hàng qua API bên thứ ba tự cấu hình)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS api_workflows (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          code VARCHAR(100) NOT NULL UNIQUE,
+          icon VARCHAR(50) DEFAULT '⚡',
+          category_id INT NULL,
+          description TEXT NULL,
+          price_vnd DECIMAL(15, 2) NOT NULL DEFAULT 0,
+          price_usdt DECIMAL(15, 4) NOT NULL DEFAULT 0,
+          api_url TEXT NOT NULL,
+          http_method VARCHAR(10) NOT NULL DEFAULT 'POST',
+          headers_json TEXT NULL,
+          body_template LONGTEXT NULL,
+          input_fields_json LONGTEXT NULL,
+          response_type VARCHAR(20) DEFAULT 'json',
+          response_data_path VARCHAR(255) DEFAULT 'data',
+          response_success_condition VARCHAR(255) DEFAULT 'status == 200',
+          success_message_template LONGTEXT NULL,
+          show_in_menu TINYINT(1) DEFAULT 1,
+          menu_row INT DEFAULT 1,
+          is_active TINYINT(1) DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_wf_code (code),
+          INDEX idx_wf_active (is_active),
+          INDEX idx_wf_category (category_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('[DB] api_workflows table initialized');
+    } catch (e: any) {
+      console.error('[DB] Error initializing api_workflows table:', e?.message || e);
     }
 
     console.log('[DB] Account storage tables initialized');

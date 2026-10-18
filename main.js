@@ -8,16 +8,26 @@ import { startAutoDepositWatcher, startQrExpirationChecker } from './includes/se
 import { startAutoRestockScheduler } from './includes/services/autoRestockService.js';
 import { startDriveBackupCron } from './includes/services/driveBackupService.js';
 import { startBinanceWatcher } from './includes/services/binanceWatcher.js';
+import { startEduAccountExpirationService } from './includes/services/eduAccountExpirationService.js';
 
 import { config, parseBotTokens } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
 import { createMultiBotProxy } from './includes/helpers/multiBotHelper.js';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ [GLOBAL] Unhandled Promise Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ [GLOBAL] Uncaught Exception:', err);
+});
 
 export { createMultiBotProxy };
 
 const BOT_COMMANDS = [
   { command: 'start', description: 'Khởi động và xem menu chính' },
   { command: 'products', description: '🛍️ Danh sách sản phẩm' },
+  { command: 'buyedu', description: '🎓 Mua Gmail EDU tự động' },
   { command: 'wallet', description: '👛 Ví & Số dư tài khoản' },
   { command: 'api', description: '🔗 Kết nối API tự động' },
   { command: 'warranty', description: '🛡️ Bảo hành đơn hàng' },
@@ -174,6 +184,7 @@ const bootstrap = async () => {
   startAutoRestockScheduler(multiBot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
   startDriveBackupCron(); // Khởi động tự động sao lưu dữ liệu CSDL lên Google Drive
   startBinanceWatcher(multiBot, config); // Khởi động tự động quét giao dịch nạp tiền Binance Pay
+  startEduAccountExpirationService(); // Khởi động tự động theo dõi đăng nhập & xóa Gmail EDU hết live
 
   // Theo dõi tín hiệu khởi động lại (Restart Signal) và thay đổi Token
   let lastRestartSignal = '';

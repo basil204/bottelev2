@@ -42,6 +42,11 @@ export async function GET(request: Request) {
             )
         `);
 
+        try {
+            await pool.query('ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL');
+            await pool.query('ALTER TABLE users ADD COLUMN first_name VARCHAR(255) NULL');
+        } catch {}
+
         // 1. CHAT CONVERSATIONS LIST (Realtime categorized list)
         if (action === 'chat_conversations') {
             let searchClause = '';

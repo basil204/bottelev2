@@ -9,7 +9,7 @@ import {
   Wallet, CreditCard, CheckSquare, Zap, Ticket, HelpCircle, MessageSquare,
   Bell, Target, Settings, Code2, Layers, Globe, Languages, Link as LinkIcon,
   Plug, Key, Handshake, UserCog, ShieldCheck, LogOut, Menu, X, Video, Film, Palette,
-  Users, ArrowDownCircle
+  Users, ArrowDownCircle, GraduationCap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -44,6 +44,8 @@ export function Sidebar() {
         { name: 'LỊCH SỬ BANK', href: '/bank-history', icon: CreditCard },
         { name: 'ĐIỂM DANH HÀNG NGÀY', href: '/checkin', icon: CheckSquare },
         { name: 'SẢN PHẨM', href: '/products', icon: Package },
+        { name: 'GMAIL EDU', href: '/gmail-edu', icon: GraduationCap },
+        { name: 'LUỒNG MUA HÀNG API', href: '/api-workflows', icon: Plug },
         { name: 'DANH MỤC SẢN PHẨM', href: '/categories', icon: Folders },
         { name: 'ĐƠN HÀNG', href: '/orders', icon: ShoppingCart },
         { name: 'ĐẶT TRƯỚC', href: '/preorders', icon: Clock },
@@ -60,6 +62,7 @@ export function Sidebar() {
       items: [
         { name: 'CẤU HÌNH BOT', href: '/settings', icon: Settings },
         { name: 'NÚT BẤM & NỘI DUNG BOT', href: '/start-menu', icon: MessageSquare },
+        { name: 'LUỒNG MUA HÀNG API', href: '/api-workflows', icon: Plug },
         { name: 'API KEY USER', href: '/user-api-keys', icon: Key },
       ],
     },

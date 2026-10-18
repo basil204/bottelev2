@@ -83,6 +83,18 @@ export const DEFAULT_BOT_TEMPLATES = {
     template_flash_sale_notify_en: `⚡ <b>SPECIAL FLASH SALE EVENT!</b>\n\n🛍️ <b>Product:</b> <b>{name}</b>\n{price_line}\n⏳ <b>Valid Time:</b> {start_time} - {end_time}\n\n⚡ <i>Limited quantity available. Click the button below to claim now!</i>`,
     template_flash_sale_notify_zh: `⚡ <b>限时特惠秒杀活动！</b>\n\n🛍️ <b>商品:</b> <b>{name}</b>\n{price_line}\n⏳ <b>活动时间:</b> {start_time} - {end_time}\n\n⚡ <i>优惠名额有限，请尽快点击下方按钮立即抢购！</i>`,
 
+    template_gmail_edu_info: `🎓 **MUA TÀI KHOẢN GMAIL EDU TỰ ĐỘNG**\n\n🌐 **Domain:** \`{domain}\`\n💰 **Đơn giá:** **{price}** / 1 tài khoản\n👛 **Số dư hiện có:** **{balance}**\n\n⚡ **Ưu điểm tài khoản:**\n• Khởi tạo trực tiếp qua Google Workspace Admin API\n• Mật khẩu bảo mật cao, tài khoản live 100%\n• Nhận tài khoản tức thì kèm hóa đơn đơn hàng\n\n👇 *Vui lòng chọn hình thức mua bên dưới:*`,
+    template_gmail_edu_info_en: `🎓 **BUY GMAIL EDU ACCOUNT (AUTO)**\n\n🌐 **Domain:** \`{domain}\`\n💰 **Unit Price:** **{price}** / account\n👛 **Your Balance:** **{balance}**\n\n⚡ **Account Highlights:**\n• Instant Google Workspace Admin API provisioning\n• 100% active & secure random password\n• Instant delivery with official invoice\n\n👇 *Please choose a purchase option below:*`,
+    template_gmail_edu_info_zh: `🎓 **自动购买 Gmail EDU 账号**\n\n🌐 **域名:** \`{domain}\`\n💰 **单价:** **{price}** / 个\n👛 **当前余额:** **{balance}**\n\n⚡ **账号特色:**\n• 直接通过 Google Workspace Admin API 实时创建\n• 高强随机密码，100% 官方正版活跃\n• 自动交付并生成订单明细\n\n👇 *请在下方选择购买方式:*`,
+
+    template_gmail_edu_success: `🎉 **MUA GMAIL EDU THÀNH CÔNG!**\n\n🧾 **Mã đơn hàng:** \`{invoice_code}\`\n📦 **Số lượng:** **{quantity}** tài khoản\n💰 **Tổng thanh toán:** **{total_price}**\n👛 **Số dư còn lại:** **{new_balance}**\n\n📋 **DANH SÁCH TÀI KHOẢN (Email|Password):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **Đăng nhập tại:** https://accounts.google.com\n⚠️ *Vui lòng sao chép mật khẩu và đăng nhập kiểm tra ngay.*`,
+    template_gmail_edu_success_en: `🎉 **GMAIL EDU PURCHASE SUCCESSFUL!**\n\n🧾 **Invoice Code:** \`{invoice_code}\`\n📦 **Quantity:** **{quantity}** account(s)\n💰 **Total Paid:** **{total_price}**\n👛 **Remaining Balance:** **{new_balance}**\n\n📋 **ACCOUNT LIST (Email|Password):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **Login at:** https://accounts.google.com\n⚠️ *Please save your password and log in immediately.*`,
+    template_gmail_edu_success_zh: `🎉 **GMAIL EDU 购买成功！**\n\n🧾 **订单编号:** \`{invoice_code}\`\n📦 **购买数量:** **{quantity}** 个账号\n💰 **实付金额:** **{total_price}**\n👛 **剩余余额:** **{new_balance}**\n\n📋 **账号列表 (账号|密码):**\n\`\`\`\n{data}\n\`\`\`\n\n🔗 **登录入口:** https://accounts.google.com\n⚠️ *请妥善保存密码并尽快登录验证。*`,
+
+    template_gmail_edu_insufficient_balance: `❌ **Số dư không đủ!**\n\n📦 Số lượng: **{quantity}** tài khoản Gmail EDU\n💰 Tổng tiền: **{total_cost}**\n👛 Số dư hiện tại: **{current_balance}**\n⚠️ Cần nạp thêm: **{lack_amount}**`,
+    template_gmail_edu_insufficient_balance_en: `❌ **Insufficient Balance!**\n\n📦 Quantity: **{quantity}** Gmail EDU account(s)\n💰 Total Cost: **{total_cost}**\n👛 Current Balance: **{current_balance}**\n⚠️ Needed Deposit: **{lack_amount}**`,
+    template_gmail_edu_insufficient_balance_zh: `❌ **余额不足！**\n\n📦 购买数量: **{quantity}** 个 Gmail EDU\n💰 总费用: **{total_cost}**\n👛 当前余额: **{current_balance}**\n⚠️ 需充值: **{lack_amount}**`,
+
     btn_view_and_buy: '🛍️ Xem & Mua sản phẩm ngay',
     btn_view_and_buy_en: '🛍️ View & Buy Now',
     btn_view_and_buy_zh: '🛍️ 查看并立即购买',
@@ -123,8 +135,27 @@ export function renderBotTemplate(templateStr, vars = {}) {
 
 /**
  * Get active template from DB or default with cache and language support
+ * Supports both signatures:
+ *   getBotTemplate(key, lang = 'vi', defaultFallback = null)
+ *   getBotTemplate(key, defaultFallback, lang = 'vi')
  */
-export async function getBotTemplate(key, lang = 'vi') {
+export async function getBotTemplate(key, param2 = 'vi', param3 = null) {
+    let lang = 'vi';
+    let defaultFallback = '';
+
+    if (param3 !== null && param3 !== undefined) {
+        defaultFallback = typeof param2 === 'string' ? param2 : '';
+        lang = typeof param3 === 'string' ? param3 : 'vi';
+    } else if (typeof param2 === 'string') {
+        const lower = param2.toLowerCase().trim();
+        if (['vi', 'en', 'zh'].includes(lower)) {
+            lang = lower;
+        } else {
+            defaultFallback = param2;
+            lang = 'vi';
+        }
+    }
+
     const langSuffix = lang === 'en' ? '_en' : (lang === 'zh' ? '_zh' : '');
     const localizedKey = langSuffix ? `${key}${langSuffix}` : key;
     const cacheKey = `${key}_${lang || 'vi'}`;
@@ -133,7 +164,10 @@ export async function getBotTemplate(key, lang = 'vi') {
     
     // Check local cache (valid for 10 seconds)
     if (templateCache.has(cacheKey) && (now - lastTemplateFetch < 10000)) {
-        return templateCache.get(cacheKey);
+        const cached = templateCache.get(cacheKey);
+        if (cached && typeof cached === 'string' && cached.trim() !== '') {
+            return cached;
+        }
     }
 
     try {
@@ -167,8 +201,14 @@ export async function getBotTemplate(key, lang = 'vi') {
         console.error(`Error loading template ${localizedKey} from DB:`, err.message);
     }
     
-    const fallbackVal = DEFAULT_BOT_TEMPLATES[localizedKey] || DEFAULT_BOT_TEMPLATES[key] || '';
-    templateCache.set(cacheKey, fallbackVal);
+    const fallbackVal = DEFAULT_BOT_TEMPLATES[localizedKey] 
+        || DEFAULT_BOT_TEMPLATES[key] 
+        || defaultFallback 
+        || '';
+
+    if (fallbackVal) {
+        templateCache.set(cacheKey, fallbackVal);
+    }
     return fallbackVal;
 }
 

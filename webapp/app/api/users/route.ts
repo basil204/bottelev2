@@ -109,12 +109,30 @@ export async function PUT(request: Request) {
         }
 
         if (type === 'admin_metadata') {
-            await pool.query('UPDATE users SET customer_tag = ?, admin_note = ? WHERE id = ?', [String(customer_tag || '').trim() || null, String(admin_note || '').trim() || null, id]);
+            const { edu_limit } = body;
+            const finalLimit = edu_limit === null || edu_limit === undefined || edu_limit === '' ? null : Number(edu_limit);
+            await pool.query('UPDATE users SET customer_tag = ?, admin_note = ?, edu_limit = ? WHERE id = ?', [
+                String(customer_tag || '').trim() || null, 
+                String(admin_note || '').trim() || null, 
+                finalLimit,
+                id
+            ]);
             await logAdminAction({
                 action: 'UPDATE', targetType: 'USER', targetId: id,
-                details: { customer_tag: customer_tag || null, admin_note: admin_note || null }, request
+                details: { customer_tag: customer_tag || null, admin_note: admin_note || null, edu_limit: finalLimit }, request
             });
             return NextResponse.json({ success: true });
+        }
+
+        if (type === 'edu_limit') {
+            const { edu_limit } = body;
+            const finalLimit = edu_limit === null || edu_limit === undefined || edu_limit === '' ? null : Number(edu_limit);
+            await pool.query('UPDATE users SET edu_limit = ? WHERE id = ?', [finalLimit, id]);
+            await logAdminAction({
+                action: 'UPDATE', targetType: 'USER', targetId: id,
+                details: { edu_limit: finalLimit }, request
+            });
+            return NextResponse.json({ success: true, edu_limit: finalLimit });
         }
 
         if (type === 'toggle_ban') {

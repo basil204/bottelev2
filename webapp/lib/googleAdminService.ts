@@ -1,5 +1,5 @@
 /**
- * Google Admin Service - Quản lý Gmail EDU qua Google Admin API
+ * Google Admin Service - Quản lý Gmail EDU qua Google Admin API (TypeScript)
  * Sử dụng credentials từ database/google/
  */
 
@@ -15,13 +15,16 @@ function findFile(relativePaths: string[]): string {
     return path.join(process.cwd(), relativePaths[0]);
 }
 
-const getCredentialsPath = () => findFile([
+export const DEFAULT_EDU_DOMAIN = process.env.GOOGLE_ADMIN_DOMAIN || 'nttp.edu.pl';
+export const DEFAULT_NON_DOMAIN = process.env.GOOGLE_ADMIN_NON_DOMAIN || 'suafpoly.app';
+
+export const getCredentialsPath = () => findFile([
     'database/google/client_secret.json',
     '../database/google/client_secret.json',
     'webapp/database/google/client_secret.json'
 ]);
 
-const getTokenPath = () => findFile([
+export const getTokenPath = () => findFile([
     'database/google/token.json',
     '../database/google/token.json',
     'webapp/database/google/token.json'
@@ -31,7 +34,7 @@ let authClient: Auth.OAuth2Client | null = null;
 let adminService: admin_directory_v1.Admin | null = null;
 
 /**
- * Khởi tạo OAuth2 client từ credentials
+ * Khởi tạo OAuth2 client từ credentials & tự động quản lý token
  */
 export const initializeAuth = async () => {
     try {
@@ -42,6 +45,9 @@ export const initializeAuth = async () => {
 
         if (!fs.existsSync(credPath)) {
             throw new Error(`Client secret file not found at: ${credPath}`);
+        }
+        if (!fs.existsSync(tokenPath)) {
+            throw new Error(`Token file not found at: ${tokenPath}`);
         }
 
         // Đọc credentials
@@ -56,28 +62,36 @@ export const initializeAuth = async () => {
         authClient = new google.auth.OAuth2(client_id, client_secret, redirect_uris ? redirect_uris[0] : undefined);
 
         // Đọc token đã lưu
-        if (fs.existsSync(tokenPath)) {
-            const token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
-            authClient.setCredentials(token);
+        let token = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+        authClient.setCredentials(token);
 
-            // Auto-refresh token nếu hết hạn
-            authClient.on('tokens', (tokens) => {
-                if (tokens.refresh_token) {
-                    try {
-                        const currentToken = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
-                        currentToken.refresh_token = tokens.refresh_token;
-                        fs.writeFileSync(tokenPath, JSON.stringify(currentToken, null, 2));
-                    } catch (e) {}
-                }
-            });
-        } else {
-            throw new Error(`Token file not found at: ${tokenPath}. Please run OAuth flow first.`);
+        // Kiểm tra hạn token
+        const now = Date.now();
+        if (token.expiry_date && token.expiry_date <= (now + 60000)) {
+            try {
+                const { credentials: newCredentials } = await authClient.refreshAccessToken();
+                token = { ...token, ...newCredentials };
+                fs.writeFileSync(tokenPath, JSON.stringify(token, null, 2));
+                authClient.setCredentials(token);
+            } catch (e) {
+                console.error('[GOOGLE_ADMIN_TS] Error auto refreshing token:', (e as Error).message);
+            }
         }
 
-        console.log('[GOOGLE_ADMIN] ✅ Auth initialized successfully');
+        // Auto-refresh token nếu hết hạn
+        authClient.on('tokens', (tokens) => {
+            if (tokens.refresh_token || tokens.access_token) {
+                try {
+                    const currentToken = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
+                    const merged = { ...currentToken, ...tokens };
+                    fs.writeFileSync(tokenPath, JSON.stringify(merged, null, 2));
+                } catch (e) {}
+            }
+        });
+
         return authClient;
     } catch (error) {
-        console.error('[GOOGLE_ADMIN] ❌ Error initializing auth:', (error as Error).message);
+        console.error('[GOOGLE_ADMIN_TS] ❌ Error initializing auth:', (error as Error).message);
         throw error;
     }
 };
@@ -96,10 +110,10 @@ export const getAdminService = async () => {
 /**
  * Sinh password ngẫu nhiên 12 ký tự hợp lệ theo chính sách bảo mật Google
  */
-export const generateRandomPassword = (): string => {
-    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-    const numbers = '0123456789';
+export const generateRandomPassword = (length: number = 12): string => {
+    const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+    const numbers = '23456789';
     const special = '!@#$%&*';
 
     let password = '';
@@ -109,7 +123,8 @@ export const generateRandomPassword = (): string => {
     password += special[Math.floor(Math.random() * special.length)];
 
     const all = uppercase + lowercase + numbers + special;
-    for (let i = 0; i < 8; i++) {
+    const remaining = Math.max(8, length - 4);
+    for (let i = 0; i < remaining; i++) {
         password += all[Math.floor(Math.random() * all.length)];
     }
     return password.split('').sort(() => Math.random() - 0.5).join('');
@@ -120,7 +135,12 @@ export const generateRandomPassword = (): string => {
  */
 export const generateRandomUsername = (prefix?: string): string => {
     if (prefix && prefix.trim()) {
-        const cleanPrefix = prefix.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const cleanPrefix = prefix
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/g, '');
         if (cleanPrefix) return `${cleanPrefix}${Math.floor(Math.random() * 899 + 100)}`;
     }
     const chars = 'abcdefghijklmnopqrstuvwxyz';
@@ -134,42 +154,52 @@ export const generateRandomUsername = (prefix?: string): string => {
  */
 export const createEduAccount = async (
     username: string,
-    domain: string = 'suafpoly.app',
+    domain: string = DEFAULT_EDU_DOMAIN,
     password?: string
-): Promise<{ success: boolean; email: string; id?: string; error?: string; data?: any }> => {
-    const email = `${username}@${domain}`;
+): Promise<{ success: boolean; email: string; password?: string; id?: string; error?: string; data?: any }> => {
+    const finalPassword = password || generateRandomPassword();
+    const cleanUsername = username ? username.trim().toLowerCase() : generateRandomUsername();
+    const email = `${cleanUsername}@${domain}`;
+
     try {
         const admin = await getAdminService();
-        const finalPassword = password || generateRandomPassword();
 
-        console.log(`[GOOGLE_ADMIN] Creating EDU account: ${email}`);
+        console.log(`[GOOGLE_ADMIN_TS] Creating EDU account: ${email}`);
 
         const response = await admin.users.insert({
             requestBody: {
                 primaryEmail: email,
                 password: finalPassword,
                 name: {
-                    givenName: username,
+                    givenName: cleanUsername,
                     familyName: 'User'
                 },
-                changePasswordAtNextLogin: false
+                changePasswordAtNextLogin: false,
+                includeInGlobalAddressList: true
             }
         });
 
-        console.log(`[GOOGLE_ADMIN] ✅ Created EDU account: ${email}, ID: ${response.data.id}`);
+        console.log(`[GOOGLE_ADMIN_TS] ✅ Created EDU account: ${email}, ID: ${response.data.id}`);
 
         return {
             success: true,
             email: email,
+            password: finalPassword,
             id: response.data.id || undefined,
             data: response.data
         };
     } catch (error) {
-        const errorMessage = (error as Error).message;
-        console.error(`[GOOGLE_ADMIN] ❌ Error creating EDU account for ${email}:`, errorMessage);
+        let errorMessage = (error as Error).message;
+        const errAny = error as any;
+        if (errAny?.response?.data?.error?.message) {
+            errorMessage = errAny.response.data.error.message;
+        }
+
+        console.error(`[GOOGLE_ADMIN_TS] ❌ Error creating EDU account for ${email}:`, errorMessage);
         return {
             success: false,
             email: email,
+            password: finalPassword,
             error: errorMessage
         };
     }
@@ -182,18 +212,18 @@ export const deleteAccount = async (email: string): Promise<{ success: boolean; 
     try {
         const admin = await getAdminService();
 
-        console.log(`[GOOGLE_ADMIN] Deleting account: ${email}`);
+        console.log(`[GOOGLE_ADMIN_TS] Deleting account: ${email}`);
 
         await admin.users.delete({
             userKey: email
         });
 
-        console.log(`[GOOGLE_ADMIN] ✅ Deleted account: ${email}`);
+        console.log(`[GOOGLE_ADMIN_TS] ✅ Deleted account: ${email}`);
 
         return { success: true, email };
     } catch (error) {
         const errorMessage = (error as Error).message;
-        console.error(`[GOOGLE_ADMIN] ❌ Error deleting account:`, errorMessage);
+        console.error(`[GOOGLE_ADMIN_TS] ❌ Error deleting account:`, errorMessage);
         return {
             success: false,
             error: errorMessage
@@ -220,7 +250,7 @@ export const deleteMultipleAccounts = async (emails: string[]): Promise<{
             } else {
                 failed.push({ email, error: result.error || 'Unknown error' });
             }
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 400));
         } catch (error) {
             failed.push({ email, error: (error as Error).message });
         }
@@ -234,6 +264,8 @@ export const deleteMultipleAccounts = async (emails: string[]): Promise<{
 };
 
 export default {
+    DEFAULT_EDU_DOMAIN,
+    DEFAULT_NON_DOMAIN,
     initializeAuth,
     getAdminService,
     generateRandomPassword,

@@ -7,11 +7,11 @@ import {
   ExternalLink, CheckCircle2, AlertCircle, Image as ImageIcon, Sparkles,
   Eye, HelpCircle, Layers, ToggleLeft, ToggleRight, ArrowRight, Smartphone,
   Zap, ListFilter, Keyboard, CreditCard, ShoppingBag, ShieldCheck, Key, FileText,
-  Copy, Globe, ArrowLeft, ArrowUpRight, Languages, Bell, Power
+  Copy, Globe, ArrowLeft, ArrowUpRight, Languages, Bell, Power, GraduationCap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StartMenuConfig, StartMenuButton } from '@/app/api/start-menu/route';
-import { MainKeyboardButton, BotMenuInlineButton } from '@/app/api/bot-templates/route';
+import { MainKeyboardButton, BotMenuInlineButton, DEFAULT_GMAIL_EDU_BUTTONS } from '@/app/api/bot-templates/route';
 import Link from 'next/link';
 
 const START_VARIABLE_CHIPS = [
@@ -21,10 +21,15 @@ const START_VARIABLE_CHIPS = [
   { code: '{balance}', label: 'Số dư tài khoản', example: '500.000 ₫' },
   { code: '{credit}', label: 'Điểm Credit', example: '100' },
   { code: '{shop_name}', label: 'Tên cửa hàng', example: 'DUCVIETSTORE' },
+  { code: '{domain}', label: 'Domain Gmail EDU', example: 'nttp.edu.pl' },
+  { code: '{invoice_code}', label: 'Mã hoá đơn', example: 'HD-20260918-0012' },
+  { code: '{total_price}', label: 'Tổng tiền mua', example: '20.000 ₫' },
+  { code: '{lack_amount}', label: 'Số tiền còn thiếu', example: '10.000 ₫' },
 ];
 
 export const CALLBACK_PRESETS = [
   { code: 'list_categories', label: '🛍️ Mở Danh Mục / Mua Sản Phẩm', defaultText: 'Sản Phẩm', defaultTextEn: 'Products', defaultTextZh: '产品' },
+  { code: 'buy_edu_menu', label: '🎓 Mua Gmail EDU Tự Động (Google Workspace)', defaultText: '🎓 Mua Gmail EDU', defaultTextEn: '🎓 Buy Gmail EDU', defaultTextZh: '🎓 购买 Gmail EDU' },
   { code: 'wallet_info', label: '👛 Thông Tin Ví & Số Dư', defaultText: 'Ví & Nạp Tiền', defaultTextEn: 'Wallet & Deposit', defaultTextZh: '钱包与充值' },
   { code: 'start_deposit', label: '➕ Nạp Tiền Vào Ví (Menu Chọn Phương Thức)', defaultText: 'Nạp Tiền', defaultTextEn: 'Deposit', defaultTextZh: '充值' },
   { code: 'deposit_select_bank', label: '💳 Nạp Tiền Ngân Hàng / VietQR Tự Động', defaultText: 'Nạp Ngân Hàng', defaultTextEn: 'Bank Deposit', defaultTextZh: '银行转账' },
@@ -38,6 +43,7 @@ export const WALLET_CALLBACK_PRESETS = [
   { code: 'start_deposit', label: '➕ Nạp Tiền Vào Ví', defaultText: 'Nạp tiền vào ví', defaultTextEn: 'Deposit Funds', defaultTextZh: '充值到钱包' },
   { code: 'deposit_history', label: '🧾 Lịch Sử Nạp Tiền', defaultText: 'Lịch sử nạp tiền', defaultTextEn: 'Deposit History', defaultTextZh: '充值记录' },
   { code: 'list_categories', label: '🛍️ Danh Mục Sản Phẩm', defaultText: 'Danh mục sản phẩm', defaultTextEn: 'View Products', defaultTextZh: '查看商品分类' },
+  { code: 'buy_edu_menu', label: '🎓 Mua Gmail EDU', defaultText: '🎓 Mua Gmail EDU', defaultTextEn: '🎓 Buy Gmail EDU', defaultTextZh: '🎓 购买 Gmail EDU' },
   { code: 'support_info', label: '💬 Hỗ Trợ CSKH', defaultText: 'Hỗ trợ CSKH', defaultTextEn: 'Live Support', defaultTextZh: '客服支持' },
   { code: 'warranty_info', label: '🛡️ Bảo Hành', defaultText: 'Bảo hành', defaultTextEn: 'Warranty', defaultTextZh: '售后保修' },
   { code: 'api_info', label: '🔗 Kết Nối API', defaultText: 'API', defaultTextEn: 'API', defaultTextZh: 'API' },
@@ -56,8 +62,19 @@ export const DEPOSIT_CALLBACK_PRESETS = [
   { code: 'back_to_menu', label: '↩️ Menu Chính', defaultText: '↩️ Menu Chính', defaultTextEn: '↩️ Main Menu', defaultTextZh: '↩️ 主菜单' }
 ];
 
+export const GMAIL_EDU_CALLBACK_PRESETS = [
+  { code: 'buy_edu_fast_1', label: '⚡ Mua Nhanh 1 Gmail EDU', defaultText: '⚡ Mua nhanh 1 Edu', defaultTextEn: '⚡ Fast Buy 1 Edu', defaultTextZh: '⚡ 快速购买 1 个' },
+  { code: 'buy_edu_fast_2', label: '🔢 Mua 2 Gmail EDU', defaultText: '🔢 Mua 2 Edu', defaultTextEn: '🔢 Buy 2 Edu', defaultTextZh: '🔢 购买 2 个' },
+  { code: 'buy_edu_fast_5', label: '🔢 Mua 5 Gmail EDU', defaultText: '🔢 Mua 5 Edu', defaultTextEn: '🔢 Buy 5 Edu', defaultTextZh: '🔢 购买 5 个' },
+  { code: 'buy_edu_prompt_qty', label: '🔢 Nhập Số Lượng Tự Chọn', defaultText: '🔢 Nhập số lượng khác', defaultTextEn: '🔢 Custom Quantity', defaultTextZh: '🔢 自定义数量' },
+  { code: 'buy_edu_prompt_prefix', label: '✍️ Đặt Theo Tiền Tố (Prefix)', defaultText: '✍️ Đặt theo tên Prefix', defaultTextEn: '✍️ Custom Username Prefix', defaultTextZh: '✍️ 自定义前缀' },
+  { code: 'back_to_categories', label: '↩️ Quay Lại Danh Mục Sản Phẩm', defaultText: '↩️ Quay lại sản phẩm', defaultTextEn: '↩️ Back to Products', defaultTextZh: '↩️ 返回商品列表' },
+  { code: 'back_to_menu', label: '🏠 Menu Chính /start', defaultText: '🏠 Menu Chính', defaultTextEn: '🏠 Main Menu', defaultTextZh: '🏠 主菜单' }
+];
+
 export const KEYBOARD_ACTION_PRESETS = [
   { code: 'products', label: '🛍️ Mở Danh Mục / Mua Sản Phẩm', defaultVi: 'Sản phẩm', defaultEn: 'Products', defaultZh: '产品' },
+  { code: 'buyedu', label: '🎓 Mua Gmail EDU Tự Động', defaultVi: 'Gmail EDU', defaultEn: 'Gmail EDU', defaultZh: 'Gmail EDU' },
   { code: 'support', label: '💬 Chat Hỗ Trợ Kỹ Thuật (Live Support)', defaultVi: 'Hỗ trợ', defaultEn: 'Support', defaultZh: '客服支持' },
   { code: 'wallet', label: '👛 Thông Tin Ví & Số Dư', defaultVi: 'Ví', defaultEn: 'Wallet', defaultZh: '钱包' },
   { code: 'deposit', label: '➕ Menu Nạp Tiền (Bank / Binance / USDT)', defaultVi: 'Nạp tiền', defaultEn: 'Deposit', defaultZh: '充值' },
@@ -138,7 +155,7 @@ function EmojiQuickBar({ onInsert, label }: { onInsert: (val: string) => void; l
 }
 
 export default function BotCustomizationPage() {
-  const [activeTab, setActiveTab] = useState<'keyboard' | 'start_menu' | 'inline_buttons' | 'deposit_templates' | 'order_templates' | 'service_templates' | 'notify_templates'>('keyboard');
+  const [activeTab, setActiveTab] = useState<'keyboard' | 'start_menu' | 'inline_buttons' | 'deposit_templates' | 'order_templates' | 'service_templates' | 'notify_templates' | 'gmail_edu'>('keyboard');
   const [inlineGroupFilter, setInlineGroupFilter] = useState<'all' | 'start' | 'wallet' | 'deposit' | 'deposit_flow' | 'shop_flow' | 'order_download' | 'service_other'>('all');
   const [inlinePreviewTab, setInlinePreviewTab] = useState<'start' | 'wallet' | 'deposit' | 'deposit_flow' | 'shop_flow' | 'delivery_flow'>('wallet');
   const [previewLang, setPreviewLang] = useState<'vi' | 'en' | 'zh'>('vi');
@@ -168,6 +185,7 @@ export default function BotCustomizationPage() {
     { id: 'btn_dep_binance', text: '🟡 Binance Pay (Tự động)', text_vi: '🟡 Binance Pay (Tự động)', text_en: '🟡 Binance Pay (Auto)', text_zh: '🟡 币安支付 (自动)', type: 'callback', callback_data: 'deposit_select_binance', row: 2, is_active: true },
     { id: 'btn_dep_usdt', text: '💲 USDT TRC20', text_vi: '💲 USDT TRC20', text_en: '💲 USDT TRC20', text_zh: '💲 USDT TRC20', type: 'callback', callback_data: 'deposit_select_usdt', row: 3, is_active: true }
   ]);
+  const [gmailEduButtons, setGmailEduButtons] = useState<BotMenuInlineButton[]>(DEFAULT_GMAIL_EDU_BUTTONS);
   const [templates, setTemplates] = useState<Record<string, { label: string; group: string; description: string; vars: string[]; value: string; value_vi?: string; value_en?: string; value_zh?: string }>>({});
 
   const [loading, setLoading] = useState(true);
@@ -207,9 +225,9 @@ export default function BotCustomizationPage() {
   const [kbBtnRow, setKbBtnRow] = useState<number>(1);
   const [kbBtnActive, setKbBtnActive] = useState(true);
 
-  // Modal / Form state for Inline Buttons (Start / Wallet / Deposit)
+  // Modal / Form state for Inline Buttons (Start / Wallet / Deposit / Gmail EDU)
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
-  const [inlineModalTarget, setInlineModalTarget] = useState<'start' | 'wallet' | 'deposit'>('start');
+  const [inlineModalTarget, setInlineModalTarget] = useState<'start' | 'wallet' | 'deposit' | 'gmail_edu'>('start');
   const [editingStartBtn, setEditingStartBtn] = useState<StartMenuButton | BotMenuInlineButton | null>(null);
   const [startBtnTextVi, setStartBtnTextVi] = useState('');
   const [startBtnTextEn, setStartBtnTextEn] = useState('');
@@ -248,6 +266,7 @@ export default function BotCustomizationPage() {
         if (botData.main_keyboard) setMainKeyboard(botData.main_keyboard);
         if (botData.wallet_buttons) setWalletButtons(botData.wallet_buttons);
         if (botData.deposit_buttons) setDepositButtons(botData.deposit_buttons);
+        if (botData.gmail_edu_buttons) setGmailEduButtons(botData.gmail_edu_buttons);
         if (botData.templates) setTemplates(botData.templates);
       }
 
@@ -304,6 +323,7 @@ export default function BotCustomizationPage() {
             main_keyboard: mainKeyboard,
             wallet_buttons: walletButtons,
             deposit_buttons: depositButtons,
+            gmail_edu_buttons: gmailEduButtons,
             templates: templatesToSave
           })
         })
@@ -546,8 +566,8 @@ export default function BotCustomizationPage() {
     });
   };
 
-  // Start / Wallet / Deposit Inline Button Handlers
-  const handleOpenAddInlineModal = (target: 'start' | 'wallet' | 'deposit', preset?: { text: string; text_en?: string; text_zh?: string; url?: string; callback_data?: string; type?: 'url' | 'callback' }) => {
+  // Start / Wallet / Deposit / Gmail EDU Inline Button Handlers
+  const handleOpenAddInlineModal = (target: 'start' | 'wallet' | 'deposit' | 'gmail_edu', preset?: { text: string; text_en?: string; text_zh?: string; url?: string; callback_data?: string; type?: 'url' | 'callback' }) => {
     setInlineModalTarget(target);
     setEditingStartBtn(null);
     setStartBtnTextVi(preset?.text || '');
@@ -555,9 +575,9 @@ export default function BotCustomizationPage() {
     setStartBtnTextZh(preset?.text_zh || '');
     const isCallback = preset?.type === 'callback' || Boolean(preset?.callback_data) || target !== 'start';
     setStartBtnType(isCallback ? 'callback' : 'url');
-    const val = preset?.url || preset?.callback_data || (target === 'deposit' ? 'deposit_select_bank' : target === 'wallet' ? 'start_deposit' : '');
+    const val = preset?.url || preset?.callback_data || (target === 'deposit' ? 'deposit_select_bank' : target === 'wallet' ? 'start_deposit' : target === 'gmail_edu' ? 'buy_edu_fast_1' : '');
     setStartBtnUrl(val);
-    const presetsList = target === 'wallet' ? WALLET_CALLBACK_PRESETS : target === 'deposit' ? DEPOSIT_CALLBACK_PRESETS : CALLBACK_PRESETS;
+    const presetsList = target === 'wallet' ? WALLET_CALLBACK_PRESETS : target === 'deposit' ? DEPOSIT_CALLBACK_PRESETS : target === 'gmail_edu' ? GMAIL_EDU_CALLBACK_PRESETS : CALLBACK_PRESETS;
     setIsCustomCallback(isCallback && Boolean(val) ? !presetsList.some(p => p.code === val) : false);
 
     let maxRow = 1;
@@ -567,13 +587,15 @@ export default function BotCustomizationPage() {
       maxRow = walletButtons.reduce((max, b) => Math.max(max, b.row || 1), 1);
     } else if (target === 'deposit') {
       maxRow = depositButtons.reduce((max, b) => Math.max(max, b.row || 1), 1);
+    } else if (target === 'gmail_edu') {
+      maxRow = gmailEduButtons.reduce((max, b) => Math.max(max, b.row || 1), 1);
     }
     setStartBtnRow(maxRow);
     setStartBtnActive(true);
     setIsStartModalOpen(true);
   };
 
-  const handleOpenEditInlineModal = (target: 'start' | 'wallet' | 'deposit', btn: StartMenuButton | BotMenuInlineButton) => {
+  const handleOpenEditInlineModal = (target: 'start' | 'wallet' | 'deposit' | 'gmail_edu', btn: StartMenuButton | BotMenuInlineButton) => {
     setInlineModalTarget(target);
     setEditingStartBtn(btn);
     setStartBtnTextVi(btn.text_vi || btn.text || '');
@@ -582,7 +604,7 @@ export default function BotCustomizationPage() {
     setStartBtnType(btn.type || 'callback');
     const val = btn.type === 'url' ? (btn.url || '') : (btn.callback_data || btn.url || '');
     setStartBtnUrl(val);
-    const presetsList = target === 'wallet' ? WALLET_CALLBACK_PRESETS : target === 'deposit' ? DEPOSIT_CALLBACK_PRESETS : CALLBACK_PRESETS;
+    const presetsList = target === 'wallet' ? WALLET_CALLBACK_PRESETS : target === 'deposit' ? DEPOSIT_CALLBACK_PRESETS : target === 'gmail_edu' ? GMAIL_EDU_CALLBACK_PRESETS : CALLBACK_PRESETS;
     setIsCustomCallback(btn.type === 'callback' && Boolean(val) && !presetsList.some(p => p.code === val));
     setStartBtnRow(btn.row || 1);
     setStartBtnActive(btn.is_active);
@@ -721,11 +743,46 @@ export default function BotCustomizationPage() {
         };
         setDepositButtons(prev => [...prev, newBtn]);
       }
+    } else if (inlineModalTarget === 'gmail_edu') {
+      if (editingStartBtn) {
+        setGmailEduButtons(prev =>
+          prev.map(b =>
+            b.id === editingStartBtn.id
+              ? {
+                  ...b,
+                  text: primaryText,
+                  text_vi: primaryText,
+                  text_en: textEn,
+                  text_zh: textZh,
+                  type: startBtnType,
+                  url: startBtnType === 'url' ? startBtnUrl.trim() : undefined,
+                  callback_data: startBtnType === 'callback' ? startBtnUrl.trim() : undefined,
+                  row: Number(startBtnRow) || 1,
+                  is_active: startBtnActive
+                }
+              : b
+          )
+        );
+      } else {
+        const newBtn: BotMenuInlineButton = {
+          id: `btn_edu_${Date.now()}`,
+          text: primaryText,
+          text_vi: primaryText,
+          text_en: textEn,
+          text_zh: textZh,
+          type: startBtnType,
+          url: startBtnType === 'url' ? startBtnUrl.trim() : undefined,
+          callback_data: startBtnType === 'callback' ? startBtnUrl.trim() : undefined,
+          row: Number(startBtnRow) || 1,
+          is_active: startBtnActive
+        };
+        setGmailEduButtons(prev => [...prev, newBtn]);
+      }
     }
     setIsStartModalOpen(false);
   };
 
-  const handleDeleteInlineBtn = (target: 'start' | 'wallet' | 'deposit', id: string) => {
+  const handleDeleteInlineBtn = (target: 'start' | 'wallet' | 'deposit' | 'gmail_edu', id: string) => {
     if (confirm('Bạn có chắc muốn xoá nút bấm này?')) {
       if (target === 'start') {
         setStartConfig(prev => ({
@@ -736,11 +793,13 @@ export default function BotCustomizationPage() {
         setWalletButtons(prev => prev.filter(b => b.id !== id));
       } else if (target === 'deposit') {
         setDepositButtons(prev => prev.filter(b => b.id !== id));
+      } else if (target === 'gmail_edu') {
+        setGmailEduButtons(prev => prev.filter(b => b.id !== id));
       }
     }
   };
 
-  const handleToggleInlineBtn = (target: 'start' | 'wallet' | 'deposit', id: string) => {
+  const handleToggleInlineBtn = (target: 'start' | 'wallet' | 'deposit' | 'gmail_edu', id: string) => {
     if (target === 'start') {
       setStartConfig(prev => ({
         ...prev,
@@ -750,10 +809,12 @@ export default function BotCustomizationPage() {
       setWalletButtons(prev => prev.map(b => b.id === id ? { ...b, is_active: !b.is_active } : b));
     } else if (target === 'deposit') {
       setDepositButtons(prev => prev.map(b => b.id === id ? { ...b, is_active: !b.is_active } : b));
+    } else if (target === 'gmail_edu') {
+      setGmailEduButtons(prev => prev.map(b => b.id === id ? { ...b, is_active: !b.is_active } : b));
     }
   };
 
-  const handleMoveInlineRow = (target: 'start' | 'wallet' | 'deposit', id: string, delta: number) => {
+  const handleMoveInlineRow = (target: 'start' | 'wallet' | 'deposit' | 'gmail_edu', id: string, delta: number) => {
     if (target === 'start') {
       setStartConfig(prev => ({
         ...prev,
@@ -775,6 +836,14 @@ export default function BotCustomizationPage() {
       }));
     } else if (target === 'deposit') {
       setDepositButtons(prev => prev.map(b => {
+        if (b.id === id) {
+          const nextRow = Math.max(1, (b.row || 1) + delta);
+          return { ...b, row: nextRow };
+        }
+        return b;
+      }));
+    } else if (target === 'gmail_edu') {
+      setGmailEduButtons(prev => prev.map(b => {
         if (b.id === id) {
           const nextRow = Math.max(1, (b.row || 1) + delta);
           return { ...b, row: nextRow };
@@ -805,6 +874,31 @@ export default function BotCustomizationPage() {
     };
     setWalletButtons(prev => [...prev, newBtn]);
     showNotification('success', `Đã thêm nút "${preset.defaultText}" vào tin nhắn Ví & Số Dư!`);
+  };
+
+  const handleQuickAddEduPreset = (preset: { defaultText: string; defaultTextEn?: string; defaultTextZh?: string; code?: string; url?: string; label: string }) => {
+    const maxRow = gmailEduButtons.length > 0 ? Math.max(...gmailEduButtons.map(b => b.row || 1)) : 1;
+    const newBtn: BotMenuInlineButton = {
+      id: `btn_edu_${preset.code || 'link'}_${Date.now()}`,
+      text: preset.defaultText,
+      text_vi: preset.defaultText,
+      text_en: preset.defaultTextEn || preset.defaultText,
+      text_zh: preset.defaultTextZh || preset.defaultText,
+      type: preset.url ? 'url' : 'callback',
+      callback_data: preset.code,
+      url: preset.url,
+      row: maxRow,
+      is_active: true
+    };
+    setGmailEduButtons(prev => [...prev, newBtn]);
+    showNotification('success', `Đã thêm nút "${preset.defaultText}" vào Menu Mua Gmail EDU!`);
+  };
+
+  const handleResetEduButtonsToDefault = () => {
+    if (confirm('Khôi phục danh sách nút bấm Gmail EDU về mặc định tiêu chuẩn?')) {
+      setGmailEduButtons(DEFAULT_GMAIL_EDU_BUTTONS);
+      showNotification('success', 'Đã khôi phục các nút bấm Gmail EDU mặc định!');
+    }
   };
 
   const handleResetWalletButtonsToDefault = () => {
@@ -890,6 +984,15 @@ export default function BotCustomizationPage() {
   });
   const sortedDepositRows = Object.keys(groupedDepositButtons).map(Number).sort((a, b) => a - b);
 
+  // Group Gmail EDU buttons by row
+  const groupedEduButtons: Record<number, BotMenuInlineButton[]> = {};
+  gmailEduButtons.forEach(btn => {
+    const r = btn.row || 1;
+    if (!groupedEduButtons[r]) groupedEduButtons[r] = [];
+    groupedEduButtons[r].push(btn);
+  });
+  const sortedEduRows = Object.keys(groupedEduButtons).map(Number).sort((a, b) => a - b);
+
   // Render Telegram simulation text (supports tags)
   const renderSimulatedText = (raw: string) => {
     if (!raw) return '';
@@ -903,6 +1006,13 @@ export default function BotCustomizationPage() {
       .replace(/\{balance\}/g, '500.000 ₫')
       .replace(/\{credit\}/g, '120')
       .replace(/\{shop_name\}/g, 'DUCVIETSTORE')
+      .replace(/\{domain\}/g, 'nttp.edu.pl')
+      .replace(/\{invoice_code\}/g, 'HD-20260918-0012')
+      .replace(/\{quantity\}/g, '2')
+      .replace(/\{total_price\}/g, '20.000 ₫')
+      .replace(/\{total_cost\}/g, '20.000 ₫')
+      .replace(/\{current_balance\}/g, '500.000 ₫')
+      .replace(/\{lack_amount\}/g, '10.000 ₫')
       .replace(/\{payId\}/g, '464811318')
       .replace(/\{memoCode\}/g, 'NAP 8202830305')
       .replace(/\{exchangeRate\}/g, '26.000')
@@ -915,17 +1025,16 @@ export default function BotCustomizationPage() {
       .replace(/\{walletAddress\}/g, 'TYDzsXD5DZX5V8x9Z1...')
       .replace(/\{order_code\}/g, 'ORD-98234')
       .replace(/\{product_name\}/g, 'ChatGPT Plus 1 Tháng')
-      .replace(/\{price\}/g, '250.000')
-      .replace(/\{data\}/g, 'user@gmail.com|Password123')
+      .replace(/\{price\}/g, '10.000 ₫')
+      .replace(/\{data\}/g, 'user01@nttp.edu.pl|Pass123456\nuser02@nttp.edu.pl|Pass654321')
       .replace(/\{note\}/g, 'Bảo hành 30 ngày đổi 1-1')
       .replace(/\{reason\}/g, 'Tài khoản lỗi không đăng nhập được')
       .replace(/\{deposit_id\}/g, 'DEP-1042')
       .replace(/\{bonus\}/g, '10.000')
       .replace(/\{total\}/g, '110.000')
-      .replace(/\{new_balance\}/g, '610.000')
+      .replace(/\{new_balance\}/g, '480.000 ₫')
       .replace(/\{apiKey\}/g, 'sk_live_78df8831bfa8291a')
       .replace(/\{statusText\}/g, '✅ Đang hoạt động')
-      .replace(/\{quantity\}/g, '50')
       .replace(/\{stock\}/g, '120')
       .replace(/\{description\}/g, 'Tài khoản Premium dùng ổn định, bảo hành trọn thời gian.')
       .replace(/\{price_line\}/g, '💰 <b>Giá gốc:</b> <s>150.000đ</s> ➡️ <b>Giá Flash Sale:</b> <b>120.000đ</b> (-20%)')
@@ -1080,6 +1189,21 @@ export default function BotCustomizationPage() {
         >
           <ShieldCheck className="w-4 h-4" />
           🛟 MẪU TIN VÍ, CSKH & API
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('gmail_edu');
+            setSelectedTemplateKey('template_gmail_edu_info');
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
+            activeTab === 'gmail_edu'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" />
+          🎓 MUA GMAIL EDU (NÚT & MẪU TIN)
         </button>
 
         <button
@@ -3390,6 +3514,332 @@ export default function BotCustomizationPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: MUA GMAIL EDU (NÚT & MẪU TIN) */}
+      {activeTab === 'gmail_edu' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 space-y-6">
+            {/* 1. NÚT BẤM MUA GMAIL EDU */}
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-black text-zinc-900 dark:text-white flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-amber-500" />
+                    CẤU HÌNH NÚT BẤM MENU GMAIL EDU
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Các nút bấm hiển thị dưới tin nhắn giới thiệu mua Gmail EDU trong Telegram Bot.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleResetEduButtonsToDefault}
+                    variant="outline"
+                    className="border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 font-bold rounded-xl text-xs h-9"
+                  >
+                    Khôi phục mặc định
+                  </Button>
+                  <Button
+                    onClick={() => handleOpenAddInlineModal('gmail_edu')}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs h-9 px-4"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Thêm Nút Bấm
+                  </Button>
+                </div>
+              </div>
+
+              {/* Quick Add Presets */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 space-y-2">
+                <span className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" />
+                  THÊM NHANH NÚT BẤM MẪU (PRESETS)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {GMAIL_EDU_CALLBACK_PRESETS.map((preset) => (
+                    <button
+                      key={preset.code}
+                      type="button"
+                      onClick={() => handleQuickAddEduPreset(preset)}
+                      className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 hover:bg-amber-600 hover:text-white text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-3 h-3 text-amber-500 group-hover:text-white" />
+                      <span>{preset.defaultText}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* List Rows */}
+              <div className="space-y-3">
+                {sortedEduRows.map(rowNum => {
+                  const rowBtns = groupedEduButtons[rowNum] || [];
+                  return (
+                    <div key={rowNum} className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-3">
+                      <span className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5" />
+                        HÀNG {rowNum} ({rowBtns.length} nút trên hàng)
+                      </span>
+                      <div className="space-y-2.5">
+                        {rowBtns.map(btn => (
+                          <div
+                            key={btn.id}
+                            className={`p-3.5 rounded-2xl border transition-all ${
+                              btn.is_active
+                                ? 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 shadow-xs'
+                                : 'bg-zinc-100/60 dark:bg-zinc-900/40 border-dashed border-zinc-300 dark:border-zinc-800 opacity-60'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="font-extrabold text-sm text-zinc-900 dark:text-white flex flex-wrap items-center gap-2">
+                                  <span className="break-all">{btn.text_vi || btn.text}</span>
+                                  {!btn.is_active && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-500 font-bold shrink-0">
+                                      Đã tắt
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold border border-zinc-200 dark:border-zinc-700 break-all">
+                                    🇺🇸 {btn.text_en || btn.text}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold border border-zinc-200 dark:border-zinc-700 break-all">
+                                    🇨🇳 {btn.text_zh || btn.text}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-zinc-500 font-mono break-all pt-0.5">
+                                  {btn.type === 'url' ? `🔗 ${btn.url}` : `⚡ Callback: ${btn.callback_data || btn.url}`}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0 self-end sm:self-center bg-zinc-50 dark:bg-zinc-800/80 p-1 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                                <button
+                                  onClick={() => handleToggleInlineBtn('gmail_edu', btn.id)}
+                                  title={btn.is_active ? 'Tạm tắt nút' : 'Bật nút'}
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-600 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  {btn.is_active ? <ToggleRight className="w-4 h-4 text-emerald-600" /> : <ToggleLeft className="w-4 h-4 text-zinc-400" />}
+                                </button>
+                                <button
+                                  onClick={() => handleMoveInlineRow('gmail_edu', btn.id, -1)}
+                                  title="Chuyển lên hàng trên"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  <MoveUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveInlineRow('gmail_edu', btn.id, 1)}
+                                  title="Chuyển xuống hàng dưới"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  <MoveDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEditInlineModal('gmail_edu', btn)}
+                                  title="Sửa nút"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteInlineBtn('gmail_edu', btn.id)}
+                                  title="Xoá nút"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. SOẠN THẢO MẪU TIN NHẮN GMAIL EDU */}
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-black text-zinc-900 dark:text-white flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-amber-500" />
+                    SOẠN THẢO MẪU TIN NHẮN GMAIL EDU
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Chọn loại tin nhắn cần tùy biến nội dung và dịch thuật đa ngôn ngữ (VI / EN / ZH).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-950 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateEditLang('vi')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      templateEditLang === 'vi' ? 'bg-amber-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    🇻🇳 VI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateEditLang('en')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      templateEditLang === 'en' ? 'bg-amber-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    🇺🇸 EN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateEditLang('zh')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      templateEditLang === 'zh' ? 'bg-amber-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    🇨🇳 ZH
+                  </button>
+                </div>
+              </div>
+
+              {/* Template Selector Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { key: 'template_gmail_edu_info', title: '🎓 Menu Giới Thiệu', desc: 'Domain, Đơn giá & Bảng nút mua' },
+                  { key: 'template_gmail_edu_success', title: '🎉 Mua Thành Công', desc: 'Mã đơn & Email|Mật khẩu nhận được' },
+                  { key: 'template_gmail_edu_insufficient_balance', title: '❌ Số Dư Không Đủ', desc: 'Báo thiếu tiền & Gợi ý nạp' }
+                ].map(tpl => (
+                  <button
+                    key={tpl.key}
+                    type="button"
+                    onClick={() => setSelectedTemplateKey(tpl.key)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      selectedTemplateKey === tpl.key
+                        ? 'bg-amber-500/10 border-amber-500 shadow-sm ring-2 ring-amber-500/20'
+                        : 'bg-zinc-50 dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+                    }`}
+                  >
+                    <div className="text-xs font-black text-zinc-900 dark:text-white">{tpl.title}</div>
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">{tpl.desc}</div>
+                    <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 mt-2 truncate">{tpl.key}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Variable tags inserter */}
+              {templates[selectedTemplateKey] && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-extrabold text-zinc-500 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Chèn nhanh biến động vào nội dung:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(templates[selectedTemplateKey].vars || ['{domain}', '{price}', '{balance}', '{quantity}', '{total_price}', '{invoice_code}', '{data}', '{new_balance}', '{lack_amount}']).map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => insertTagToTemplate(tag)}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-amber-100 dark:hover:bg-amber-950/60 text-zinc-800 dark:text-zinc-200 text-xs font-mono font-bold border border-zinc-200 dark:border-zinc-700 transition-transform active:scale-95 cursor-pointer"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Textarea */}
+                  <textarea
+                    value={getTemplateTextForLang(selectedTemplateKey, templateEditLang)}
+                    onChange={(e) => setTemplateTextForLang(selectedTemplateKey, templateEditLang, e.target.value)}
+                    rows={8}
+                    className="w-full p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    placeholder="Nhập nội dung mẫu tin nhắn..."
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Live Telegram Mockup for Gmail EDU */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="sticky top-6 bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
+                  <Smartphone className="w-4 h-4 text-amber-500" />
+                  MÔ PHỎNG BOT GMAIL EDU
+                </div>
+
+                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl">
+                  <button
+                    onClick={() => setPreviewLang('vi')}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                      previewLang === 'vi' ? 'bg-white dark:bg-zinc-900 text-amber-600 shadow-xs' : 'text-zinc-500'
+                    }`}
+                  >
+                    🇻🇳 VI
+                  </button>
+                  <button
+                    onClick={() => setPreviewLang('en')}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                      previewLang === 'en' ? 'bg-white dark:bg-zinc-900 text-amber-600 shadow-xs' : 'text-zinc-500'
+                    }`}
+                  >
+                    🇺🇸 EN
+                  </button>
+                  <button
+                    onClick={() => setPreviewLang('zh')}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                      previewLang === 'zh' ? 'bg-white dark:bg-zinc-900 text-amber-600 shadow-xs' : 'text-zinc-500'
+                    }`}
+                  >
+                    🇨🇳 ZH
+                  </button>
+                </div>
+              </div>
+
+              {/* Phone Frame Mockup */}
+              <div className="w-full rounded-3xl bg-zinc-950 p-4 border border-zinc-800 shadow-2xl space-y-3">
+                <div className="min-h-[220px] rounded-2xl bg-zinc-900/80 p-4 text-zinc-200 text-xs whitespace-pre-wrap leading-relaxed space-y-3">
+                  <div className="self-start max-w-[95%] rounded-2xl rounded-tl-xs bg-zinc-800/90 p-3.5 text-zinc-300 space-y-1.5 border border-zinc-700/40">
+                    <p className="font-bold text-amber-400 flex items-center gap-1">
+                      <span>🤖 DUCVIETSTORE Bot</span>
+                      <span className="text-[10px] text-zinc-400 font-normal">({selectedTemplateKey})</span>
+                    </p>
+                    <div className="text-zinc-200 text-xs leading-relaxed">
+                      {renderSimulatedText(getTemplateTextForLang(selectedTemplateKey, previewLang) || '')}
+                    </div>
+                  </div>
+
+                  {/* Inline Buttons Preview (only when viewing intro menu) */}
+                  {selectedTemplateKey === 'template_gmail_edu_info' && (
+                    <div className="pt-2 space-y-1.5">
+                      {sortedEduRows.map(rowNum => {
+                        const rowBtns = (groupedEduButtons[rowNum] || []).filter(b => b.is_active !== false);
+                        if (rowBtns.length === 0) return null;
+                        return (
+                          <div key={rowNum} className="flex gap-1.5">
+                            {rowBtns.map(b => (
+                              <div
+                                key={b.id}
+                                className="flex-1 py-2 px-1 text-center rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-amber-400 font-extrabold text-[11px] shadow-sm border border-zinc-700/60 truncate cursor-pointer"
+                              >
+                                {getStartButtonLabelForLang(b, previewLang)}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

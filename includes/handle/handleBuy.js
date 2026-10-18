@@ -1569,8 +1569,6 @@ export const sendBuyEduMenu = async (bot, chatId, user, messageId = null) => {
   let passDisplay = '';
   if (userCustomPass) {
     passDisplay = `\n🔑 **Mật khẩu đã đặt:** \`${userCustomPass}\``;
-  } else if (settings.gmail_edu_password_type === 'custom' && settings.gmail_edu_custom_password) {
-    passDisplay = `\n🔑 **Mật khẩu:** \`${settings.gmail_edu_custom_password}\` *(Cố định hệ thống)*`;
   } else {
     passDisplay = `\n🔑 **Mật khẩu:** \`Ngẫu nhiên bảo mật cao\``;
   }
@@ -1824,12 +1822,9 @@ export const handleBuyEduPurchase = async (bot, chatId, user, options = {}, mess
     );
   } catch (e) {}
 
-  // Xác định mật khẩu: Ưu tiên mật khẩu user tự đặt -> mật khẩu cố định Admin -> ngẫu nhiên
+  // Xác định mật khẩu: Nếu người dùng set pass thì tạo đúng mật khẩu đó, nếu không set pass thì random ngẫu nhiên
   const userCustomPass = userEduCustomPasswordState.get(String(user.telegram_id || chatId));
-  const configuredPass = (settings.gmail_edu_password_type === 'custom' && settings.gmail_edu_custom_password)
-    ? settings.gmail_edu_custom_password.trim()
-    : null;
-  const staticPass = userCustomPass || configuredPass || null;
+  const staticPass = userCustomPass ? userCustomPass.trim() : null;
 
   // 3. Tạo tài khoản trên Google Admin
   const createdAccounts = [];

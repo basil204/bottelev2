@@ -35,7 +35,8 @@ const BOT_COMMANDS = [
   { command: 'history', description: '🧾 Lịch sử đơn hàng' },
   { command: 'lang', description: '🌐 Đổi ngôn ngữ' },
   { command: 'id', description: '🆔 Lấy UID người dùng, ID nhóm (Box) & Kênh' },
-  { command: 'uid', description: '🆔 Lấy UID người dùng, ID nhóm (Box) & Kênh' }
+  { command: 'uid', description: '🆔 Lấy UID người dùng, ID nhóm (Box) & Kênh' },
+  { command: 'backup', description: '💾 Sao lưu CSDL và nhận file về Telegram (Admin)' }
 ];
 
 const botHolder = { bots: [] };
@@ -182,7 +183,7 @@ const bootstrap = async () => {
   startQrExpirationChecker(multiBot); // Always start QR expiration checker
   startAutoDepositWatcher(multiBot, config);
   startAutoRestockScheduler(multiBot); // Khởi động hẹn giờ thông báo kho ảo (Auto Restock)
-  startDriveBackupCron(); // Khởi động tự động sao lưu dữ liệu CSDL lên Google Drive
+  startDriveBackupCron(multiBot, config); // Khởi động tự động sao lưu dữ liệu CSDL hằng ngày gửi Telegram Admin & Drive
   startBinanceWatcher(multiBot, config); // Khởi động tự động quét giao dịch nạp tiền Binance Pay
   startEduAccountExpirationService(); // Khởi động tự động theo dõi đăng nhập & xóa Gmail EDU hết live
 

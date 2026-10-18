@@ -320,6 +320,47 @@ export const getDomains = async () => {
     }
 };
 
+/**
+ * Cập nhật/Set mật khẩu cho tài khoản Google Workspace (EDU/Non-EDU)
+ */
+export const updateAccountPassword = async (email, newPassword) => {
+    try {
+        if (!email || !newPassword) {
+            return { success: false, error: 'Thiếu email hoặc mật khẩu mới' };
+        }
+        const cleanPassword = String(newPassword).trim();
+        if (cleanPassword.length < 8) {
+            return { success: false, error: 'Mật khẩu phải có tối thiểu 8 ký tự theo tiêu chuẩn bảo mật Google Workspace' };
+        }
+        const admin = await getAdminService();
+        const cleanEmail = String(email).trim().toLowerCase();
+
+        console.log(`[GOOGLE_ADMIN] 🔑 Đang đổi mật khẩu cho tài khoản: ${cleanEmail}`);
+
+        await admin.users.patch({
+            userKey: cleanEmail,
+            requestBody: {
+                password: cleanPassword,
+                changePasswordAtNextLogin: false
+            }
+        });
+
+        console.log(`[GOOGLE_ADMIN] ✅ Đã đổi mật khẩu thành công cho: ${cleanEmail}`);
+        return { success: true, email: cleanEmail, password: cleanPassword };
+    } catch (error) {
+        let errorMsg = error.message || 'Lỗi không xác định khi cập nhật mật khẩu trên Google';
+        if (error.response?.data?.error?.message) {
+            errorMsg = error.response.data.error.message;
+        }
+        console.error(`[GOOGLE_ADMIN] ❌ Lỗi đổi mật khẩu ${email}:`, errorMsg);
+        return {
+            success: false,
+            email,
+            error: errorMsg
+        };
+    }
+};
+
 export default {
     DEFAULT_EDU_DOMAIN,
     DEFAULT_NON_DOMAIN,
@@ -332,5 +373,6 @@ export default {
     deleteAccount,
     deleteMultipleAccounts,
     getUserInfo,
-    getDomains
+    getDomains,
+    updateAccountPassword
 };

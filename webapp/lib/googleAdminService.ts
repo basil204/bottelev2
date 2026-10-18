@@ -262,6 +262,51 @@ export const deleteMultipleAccounts = async (emails: string[]): Promise<{
         failed
     };
 };
+/**
+ * Cập nhật/Set mật khẩu cho tài khoản Google Workspace (EDU/Non-EDU)
+ */
+export const updateAccountPassword = async (
+    email: string,
+    newPassword: string
+): Promise<{ success: boolean; email?: string; password?: string; error?: string }> => {
+    try {
+        if (!email || !newPassword) {
+            return { success: false, error: 'Thiếu email hoặc mật khẩu mới' };
+        }
+        const cleanPassword = String(newPassword).trim();
+        if (cleanPassword.length < 8) {
+            return { success: false, error: 'Mật khẩu phải có tối thiểu 8 ký tự theo tiêu chuẩn bảo mật Google Workspace' };
+        }
+        const admin = await getAdminService();
+        const cleanEmail = String(email).trim().toLowerCase();
+
+        console.log(`[GOOGLE_ADMIN_TS] 🔑 Đang đổi mật khẩu cho tài khoản: ${cleanEmail}`);
+
+        await admin.users.patch({
+            userKey: cleanEmail,
+            requestBody: {
+                password: cleanPassword,
+                changePasswordAtNextLogin: false
+            }
+        });
+
+        console.log(`[GOOGLE_ADMIN_TS] ✅ Đã đổi mật khẩu thành công cho: ${cleanEmail}`);
+        return { success: true, email: cleanEmail, password: cleanPassword };
+    } catch (error) {
+        let errorMessage = (error as Error).message;
+        const errAny = error as any;
+        if (errAny?.response?.data?.error?.message) {
+            errorMessage = errAny.response.data.error.message;
+        }
+
+        console.error(`[GOOGLE_ADMIN_TS] ❌ Error updating password for ${email}:`, errorMessage);
+        return {
+            success: false,
+            email,
+            error: errorMessage
+        };
+    }
+};
 
 export default {
     DEFAULT_EDU_DOMAIN,
@@ -272,5 +317,6 @@ export default {
     generateRandomUsername,
     createEduAccount,
     deleteAccount,
-    deleteMultipleAccounts
+    deleteMultipleAccounts,
+    updateAccountPassword
 };

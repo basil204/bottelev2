@@ -157,10 +157,124 @@ async function getDriveAuth() {
     return null;
 }
 
+import { getAdminIds } from '../handle/handleNotify.js';
+
+let globalBot = null;
+let globalConfig = null;
+
+export function setBackupBotInstance(bot, config) {
+    if (bot) globalBot = bot;
+    if (config) globalConfig = config;
+}
+
 /**
- * Create Auto Backup and upload to Google Drive
+ * Gửi tệp sao lưu CSDL (.sql) đến các Admin Telegram IDs
  */
-export async function runAutoDriveBackup() {
+export async function sendBackupToTelegramAdmins({
+    filePath,
+    fileName,
+    sizeKb,
+    driveLink = null,
+    bot = null,
+    config = null,
+    specificChatId = null
+}) {
+    try {
+        const targetBot = bot || globalBot;
+        const targetConfig = config || globalConfig;
+
+        let targetChatIds = [];
+        if (specificChatId) {
+            targetChatIds = [specificChatId];
+        } else {
+            const adminIds = await getAdminIds(targetConfig?.ADMIN_IDS || []);
+            targetChatIds = [...adminIds];
+        }
+
+        if (targetChatIds.length === 0) {
+            console.warn('[TELE_BACKUP] ⚠️ Không tìm thấy Telegram Admin ID nào để gửi bản sao lưu CSDL.');
+            return;
+        }
+
+        const sizeFormatted = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(2)} MB` : `${sizeKb} KB`;
+        const nowStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        const caption = `📦 *BẢN SAO LƯU CSDL HỆ THỐNG (DAILY BACKUP)*\n\n` +
+            `📅 *Thời gian:* \`${nowStr}\`\n` +
+            `📁 *Tệp tin:* \`${fileName}\`\n` +
+            `📊 *Dung lượng:* \`${sizeFormatted}\`\n` +
+            (driveLink ? `☁️ *Google Drive:* [Mở file trên Drive](${driveLink})\n` : '') +
+            `🛡️ *Trạng thái:* Sao lưu toàn bộ Database tự động định kỳ thành công!`;
+
+        // 1. Nếu có bot instance (chạy từ main.js)
+        if (targetBot && typeof targetBot.sendDocument === 'function') {
+            for (const adminId of targetChatIds) {
+                try {
+                    await targetBot.sendDocument(adminId, filePath, {
+                        caption,
+                        parse_mode: 'Markdown'
+                    }, {
+                        filename: fileName,
+                        contentType: 'application/sql'
+                    });
+                    console.log(`[TELE_BACKUP] ✅ Đã gửi bản sao lưu CSDL đến Admin ID: ${adminId}`);
+                } catch (sendErr) {
+                    console.error(`[TELE_BACKUP] ❌ Lỗi gửi file sao lưu đến Admin ID ${adminId}:`, sendErr.message);
+                }
+            }
+            return;
+        }
+
+        // 2. Fallback: Nếu không có bot instance (ví dụ gọi từ Next.js API / standalone), gọi trực tiếp qua Telegram Bot API
+        let botToken = targetConfig?.TELEGRAM_BOT_TOKEN;
+        if (!botToken) {
+            try {
+                const tokenRows = await query("SELECT `value` FROM settings WHERE `key` = 'telegram_bot_token' LIMIT 1");
+                if (tokenRows && tokenRows.length > 0 && tokenRows[0].value) {
+                    let parsed;
+                    try { parsed = JSON.parse(tokenRows[0].value); } catch {}
+                    botToken = Array.isArray(parsed) ? parsed[0] : String(tokenRows[0].value).split(/[\r\n,;|]+/)[0]?.trim();
+                }
+            } catch {}
+        }
+        if (!botToken) {
+            botToken = process.env.TELEGRAM_BOT_TOKEN;
+        }
+
+        if (botToken) {
+            const fileBuffer = fs.readFileSync(filePath);
+            for (const adminId of targetChatIds) {
+                try {
+                    const formData = new FormData();
+                    formData.append('chat_id', String(adminId));
+                    formData.append('caption', caption);
+                    formData.append('parse_mode', 'Markdown');
+                    const blob = new Blob([fileBuffer], { type: 'application/sql' });
+                    formData.append('document', blob, fileName);
+
+                    const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const resJson = await resp.json();
+                    if (resJson.ok) {
+                        console.log(`[TELE_BACKUP_HTTP] ✅ Đã gửi file backup qua Telegram API đến Admin ID: ${adminId}`);
+                    } else {
+                        console.error(`[TELE_BACKUP_HTTP] ❌ Telegram API trả về lỗi:`, resJson.description);
+                    }
+                } catch (httpErr) {
+                    console.error(`[TELE_BACKUP_HTTP] ❌ Lỗi gọi Telegram API:`, httpErr.message);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[TELE_BACKUP] ❌ Lỗi trong quy trình gửi sao lưu đến Telegram Admin:', e.message);
+    }
+}
+
+/**
+ * Create Auto Backup, upload to Google Drive & send to Admin Telegram IDs
+ */
+export async function runAutoDriveBackup(bot = null, config = null, specificChatId = null) {
     try {
         console.log('[AUTO_BACKUP] 🚀 Bắt đầu quy trình tự động sao lưu dữ liệu...');
         
@@ -244,6 +358,17 @@ export async function runAutoDriveBackup() {
         await query("INSERT INTO settings (`key`, `value`) VALUES ('database_backups_history', ?) ON DUPLICATE KEY UPDATE `value` = ?", [JSON.stringify(history), JSON.stringify(history)]);
         await query("INSERT INTO settings (`key`, `value`) VALUES ('last_backup_time', ?) ON DUPLICATE KEY UPDATE `value` = ?", [nowIso, nowIso]);
 
+        // Gửi bản sao lưu trực tiếp đến Telegram Admin ID(s)
+        await sendBackupToTelegramAdmins({
+            filePath,
+            fileName,
+            sizeKb,
+            driveLink,
+            bot: bot || globalBot,
+            config: config || globalConfig,
+            specificChatId
+        });
+
         return newEntry;
     } catch (error) {
         console.error('[AUTO_BACKUP] ❌ Lỗi chạy sao lưu CSDL:', error);
@@ -251,13 +376,15 @@ export async function runAutoDriveBackup() {
 }
 
 /**
- * Schedule Auto Backup Job Check (every 30 minutes)
+ * Schedule Auto Backup Job Check (hằng ngày / định kỳ)
  */
-export function startDriveBackupCron() {
-    console.log('[AUTO_BACKUP] ⏰ Khởi chạy tiến trình Auto Backup Scheduler...');
+export function startDriveBackupCron(bot = null, config = null) {
+    if (bot) globalBot = bot;
+    if (config) globalConfig = config;
+
+    console.log('[AUTO_BACKUP] ⏰ Khởi chạy tiến trình Auto Backup Scheduler (Gửi Admin Telegram & Google Drive)...');
     
-    // Check every 30 minutes
-    setInterval(async () => {
+    const checkAndRunBackup = async () => {
         try {
             const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('auto_backup_enabled', 'auto_backup_interval', 'last_backup_time')");
             let enabled = true;
@@ -272,23 +399,39 @@ export function startDriveBackupCron() {
 
             if (!enabled) return;
 
-            let intervalMs = 24 * 60 * 60 * 1000; // default 24h
+            let intervalMs = 24 * 60 * 60 * 1000; // default 24h (hằng ngày)
             if (interval === '6h') intervalMs = 6 * 60 * 60 * 1000;
             if (interval === '12h') intervalMs = 12 * 60 * 60 * 1000;
             if (interval === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
 
+            const now = Date.now();
             const lastTimeMs = lastBackup ? new Date(lastBackup).getTime() : 0;
-            if (Date.now() - lastTimeMs >= intervalMs) {
-                await runAutoDriveBackup();
+
+            // Kiểm tra: Đã qua chu kỳ interval HOẶC sang ngày mới và cách lần backup trước trên 12 tiếng
+            const isDifferentDay = lastBackup && new Date().toDateString() !== new Date(lastBackup).toDateString() && (now - lastTimeMs >= 12 * 60 * 60 * 1000);
+
+            if (!lastBackup || (now - lastTimeMs >= intervalMs) || isDifferentDay) {
+                console.log('[DAILY_BACKUP] ⏰ Đến thời điểm sao lưu CSDL tự động hằng ngày. Đang tiến hành...');
+                await runAutoDriveBackup(globalBot, globalConfig);
             }
         } catch (e) {
             console.error('[AUTO_BACKUP] Error in cron check:', e.message);
         }
-    }, 30 * 60 * 1000);
+    };
+
+    // Kiểm tra lần đầu sau 15 giây khởi động server
+    setTimeout(() => {
+        checkAndRunBackup();
+    }, 15000);
+
+    // Kiểm tra định kỳ mỗi 15 phút
+    setInterval(checkAndRunBackup, 15 * 60 * 1000);
 }
 
 export default {
     dumpDatabaseToSql,
     runAutoDriveBackup,
-    startDriveBackupCron
+    startDriveBackupCron,
+    sendBackupToTelegramAdmins,
+    setBackupBotInstance
 };

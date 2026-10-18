@@ -108,7 +108,9 @@ async function initAccountStorageTables() {
       "ALTER TABLE users ADD COLUMN first_name VARCHAR(255) NULL",
       "ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL",
       "ALTER TABLE users ADD COLUMN admin_note TEXT NULL",
-      "ALTER TABLE user_api_keys ADD COLUMN permissions VARCHAR(255) DEFAULT 'all'"
+      "ALTER TABLE user_api_keys ADD COLUMN permissions VARCHAR(255) DEFAULT 'all'",
+      "ALTER TABLE orders ADD COLUMN api_key_id INT NULL",
+      "ALTER TABLE orders ADD COLUMN source VARCHAR(50) DEFAULT 'bot'"
     ]) {
       try {
         await pool.query(migration);

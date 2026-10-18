@@ -340,11 +340,83 @@ async function performBackup(customSettings?: Record<string, string>) {
         [nowIso, nowIso]
     );
 
+    // Gửi bản sao lưu trực tiếp đến Telegram Admin ID
+    sendBackupToTelegramAdmins(filePath, fileName, sizeKb, driveResult.webViewLink).catch((e) => {
+        console.error('[PERFORM_BACKUP_TELE_ERR]', e);
+    });
+
     return {
         success: true,
         entry: newEntry,
         history
     };
+}
+
+async function sendBackupToTelegramAdmins(filePath: string, fileName: string, sizeKb: number, driveLink?: string | null) {
+    try {
+        // 1. Lấy Telegram Bot Token
+        const [tokenRows] = await pool.query<RowDataPacket[]>("SELECT `value` FROM settings WHERE `key` = 'telegram_bot_token' LIMIT 1");
+        let botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (tokenRows && tokenRows.length > 0 && tokenRows[0].value) {
+            try {
+                const parsed = JSON.parse(tokenRows[0].value);
+                botToken = Array.isArray(parsed) ? parsed[0] : String(tokenRows[0].value).split(/[\r\n,;|]+/)[0]?.trim();
+            } catch {
+                botToken = String(tokenRows[0].value).split(/[\r\n,;|]+/)[0]?.trim();
+            }
+        }
+        if (!botToken) return;
+
+        // 2. Lấy danh sách Telegram Admin IDs
+        const adminIds = new Set<number>();
+        if (process.env.ADMIN_IDS) {
+            try {
+                const parsed = JSON.parse(process.env.ADMIN_IDS);
+                (Array.isArray(parsed) ? parsed : [parsed]).forEach(id => { if (Number(id) > 0) adminIds.add(Number(id)); });
+            } catch {}
+        }
+        const [adminRows] = await pool.query<RowDataPacket[]>("SELECT `value` FROM settings WHERE `key` = 'admin_ids' LIMIT 1");
+        if (adminRows && adminRows.length > 0 && adminRows[0].value) {
+            try {
+                const parsed = JSON.parse(adminRows[0].value);
+                (Array.isArray(parsed) ? parsed : String(adminRows[0].value).split(',')).forEach((id: any) => { if (Number(id) > 0) adminIds.add(Number(id)); });
+            } catch {}
+        }
+        const [accRows] = await pool.query<RowDataPacket[]>("SELECT telegram_id FROM admin_accounts WHERE telegram_id IS NOT NULL AND telegram_id != 0");
+        accRows.forEach(r => { if (Number(r.telegram_id) > 0) adminIds.add(Number(r.telegram_id)); });
+
+        if (adminIds.size === 0) return;
+
+        const sizeFormatted = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(2)} MB` : `${sizeKb} KB`;
+        const nowStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        const caption = `📦 *BẢN SAO LƯU CSDL HỆ THỐNG (DAILY BACKUP)*\n\n` +
+            `📅 *Thời gian:* \`${nowStr}\`\n` +
+            `📁 *Tệp tin:* \`${fileName}\`\n` +
+            `📊 *Dung lượng:* \`${sizeFormatted}\`\n` +
+            (driveLink ? `☁️ *Google Drive:* [Mở file trên Drive](${driveLink})\n` : '') +
+            `🛡️ *Trạng thái:* Sao lưu toàn bộ Database thành công!`;
+
+        const fileBuffer = fs.readFileSync(filePath);
+        for (const adminId of adminIds) {
+            try {
+                const formData = new FormData();
+                formData.append('chat_id', String(adminId));
+                formData.append('caption', caption);
+                formData.append('parse_mode', 'Markdown');
+                const blob = new Blob([fileBuffer], { type: 'application/sql' });
+                formData.append('document', blob, fileName);
+
+                await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (err: any) {
+                console.error(`[BACKUP_TELE] Error sending to admin ${adminId}:`, err.message);
+            }
+        }
+    } catch (e: any) {
+        console.error('[BACKUP_TELE_SEND_ERR]', e.message);
+    }
 }
 
 export async function GET(request: Request) {

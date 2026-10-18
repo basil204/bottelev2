@@ -13,8 +13,11 @@ export async function GET(
             return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
         }
 
+        const { searchParams } = new URL(request.url);
+        const apiOnly = searchParams.get('api_only') === 'true' || searchParams.get('source') === 'api';
+
         // Get user's orders with product info
-        const ordersQuery = `
+        let ordersQuery = `
             SELECT 
                 o.id,
                 o.invoice_code,
@@ -23,17 +26,25 @@ export async function GET(
                 o.email,
                 o.note,
                 o.status,
+                o.api_key_id,
+                COALESCE(o.source, 'bot') as source,
+                CASE WHEN (o.api_key_id IS NOT NULL OR o.source = 'api' OR o.note LIKE '%API%') THEN 1 ELSE 0 END as is_api_order,
                 o.created_at,
                 o.completed_at,
                 COALESCE(p.name, o.note, 'Sản phẩm') as product_name
             FROM orders o
             LEFT JOIN products p ON p.id = o.product_id
             WHERE o.user_id = ?
-            ORDER BY o.created_at DESC
-            LIMIT 50
         `;
+        const sqlParams: any[] = [userId];
 
-        const [orders] = await pool.query<any[]>(ordersQuery, [userId]);
+        if (apiOnly) {
+            ordersQuery += ` AND (o.api_key_id IS NOT NULL OR o.source = 'api' OR o.note LIKE '%API%')`;
+        }
+
+        ordersQuery += ` ORDER BY o.created_at DESC LIMIT 50`;
+
+        const [orders] = await pool.query<any[]>(ordersQuery, sqlParams);
 
         // Group by product to create a summary
         const productSummary: { [key: string]: { count: number; totalSpent: number; lastPurchase: string; productName: string } } = {};

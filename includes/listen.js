@@ -166,6 +166,23 @@ export const registerListeners = (bot, config) => {
     await adminMenu(bot, msg.chat.id);
   });
 
+  // Command /backup để Admin sao lưu CSDL ngay lập tức và nhận file .sql trực tiếp
+  bot.onText(/^\/backup/i, async (msg) => {
+    if (!await requireAdmin(config.ADMIN_IDS, msg.from.id)) {
+      return bot.sendMessage(msg.chat.id, '❌ Bạn không có quyền quản trị viên.');
+    }
+    const waitMsg = await bot.sendMessage(msg.chat.id, '⏳ **Đang tiến hành sao lưu CSDL...**\nVui lòng đợi vài giây để hệ thống tạo bản sao lưu và gửi tệp tin cho bạn.', { parse_mode: 'Markdown' });
+    try {
+      const { runAutoDriveBackup } = await import('./services/driveBackupService.js');
+      const entry = await runAutoDriveBackup(bot, config, msg.chat.id);
+      if (entry) {
+        await bot.deleteMessage(msg.chat.id, waitMsg.message_id).catch(() => {});
+      }
+    } catch (err) {
+      await bot.sendMessage(msg.chat.id, `❌ **Lỗi khi sao lưu dữ liệu:** ${err.message}`);
+    }
+  });
+
   bot.onText(/^\/lang/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     const { updateLanguage } = await import('./controllers/userController.js');
@@ -343,13 +360,9 @@ export const registerListeners = (bot, config) => {
         cleanTxt === '🌐 Ngôn ngữ' || cleanTxt === 'Ngôn ngữ' || cleanTxt === '🌐 Language' || cleanTxt === 'Language' || cleanTxt === '语言' || cleanTxt === '🌐 语言' || cleanTxt === '语言切换' || isMatchButton(cleanTxt, 'btn_change_language', userLang) ||
         cleanTxt === '🎁 Điểm danh' || cleanTxt === 'Điểm danh' || cleanTxt === 'Check-in' || cleanTxt === 'Checkin' || cleanTxt === '每日签到' || cleanTxt === '签到' ||
         cleanTxt === '🔎 Check Live' || cleanTxt === 'Check Live' || isMatchButton(cleanTxt, 'btn_check_live', userLang) ||
-<<<<<<< HEAD
         cleanTxt === '🎓 Mua Gmail EDU' || cleanTxt === 'Mua Gmail EDU' || cleanTxt === '🎓 Gmail EDU' || cleanTxt === 'Gmail EDU' || cleanTxt === '🎓 Mua Gmail' || cleanTxt === 'Mua Gmail' || cleanTxt === 'Gmail' || cleanTxt === '🎓 Buy Gmail EDU' || cleanTxt === 'Buy Gmail EDU' || cleanTxt === '🎓 购买 Gmail EDU' || cleanTxt === '购买 Gmail EDU' ||
-        cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组'
-=======
         cleanTxt === '⬇️ Download All' || cleanTxt === 'Download All' || isMatchButton(cleanTxt, 'btn_download_all', userLang) ||
         cleanTxt === '👥 Nhóm' || cleanTxt === '👥 Group' || cleanTxt === '👥 群组' || cleanTxt === 'Group' || cleanTxt === '群组' || cleanTxt === 'Nhóm'
->>>>>>> 66d81ca158bb384a89958424867c072644fdcb60
       );
     };
 

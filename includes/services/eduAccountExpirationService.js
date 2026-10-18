@@ -8,11 +8,23 @@
  * 3. Khi hết thời gian live kể từ khi đăng nhập, tự động xóa vĩnh viễn tài khoản trên Google Workspace.
  */
 
-import { query } from '../database/index.js';
+import { query as defaultQuery } from '../database/index.js';
 import { getUserInfo, deleteAccount } from './googleAdminService.js';
 
 let isRunningCheck = false;
 let checkIntervalTimer = null;
+let customDbQuery = null;
+
+export const setExpirationDbQuery = (fn) => {
+    customDbQuery = fn;
+};
+
+const executeQuery = async (sql, params = []) => {
+    if (typeof customDbQuery === 'function') {
+        return customDbQuery(sql, params);
+    }
+    return defaultQuery(sql, params);
+};
 
 /**
  * Kiểm tra xem timestamp lastLoginTime từ Google có phải là lượt đăng nhập thật hay không
@@ -34,7 +46,7 @@ export async function checkAndProcessEduExpiration() {
 
     try {
         // 1. Đọc cài đặt hệ thống
-        const settingsRows = await query(
+        const settingsRows = await executeQuery(
             "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_delete_hours', 'gmail_edu_enabled', 'buy_gmail_edu')"
         );
         const settings = {};
@@ -55,7 +67,7 @@ export async function checkAndProcessEduExpiration() {
 
         // 2. BƯỚC A: Quét các tài khoản đã bán nhưng CHƯA ghi nhận đăng nhập
         // Kiểm tra qua Google Admin SDK xem khách đã đăng nhập hay chưa
-        const unloggedAccounts = await query(
+        const unloggedAccounts = await executeQuery(
             `SELECT id, email, created_at 
              FROM gmail_accounts 
              WHERE status = 'sold' 
@@ -70,14 +82,14 @@ export async function checkAndProcessEduExpiration() {
                     const info = await getUserInfo(acc.email);
                     if (info.notFound) {
                         // Tài khoản không tồn tại trên Google (có thể do xóa thủ công), đánh dấu deleted
-                        await query("UPDATE gmail_accounts SET status = 'deleted' WHERE id = ?", [acc.id]);
+                        await executeQuery("UPDATE gmail_accounts SET status = 'deleted' WHERE id = ?", [acc.id]);
                         continue;
                     }
 
                     if (info.success && isValidGoogleLoginTime(info.lastLoginTime)) {
                         // Người dùng ĐÃ ĐĂNG NHẬP!
                         const loginDate = new Date(info.lastLoginTime);
-                        await query(
+                        await executeQuery(
                             `UPDATE gmail_accounts 
                              SET is_logged_in = 1, 
                                  first_login_at = NOW(), 
@@ -97,7 +109,7 @@ export async function checkAndProcessEduExpiration() {
         }
 
         // 3. BƯỚC B: Quét các tài khoản ĐÃ ĐĂNG NHẬP và ĐÃ HẾT HẠN LIVE (delete_at <= NOW())
-        const expiredAccounts = await query(
+        const expiredAccounts = await executeQuery(
             `SELECT id, email, delete_at, first_login_at 
              FROM gmail_accounts 
              WHERE status = 'sold' 
@@ -115,7 +127,7 @@ export async function checkAndProcessEduExpiration() {
                     const delRes = await deleteAccount(exp.email);
 
                     if (delRes.success || delRes.error?.includes('404') || delRes.error?.includes('notFound') || delRes.error?.includes('Resource Not Found')) {
-                        await query("UPDATE gmail_accounts SET status = 'deleted', updated_at = NOW() WHERE id = ?", [exp.id]);
+                        await executeQuery("UPDATE gmail_accounts SET status = 'deleted', updated_at = NOW() WHERE id = ?", [exp.id]);
                         console.log(`[EDU_EXPIRATION] ✅ Đã xóa vĩnh viễn email hết live trên Google Workspace: ${exp.email}`);
                     } else {
                         console.error(`[EDU_EXPIRATION] ❌ Lỗi xóa email ${exp.email} trên Google:`, delRes.error);

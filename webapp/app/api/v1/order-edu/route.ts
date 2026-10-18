@@ -145,10 +145,33 @@ export async function POST(request: Request) {
 
         const domain = defaultDomain;
         const type = body.type === 'non' ? 'non' : 'edu';
-        const defaultPass = (settingsMap.gmail_edu_password_type === 'custom' && settingsMap.gmail_edu_custom_password)
-            ? settingsMap.gmail_edu_custom_password.trim()
-            : null;
-        const customPassword = body.password ? String(body.password).trim() : defaultPass;
+
+        // Hỗ trợ đặt mật khẩu cho email EDU qua body hoặc query (password, pass, custom_password)
+        const reqPassword = body.password || body.pass || body.custom_password || searchParams.get('password') || searchParams.get('pass');
+        let customPassword = null;
+        if (reqPassword) {
+            const cleanReqPass = String(reqPassword).trim();
+            if (cleanReqPass.length < 8) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'Mật khẩu tùy chỉnh cho Gmail EDU phải có tối thiểu 8 ký tự theo tiêu chuẩn bảo mật Google Workspace.'
+                }, { status: 400 });
+            }
+            customPassword = cleanReqPass;
+        }
+
+        // Hỗ trợ mảng passwords cho nhiều tài khoản
+        const passwordsList = Array.isArray(body.passwords) ? body.passwords : [];
+        if (passwordsList.length > 0) {
+            for (const p of passwordsList) {
+                if (p && String(p).trim().length < 8) {
+                    return NextResponse.json({
+                        success: false,
+                        error: `Mật khẩu '${p}' trong danh sách passwords không hợp lệ. Phải có tối thiểu 8 ký tự.`
+                    }, { status: 400 });
+                }
+            }
+        }
 
         const totalCost = pricePerUnit * quantity;
         const currentBalance = Number(keyInfo.balance) || 0;
@@ -166,7 +189,9 @@ export async function POST(request: Request) {
 
         for (let i = 0; i < quantity; i++) {
             const username = generateRandomUsername(body.prefix || body.username);
-            const password = customPassword || generateRandomPassword(12);
+            // Quy luật: Nếu người dùng set pass thì tạo đúng mật khẩu đó, nếu không set pass thì random ngẫu nhiên
+            const userProvidedPass = (passwordsList[i] && String(passwordsList[i]).trim()) || customPassword;
+            const password = userProvidedPass || generateRandomPassword(12);
 
             // Call Google Admin API
             const createRes = await createEduAccount(username, domain, password);
@@ -225,9 +250,9 @@ export async function POST(request: Request) {
         // Create Order Record
         const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
         const [orderRes] = await pool.query<ResultSetHeader>(`
-            INSERT INTO orders (user_id, price, email, note, status)
-            VALUES (?, ?, ?, ?, 'completed')
-        `, [keyInfo.user_id, actualTotalCost, accountsFormatted, `API Order Gmail EDU (${createdAccounts.length} tài khoản)`]);
+            INSERT INTO orders (user_id, price, email, note, status, api_key_id, source)
+            VALUES (?, ?, ?, ?, 'completed', ?, 'api')
+        `, [keyInfo.user_id, actualTotalCost, accountsFormatted, `API Order Gmail EDU (${createdAccounts.length} tài khoản)`, keyInfo.key_id]);
 
         const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
 

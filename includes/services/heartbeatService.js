@@ -184,6 +184,11 @@ const buildReport = async () => {
   ].join('\n');
 };
 
+export const sendReportToChat = async (bot, chatId) => {
+  const text = await buildReport();
+  return bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+};
+
 export const sendHeartbeat = async (bot, config) => {
   try {
     const adminIds = await getAdminIds(config?.ADMIN_IDS || []);

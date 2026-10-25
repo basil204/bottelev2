@@ -183,6 +183,20 @@ export const registerListeners = (bot, config) => {
     }
   });
 
+  // Command /ping: chỉ admin được dùng để kiểm tra bot live + thông số máy/mạng/database ngay lập tức
+  bot.onText(/^\/ping(?:@\w+)?\s*$/i, async (msg) => {
+    if (!await requireAdmin(config.ADMIN_IDS, msg.from.id)) return;
+    const waitMsg = await bot.sendMessage(msg.chat.id, '⏳ Đang kiểm tra hệ thống...').catch(() => null);
+    try {
+      const { sendReportToChat } = await import('./services/heartbeatService.js');
+      await sendReportToChat(bot, msg.chat.id);
+    } catch (err) {
+      await bot.sendMessage(msg.chat.id, `❌ Lỗi /ping: ${err.message}`);
+    } finally {
+      if (waitMsg) await bot.deleteMessage(msg.chat.id, waitMsg.message_id).catch(() => {});
+    }
+  });
+
   bot.onText(/^\/lang/i, async (msg) => {
     const user = await ensureUser(bot, msg);
     const { updateLanguage } = await import('./controllers/userController.js');

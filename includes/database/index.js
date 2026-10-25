@@ -658,3 +658,12 @@ export const query = async (sql, params = []) => {
   }
 };
 
+const defaultExport = {
+  getPool,
+  closeDb,
+  query,
+  initDb
+};
+
+export default defaultExport;
+

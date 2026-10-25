@@ -184,13 +184,19 @@ export const registerListeners = (bot, config) => {
   });
 
   // Command /ping: chỉ admin được dùng để kiểm tra bot live + thông số máy/mạng/database ngay lập tức
-  bot.onText(/^\/ping(?:@\w+)?\s*$/i, async (msg) => {
-    if (!await requireAdmin(config.ADMIN_IDS, msg.from.id)) return;
-    const waitMsg = await bot.sendMessage(msg.chat.id, '⏳ Đang kiểm tra hệ thống...').catch(() => null);
+  bot.onText(/^\/ping(?:\s+.*)?$/i, async (msg) => {
+    const isAdminUser = await requireAdmin(config.ADMIN_IDS, msg.from.id);
+    if (!isAdminUser) {
+      console.log(`[PING] Từ chối: User ${msg.from.id} không phải là Admin`);
+      return bot.sendMessage(msg.chat.id, '❌ Bạn không có quyền sử dụng lệnh này.');
+    }
+    console.log(`[PING] Admin ${msg.from.id} kích hoạt kiểm tra hệ thống...`);
+    const waitMsg = await bot.sendMessage(msg.chat.id, '⏳ **Đang kiểm tra toàn bộ hệ thống (RAM, CPU, Ping, Mạng, Database)...**\nVui lòng đợi 3-5 giây.', { parse_mode: 'Markdown' }).catch(() => null);
     try {
       const { sendReportToChat } = await import('./services/heartbeatService.js');
       await sendReportToChat(bot, msg.chat.id);
     } catch (err) {
+      console.error('[PING_ERROR]:', err);
       await bot.sendMessage(msg.chat.id, `❌ Lỗi /ping: ${err.message}`);
     } finally {
       if (waitMsg) await bot.deleteMessage(msg.chat.id, waitMsg.message_id).catch(() => {});

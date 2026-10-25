@@ -1,4 +1,7 @@
-import pool from '../database/index.js';
+import { getPool } from '../database/index.js';
+
+// Pool is created in initDb(), so resolve it lazily at call time.
+const pool = { query: (...args) => getPool().query(...args) };
 import { updateBalance, getUserByTelegram, getUserById } from '../controllers/userController.js';
 import axios from 'axios';
 

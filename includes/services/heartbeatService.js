@@ -44,21 +44,23 @@ const measureNetwork = async () => {
   const result = { ping: null, down: null, up: null };
   try {
     const t = Date.now();
-    await axios.get('https://api.telegram.org', { timeout: 10_000, validateStatus: () => true });
+    await axios.get('https://api.telegram.org', { timeout: 5_000, validateStatus: () => true });
     result.ping = Date.now() - t;
   } catch { /* ignore */ }
   try {
     const t = Date.now();
-    const res = await axios.get('https://speed.cloudflare.com/__down?bytes=10000000', {
-      responseType: 'arraybuffer', timeout: 30_000
+    // Test download 2MB thay vì 10MB để ra kết quả nhanh trong 1-2s
+    const res = await axios.get('https://speed.cloudflare.com/__down?bytes=2000000', {
+      responseType: 'arraybuffer', timeout: 6_000
     });
     result.down = (res.data.byteLength * 8) / 1e6 / ((Date.now() - t) / 1000);
   } catch { /* ignore */ }
   try {
-    const payload = Buffer.alloc(3_000_000);
+    // Test upload 1MB thay vì 3MB
+    const payload = Buffer.alloc(1_000_000);
     const t = Date.now();
     await axios.post('https://speed.cloudflare.com/__up', payload, {
-      timeout: 30_000, headers: { 'Content-Type': 'application/octet-stream' }
+      timeout: 6_000, headers: { 'Content-Type': 'application/octet-stream' }
     });
     result.up = (payload.length * 8) / 1e6 / ((Date.now() - t) / 1000);
   } catch { /* ignore */ }

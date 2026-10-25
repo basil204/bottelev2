@@ -44,10 +44,9 @@ export const getMainKeyboardConfig = async () => {
   } catch (e) {}
   return [
     { id: 'btn_products', text: 'Sản phẩm', text_vi: 'Sản phẩm', text_en: 'Products', text_zh: '产品', action: 'products', row: 1, is_active: true },
-    { id: 'btn_buyedu', text: 'Gmail EDU', text_vi: 'Gmail EDU', text_en: 'Gmail EDU', text_zh: 'Gmail EDU', action: 'buyedu', row: 1, is_active: true },
+    { id: 'btn_wallet', text: 'Ví', text_vi: 'Ví', text_en: 'Wallet', text_zh: '钱包', action: 'wallet', row: 1, is_active: true },
     { id: 'btn_support', text: 'Hỗ trợ', text_vi: 'Hỗ trợ', text_en: 'Support', text_zh: '客服支持', action: 'support', row: 2, is_active: true },
-    { id: 'btn_wallet', text: 'Ví', text_vi: 'Ví', text_en: 'Wallet', text_zh: '钱包', action: 'wallet', row: 2, is_active: true },
-    { id: 'btn_api', text: 'API', text_vi: 'API', text_en: 'API', text_zh: 'API', action: 'api', row: 3, is_active: true },
+    { id: 'btn_api', text: 'API', text_vi: 'API', text_en: 'API', text_zh: 'API', action: 'api', row: 2, is_active: true },
     { id: 'btn_warranty', text: 'Bảo hành', text_vi: 'Bảo hành', text_en: 'Warranty', text_zh: '售后保修', action: 'warranty', row: 3, is_active: true }
   ];
 };
@@ -69,19 +68,19 @@ export const buildMainKeyboard = async (t, lang = 'vi') => {
     .map((r) => rowsMap[r]);
 
   const defaultVi = [
-    [{ text: 'Sản phẩm' }, { text: 'Gmail EDU' }],
-    [{ text: 'Ví' }, { text: 'Hỗ trợ' }],
-    [{ text: 'API' }, { text: 'Bảo hành' }]
+    [{ text: 'Sản phẩm' }, { text: 'Ví' }],
+    [{ text: 'Hỗ trợ' }, { text: 'API' }],
+    [{ text: 'Bảo hành' }]
   ];
   const defaultEn = [
-    [{ text: 'Products' }, { text: 'Gmail EDU' }],
-    [{ text: 'Wallet' }, { text: 'Support' }],
-    [{ text: 'API' }, { text: 'Warranty' }]
+    [{ text: 'Products' }, { text: 'Wallet' }],
+    [{ text: 'Support' }, { text: 'API' }],
+    [{ text: 'Warranty' }]
   ];
   const defaultZh = [
-    [{ text: '产品' }, { text: 'Gmail EDU' }],
-    [{ text: '钱包' }, { text: '客服支持' }],
-    [{ text: 'API' }, { text: '售后保修' }]
+    [{ text: '产品' }, { text: '钱包' }],
+    [{ text: '客服支持' }, { text: 'API' }],
+    [{ text: '售后保修' }]
   ];
 
   const defaultFallback = lang === 'en' ? defaultEn : (lang === 'zh' ? defaultZh : defaultVi);
@@ -131,8 +130,7 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
       image_url: '',
       buttons: [
         { id: 'btn_products', text: '🛍️ Mua Tài Khoản', type: 'callback', callback_data: 'list_categories', row: 1, is_active: true },
-        { id: 'btn_buy_edu', text: '🎓 Mua Gmail EDU', type: 'callback', callback_data: 'buy_edu_menu', row: 1, is_active: true },
-        { id: 'btn_wallet', text: '👛 Ví & Nạp Tiền', type: 'callback', callback_data: 'wallet_info', row: 2, is_active: true },
+        { id: 'btn_wallet', text: '👛 Ví & Nạp Tiền', type: 'callback', callback_data: 'wallet_info', row: 1, is_active: true },
         { id: 'btn_support', text: '💬 Hỗ Trợ CSKH', type: 'callback', callback_data: 'support_info', row: 2, is_active: true }
       ]
     };
@@ -172,8 +170,6 @@ export const sendMenu = async (bot, chatId, user, groupLinks = []) => {
         let cbData = rawCb;
         if (rawCb === 'list_categories') {
           cbData = createCallbackData({ action: 'back_to_categories' });
-        } else if (rawCb === 'buy_edu_menu' || rawCb === 'buyedu' || rawCb === 'buy_edu') {
-          cbData = createCallbackData({ action: 'buy_edu_menu' });
         } else if (rawCb === 'start_deposit') {
           cbData = createCallbackData({ action: 'start_deposit' });
         } else if (rawCb === 'wallet_info') {

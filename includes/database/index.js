@@ -260,17 +260,6 @@ export const initDb = async (config) => {
       }
     }
 
-    try {
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_enabled', 'true')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('buy_gmail_edu', 'true')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_price', '10000')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_domain', 'nttp.edu.pl')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_delete_hours', '1')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_password_type', 'random')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_custom_password', '')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_user_limit', '0')");
-      await pool.execute("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_order_qty', '20')");
-    } catch (e) {}
 
     // Ensure name, first_name and edu_limit columns exist in users table
     for (const userCol of [

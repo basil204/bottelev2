@@ -891,7 +891,6 @@ export const adminSettings = async (bot, chatId) => {
 
     // Default values
     const minDeposit = settings.min_deposit ? Number(settings.min_deposit) : 50000;
-    const buyGmailEdu = settings.buy_gmail_edu !== 'false'; // Default true
     const buyGmailNon = settings.buy_gmail_non !== 'false'; // Default true
 
     // Fetch products summary
@@ -904,7 +903,6 @@ export const adminSettings = async (bot, chatId) => {
 
     let message = `⚙️ **Cài đặt hệ thống**\n\n`;
     message += `💰 **Nạp tối thiểu:** ${formatCurrency(minDeposit)}\n`;
-    message += `🎓 **Mua Gmail Edu:** ${buyGmailEdu ? '✅ Bật' : '❌ Tắt'}\n`;
     message += `📧 **Mua Gmail Thường:** ${buyGmailNon ? '✅ Bật' : '❌ Tắt'}\n\n`;
 
     message += `📦 **Danh sách sản phẩm (${products.length}):**\n${productSummary || 'Chưa có sản phẩm'}\n\n`;
@@ -912,7 +910,6 @@ export const adminSettings = async (bot, chatId) => {
 
     const inline_keyboard = [
       [
-        { text: `${buyGmailEdu ? '❌ Tắt' : '✅ Bật'} Gmail Edu`, callback_data: createCallbackData({ action: 'toggle_setting', key: 'buy_gmail_edu' }) },
         { text: `${buyGmailNon ? '❌ Tắt' : '✅ Bật'} Gmail Non`, callback_data: createCallbackData({ action: 'toggle_setting', key: 'buy_gmail_non' }) }
       ],
       [

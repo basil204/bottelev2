@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import {
   createDeposit,
   listDeposits,
@@ -34,12 +35,65 @@ const isBankConfigured = (bankConfig) => Boolean(
   String(bankConfig?.accountNo || '').trim()
 );
 
-const buildQrUrl = (bankCode, accountNo, amount, content, accountName = null) => {
-  let url = `https://img.vietqr.io/image/${bankCode}-${accountNo}-compact.png?amount=${amount}&addInfo=${encodeURIComponent(content)}`;
-  if (accountName) {
-    url += `&accountName=${encodeURIComponent(accountName)}`;
+// Napas BIN codes used by the VietQR standard
+const BANK_BINS = {
+  VCB: '970436', MB: '970422', TPB: '970423', ACB: '970416', TCB: '970407',
+  VPB: '970432', TIMO: '970454', VIETTELMONEY: '971005', BIDV: '970418',
+  CTG: '970415', VIETINBANK: '970415', AGRIBANK: '970405', VBA: '970405',
+  STB: '970403', SACOMBANK: '970403', SHB: '970443', VIB: '970441',
+  HDB: '970437', OCB: '970448', MSB: '970426', SCB: '970429',
+  EIB: '970431', LPB: '970449', LPBANK: '970449', SEAB: '970440',
+  NAB: '970428', BAB: '970409', ABB: '970425', VAB: '970427',
+  NCB: '970419', PVCOMBANK: '970412', OCEANBANK: '970414', GPB: '970408'
+};
+
+const crc16 = (str) => {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
   }
-  return url;
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+};
+
+const tlv = (id, value) => `${id}${String(value.length).padStart(2, '0')}${value}`;
+
+// Build the VietQR (EMVCo) payload string locally - no external service needed.
+const buildQrUrl = (bankCode, accountNo, amount, content) => {
+  const code = String(bankCode || '').trim().toUpperCase();
+  const bin = /^\d{6}$/.test(code) ? code : BANK_BINS[code];
+  if (!bin) throw new Error(`Unsupported bank code for QR: ${bankCode}`);
+  const memberInfo = tlv('00', bin) + tlv('01', String(accountNo).trim());
+  const merchant = tlv('00', 'A000000727') + tlv('01', memberInfo) + tlv('02', 'QRIBFTTA');
+  const addInfo = String(content || '').replace(/[^\x20-\x7E]/g, '').slice(0, 25);
+  let payload =
+    tlv('00', '01') +
+    tlv('01', '12') +
+    tlv('38', merchant) +
+    tlv('53', '704') +
+    tlv('54', String(Math.round(Number(amount)))) +
+    tlv('58', 'VN') +
+    (addInfo ? tlv('62', tlv('08', addInfo)) : '') +
+    '6304';
+  return payload + crc16(payload);
+};
+
+// Render the payload to a PNG locally and upload it; fall back to text if it fails.
+const sendQrPhoto = async (bot, chatId, qrPayload, options) => {
+  try {
+    const png = await QRCode.toBuffer(qrPayload, { type: 'png', width: 512, margin: 2, errorCorrectionLevel: 'M' });
+    return await bot.sendPhoto(chatId, png, options, {
+      filename: 'qr.png',
+      contentType: 'image/png'
+    });
+  } catch (err) {
+    console.error('[Deposit] Send QR photo failed, fallback to text:', err?.message || err);
+    const { caption, ...rest } = options;
+    return bot.sendMessage(chatId, caption, rest);
+  }
 };
 
 // Helper to get Bank Settings for QR
@@ -847,7 +901,7 @@ export const handleDepositAmount = async (bot, msg, user, config) => {
   const cancelBtn = L(lang, 'Huỷ QR', 'Cancel QR', '取消 QR');
   const reloadBtn = L(lang, 'Tải lại QR (1 lần)', 'Reload QR Code (1x)', '重新加载二维码 (1次)');
 
-  const qrMessage = await bot.sendPhoto(msg.chat.id, qrUrl, {
+  const qrMessage = await sendQrPhoto(bot, msg.chat.id, qrUrl, {
     caption,
     parse_mode: 'Markdown',
     reply_markup: {
@@ -1032,7 +1086,7 @@ export const reloadQr = async (bot, chatId, from) => {
   setCache(contentKey(cache.token), locked, QR_CACHE_TTL_MS);
   await deleteQrMessage(bot, cache);
   const expiresAt = Date.now() + QR_DURATION_MS;
-  const qrMessage = await bot.sendPhoto(chatId, cache.qrUrl, {
+  const qrMessage = await sendQrPhoto(bot, chatId, cache.qrUrl, {
     caption: `🔄 **QR ĐÃ ĐƯỢC TẢI LẠI**\n\n💰 Số tiền: ${formatCurrency(cache.amount)}\n📝 Nội dung: \`${cache.content}\`\n\n⏱ QR có hiệu lực thêm 5 phút. Đây là lượt tải lại duy nhất.`,
     parse_mode: 'Markdown',
     reply_markup: {

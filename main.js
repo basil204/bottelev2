@@ -9,6 +9,7 @@ import { startAutoRestockScheduler } from './includes/services/autoRestockServic
 import { startDriveBackupCron } from './includes/services/driveBackupService.js';
 import { startBinanceWatcher } from './includes/services/binanceWatcher.js';
 import { startEduAccountExpirationService } from './includes/services/eduAccountExpirationService.js';
+import { startHeartbeat } from './includes/services/heartbeatService.js';
 
 import { config, parseBotTokens } from './config.js';
 import { installTelegramFormatHelper } from './includes/helpers/telegramFormatHelper.js';
@@ -186,6 +187,7 @@ const bootstrap = async () => {
   startDriveBackupCron(multiBot, config); // Khởi động tự động sao lưu dữ liệu CSDL hằng ngày gửi Telegram Admin & Drive
   startBinanceWatcher(multiBot, config); // Khởi động tự động quét giao dịch nạp tiền Binance Pay
   startEduAccountExpirationService(); // Khởi động tự động theo dõi đăng nhập & xóa Gmail EDU hết live
+  startHeartbeat(multiBot, config); // Báo admin bot vẫn live + thông số máy mỗi 1 giờ
 
   // Theo dõi tín hiệu khởi động lại (Restart Signal) và thay đổi Token
   let lastRestartSignal = '';

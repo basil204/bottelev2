@@ -15,6 +15,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper for 3-lang text
+const L = (lang, vi, en, zh) => ({ en, zh }[lang] || vi);
+
 // Map để lưu state user đang nhập thông tin cho manual order
 export const manualOrderState = new Map();
 

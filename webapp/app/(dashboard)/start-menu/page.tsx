@@ -10,8 +10,8 @@ import {
   Copy, Globe, ArrowLeft, ArrowUpRight, Languages, Bell, Power, GraduationCap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { StartMenuConfig, StartMenuButton } from '@/app/api/start-menu/route';
-import { MainKeyboardButton, BotMenuInlineButton, DEFAULT_GMAIL_EDU_BUTTONS } from '@/app/api/bot-templates/route';
+import type { StartMenuConfig, StartMenuButton } from '@/app/api/start-menu/route';
+import { DEFAULT_GMAIL_EDU_BUTTONS, type MainKeyboardButton, type BotMenuInlineButton } from '@/lib/botTemplateDefaults';
 import Link from 'next/link';
 
 const START_VARIABLE_CHIPS = [

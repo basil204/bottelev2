@@ -5,6 +5,8 @@ import { sendMessage } from '@/lib/telegram';
 import { getTemplateFromDb, renderTemplate } from '@/lib/templateHelper';
 import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminLog';
 
+let supportColumnsEnsured = false;
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -41,6 +43,23 @@ export async function GET(request: Request) {
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         `);
+
+        // Upgrade older support_requests tables (e.g. created by database/schema.sql)
+        // that are missing columns used by the queries below.
+        if (!supportColumnsEnsured) {
+            for (const colSql of [
+                'ALTER TABLE support_requests ADD COLUMN order_id INT NULL',
+                'ALTER TABLE support_requests ADD COLUMN order_code VARCHAR(100) NULL',
+                'ALTER TABLE support_requests ADD COLUMN product_name VARCHAR(255) NULL'
+            ]) {
+                try {
+                    await pool.query(colSql);
+                } catch (e: any) {
+                    if (e?.code !== 'ER_DUP_FIELDNAME') console.error('[Support] Column migration failed:', colSql, e?.message);
+                }
+            }
+            supportColumnsEnsured = true;
+        }
 
         try {
             await pool.query('ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL');

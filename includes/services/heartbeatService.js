@@ -212,7 +212,11 @@ export const sendHeartbeat = async (bot, config) => {
       try {
         await bot.sendMessage(adminId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard } });
       } catch (err) {
-        console.error(`[HEARTBEAT] Gửi thất bại tới admin ${adminId}:`, err?.message || err);
+        if (err?.message?.includes('chat not found')) {
+          console.warn(`[HEARTBEAT] Admin ID ${adminId} chưa từng bấm /start với Bot nên Telegram chặn gửi tin (chat not found). Hãy mở bot và bấm /start.`);
+        } else {
+          console.error(`[HEARTBEAT] Gửi thất bại tới admin ${adminId}:`, err?.message || err);
+        }
       }
     }
   } catch (err) {

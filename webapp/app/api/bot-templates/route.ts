@@ -7,7 +7,6 @@ import { logAdminAction, getRequestInfo, getAdminFromCookie } from '@/lib/adminL
 import {
   DEFAULT_WALLET_BUTTONS,
   DEFAULT_DEPOSIT_BUTTONS,
-  DEFAULT_GMAIL_EDU_BUTTONS,
   DEFAULT_KEYBOARD_BUTTONS,
   DEFAULT_TEMPLATES,
   type MainKeyboardButton,
@@ -63,19 +62,6 @@ export async function GET() {
       }
     }
 
-    // Parse Gmail EDU buttons
-    let gmailEduButtons: BotMenuInlineButton[] = DEFAULT_GMAIL_EDU_BUTTONS;
-    if (settingsMap.gmail_edu_buttons_config) {
-      try {
-        const parsed = JSON.parse(settingsMap.gmail_edu_buttons_config);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          gmailEduButtons = parsed;
-        }
-      } catch (e) {
-        console.error('Error parsing gmail_edu_buttons_config:', e);
-      }
-    }
-
     // Build templates map
     const templates: Record<string, { label: string; group: string; description: string; vars: string[]; value: string; value_vi: string; value_en: string; value_zh: string }> = {};
     for (const [key, meta] of Object.entries(DEFAULT_TEMPLATES)) {
@@ -100,7 +86,6 @@ export async function GET() {
       main_keyboard: mainKeyboard,
       wallet_buttons: walletButtons,
       deposit_buttons: depositButtons,
-      gmail_edu_buttons: gmailEduButtons,
       templates
     });
   } catch (error: any) {
@@ -113,7 +98,7 @@ export async function POST(request: Request) {
   try {
     await dbReady;
     const body = await request.json();
-    const { main_keyboard, wallet_buttons, deposit_buttons, gmail_edu_buttons, templates } = body;
+    const { main_keyboard, wallet_buttons, deposit_buttons, templates } = body;
     const { ipAddress, userAgent } = getRequestInfo(request);
     const adminName = await getAdminFromCookie(request);
 
@@ -142,14 +127,6 @@ export async function POST(request: Request) {
         await connection.query(
           'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?',
           ['deposit_menu_buttons_config', jsonStr, jsonStr]
-        );
-      }
-
-      if (gmail_edu_buttons && Array.isArray(gmail_edu_buttons)) {
-        const jsonStr = JSON.stringify(gmail_edu_buttons);
-        await connection.query(
-          'INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = ?',
-          ['gmail_edu_buttons_config', jsonStr, jsonStr]
         );
       }
 

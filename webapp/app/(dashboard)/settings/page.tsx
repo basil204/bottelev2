@@ -99,7 +99,6 @@ interface SystemSettings {
     admin_fullname2?: string;
     admin_username2?: string;
     admin_password2?: string;
-    gmail_checker_api_keys: string[];
     deposit_rank_promotions: { name: string; min_total: number; bonus_percentage: number }[];
     // Auto workflows
     auto_approve_orders?: boolean;
@@ -156,7 +155,6 @@ export default function SettingsPage() {
         admin_password: '',
         admin_username2: 'admin2',
         admin_password2: '',
-        gmail_checker_api_keys: [],
         deposit_rank_promotions: [],
         auto_approve_orders: true,
         auto_warranty_replace: true,

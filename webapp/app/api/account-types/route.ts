@@ -92,7 +92,7 @@ export async function POST(request: Request) {
             const presets = [
                 '🤖 ChatGPT Plus / Team',
                 '🎬 CapCut Pro Workspace',
-                '📧 Gmail EDU (Office 365)',
+                '📧 Email Domain / Workspace',
                 '🎨 Canva Pro VIP',
                 '🍿 Netflix 4K Ultra HD',
                 '🎵 Spotify Premium',

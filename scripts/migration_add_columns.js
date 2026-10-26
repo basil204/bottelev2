@@ -183,31 +183,6 @@ async function migrate() {
         // NEW AUTO-MIGRATIONS (Consolidated from separate scripts)
         // -------------------------------------------------------------
         
-        // 1. Gmail Accounts Revenue Columns
-        console.log("Checking gmail_accounts columns for revenue stats...");
-        const [gmailCols] = await connection.query("SHOW COLUMNS FROM gmail_accounts");
-        const hasSoldPrice = gmailCols.some(c => c.Field === 'sold_price');
-        const hasOrderId = gmailCols.some(c => c.Field === 'order_id');
-        const hasSoldTo = gmailCols.some(c => c.Field === 'sold_to_user_id');
-
-        if (!hasSoldTo) {
-            console.log("Adding column 'sold_to_user_id' to gmail_accounts...");
-            await connection.query("ALTER TABLE gmail_accounts ADD COLUMN sold_to_user_id INT DEFAULT NULL");
-        }
-        if (!hasSoldPrice) {
-            console.log("Adding column 'sold_price' to gmail_accounts...");
-            await connection.query("ALTER TABLE gmail_accounts ADD COLUMN sold_price DECIMAL(10, 2) DEFAULT NULL");
-            
-            // Backfill sold_price for existing sold accounts
-            const [priceSetting] = await connection.query("SELECT `value` FROM settings WHERE `key` = 'gmail_edu_price'");
-            const currentPrice = Number(priceSetting[0]?.value) || 10000;
-            console.log(`Backfilling sold_price with current price (${currentPrice}) for already sold accounts...`);
-            await connection.query("UPDATE gmail_accounts SET sold_price = ? WHERE status = 'sold' AND sold_price IS NULL", [currentPrice]);
-        }
-        if (!hasOrderId) {
-            console.log("Adding column 'order_id' to gmail_accounts...");
-            await connection.query("ALTER TABLE gmail_accounts ADD COLUMN order_id VARCHAR(50) DEFAULT NULL");
-        }
 
         // 2. Stored Accounts Columns (New Features & Bot Status)
         console.log("Checking stored_accounts columns...");

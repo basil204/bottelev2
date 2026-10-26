@@ -328,7 +328,7 @@ export default function StoredAccountsPage() {
 
     const handleAdd = async () => {
         if (!selectedType) {
-            alert('Vui lòng chọn loại tài khoản (ChatGPT, CapCut, Mail EDU...)');
+            alert('Vui lòng chọn loại tài khoản (ChatGPT, CapCut, Canva...)');
             return;
         }
         if (!accountData.trim()) {
@@ -610,7 +610,7 @@ export default function StoredAccountsPage() {
                             KHO QUẢN LÝ TÀI KHOẢN CHI TIẾT
                         </h1>
                         <p className="text-xs text-indigo-200/80 font-medium mt-0.5">
-                            Quản lý tài khoản ChatGPT, CapCut, Gmail EDU, Canva, Netflix... Tình trạng Đã bán / Chưa bán, Mã Code, Ghi chú & Lên Bot
+                            Quản lý tài khoản ChatGPT, CapCut, Canva, Netflix... Tình trạng Đã bán / Chưa bán, Mã Code, Ghi chú & Lên Bot
                         </p>
                     </div>
                 </div>
@@ -1536,7 +1536,7 @@ export default function StoredAccountsPage() {
                         <div>
                             <span className="font-extrabold text-indigo-950 uppercase text-xs block">⚡ KHỞI TẠO MẪU CÁC LOẠI TK PHỔ BIẾN</span>
                             <p className="text-[11px] text-indigo-700/80 mt-0.5">
-                                Tự động tạo ChatGPT, CapCut Pro, Gmail EDU, Canva Pro, Netflix 4K, Spotify, Telegram Premium...
+                                Tự động tạo ChatGPT, CapCut Pro, Canva Pro, Netflix 4K, Spotify, Telegram Premium...
                             </p>
                         </div>
                         <Button

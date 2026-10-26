@@ -217,57 +217,12 @@ export const initDb = async (config) => {
       console.error('Migration error for coupons:', e.message);
     }
 
-    // Ensure gmail_accounts table and default settings exist
-    try {
-      await pool.execute(`
-        CREATE TABLE IF NOT EXISTS gmail_accounts (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          email VARCHAR(255) NOT NULL UNIQUE,
-          password VARCHAR(255) NOT NULL,
-          type VARCHAR(50) DEFAULT 'edu',
-          domain VARCHAR(255) DEFAULT 'nttp.edu.pl',
-          status VARCHAR(50) DEFAULT 'available',
-          sold_to_user_id INT DEFAULT NULL,
-          sold_price DECIMAL(15, 2) DEFAULT NULL,
-          order_id VARCHAR(50) DEFAULT NULL,
-          delete_at TIMESTAMP NULL DEFAULT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_gmail_status (status),
-          INDEX idx_gmail_domain (domain),
-          INDEX idx_gmail_sold_user (sold_to_user_id),
-          INDEX idx_gmail_delete_at (delete_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-      console.log('✅ Ensured gmail_accounts table exists');
-    } catch (e) {
-      if (!e.message.includes('already exists')) {
-        console.error('Migration error for gmail_accounts table:', e.message);
-      }
-    }
-
-    // Ensure columns for login tracking in gmail_accounts
-    for (const gCol of [
-      'ALTER TABLE gmail_accounts ADD COLUMN first_login_at TIMESTAMP NULL DEFAULT NULL',
-      'ALTER TABLE gmail_accounts ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL',
-      'ALTER TABLE gmail_accounts ADD COLUMN is_logged_in TINYINT(1) DEFAULT 0',
-      'ALTER TABLE gmail_accounts ADD INDEX idx_gmail_is_logged_in (is_logged_in)'
-    ]) {
-      try {
-        await pool.execute(gCol);
-      } catch (colErr) {
-        // ignore duplicate column / index error
-      }
-    }
-
-
-    // Ensure name, first_name and edu_limit columns exist in users table
+    // Ensure name and first_name columns exist in users table
     for (const userCol of [
       'ALTER TABLE users ADD COLUMN name VARCHAR(255) NULL',
       'ALTER TABLE users ADD COLUMN first_name VARCHAR(255) NULL',
       'ALTER TABLE users ADD COLUMN customer_tag VARCHAR(50) NULL',
-      'ALTER TABLE users ADD COLUMN admin_note TEXT NULL',
-      'ALTER TABLE users ADD COLUMN edu_limit INT DEFAULT NULL'
+      'ALTER TABLE users ADD COLUMN admin_note TEXT NULL'
     ]) {
       try {
         await pool.execute(userCol);

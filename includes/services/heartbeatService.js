@@ -188,7 +188,13 @@ const buildReport = async () => {
 
 export const sendReportToChat = async (bot, chatId) => {
   const text = await buildReport();
-  return bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+  const inline_keyboard = [
+    [
+      { text: '🔄 Khởi động lại Bot ngay', callback_data: 'admin_trigger_restart' },
+      { text: '⚡ Kiểm tra lại (/ping)', callback_data: 'admin_recheck_ping' }
+    ]
+  ];
+  return bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard } });
 };
 
 export const sendHeartbeat = async (bot, config) => {
@@ -196,9 +202,15 @@ export const sendHeartbeat = async (bot, config) => {
     const adminIds = await getAdminIds(config?.ADMIN_IDS || []);
     if (!adminIds || adminIds.length === 0) return;
     const text = await buildReport();
+    const inline_keyboard = [
+      [
+        { text: '🔄 Khởi động lại Bot ngay', callback_data: 'admin_trigger_restart' },
+        { text: '⚡ Kiểm tra lại', callback_data: 'admin_recheck_ping' }
+      ]
+    ];
     for (const adminId of adminIds) {
       try {
-        await bot.sendMessage(adminId, text, { parse_mode: 'HTML' });
+        await bot.sendMessage(adminId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard } });
       } catch (err) {
         console.error(`[HEARTBEAT] Gửi thất bại tới admin ${adminId}:`, err?.message || err);
       }

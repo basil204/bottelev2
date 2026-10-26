@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
         if (userId) {
             const [rows] = await pool.query<RowDataPacket[]>(`
-                SELECT cp.*, IF(cp.product_id = -1 OR cp.plan_id = 'gmail_edu', '🎓 Gmail EDU (Dịch vụ đặc biệt)', p.name) as product_name,
+                SELECT cp.*, p.name as product_name,
                        p.price as original_price
                 FROM custom_pricing cp
                 LEFT JOIN products p ON cp.product_id = p.id
@@ -56,9 +56,8 @@ export async function POST(request: Request) {
         const [userRows] = await pool.query<RowDataPacket[]>('SELECT id FROM users WHERE id = ? OR telegram_id = ?', [userId, userId]);
         const targetUserId = userRows[0]?.id || Number(userId);
 
-        const isGmailEdu = String(productId) === '-1' || productId === 'gmail_edu' || planId === 'gmail_edu';
-        const targetProductId = isGmailEdu ? -1 : Number(productId);
-        const targetPlanId = isGmailEdu ? 'gmail_edu' : (planId || null);
+        const targetProductId = Number(productId);
+        const targetPlanId = planId || null;
         const activeVal = isActive !== undefined ? (isActive ? 1 : 0) : 1;
 
         // Check if existing rule already exists for this user and product

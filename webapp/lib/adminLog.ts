@@ -23,7 +23,6 @@ export type TargetType =
     | 'ACCOUNT_TYPE'
     | 'STORED_ACCOUNT'
     | 'CHATGPT_ACCOUNT'
-    | 'GMAIL_ACCOUNT'
     | 'BROADCAST'
     | 'ADMIN_ACCOUNT'
     | 'SYSTEM'

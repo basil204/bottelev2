@@ -1177,7 +1177,6 @@ export default function DepositsPage() {
                                             className="w-full rounded-xl border border-zinc-200 bg-white p-2.5 font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                         >
                                             <option value="">Chọn sản phẩm</option>
-                                            <option value="-1">🎓 Gmail EDU (Dịch vụ đặc biệt)</option>
                                             {products.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name} - {formatCurrency(p.price)}</option>
                                             ))}
@@ -1674,7 +1673,7 @@ export default function DepositsPage() {
                             <div className="font-mono text-[11px] bg-zinc-900 text-zinc-300 p-3 rounded-xl overflow-x-auto border border-zinc-800 space-y-1">
                                 <div className="text-emerald-400"># 1. Lấy danh sách sản phẩm:</div>
                                 <div>GET http://localhost:8080/api/v1/products</div>
-                                <div className="text-emerald-400 mt-2"># 2. Đặt mua sản phẩm (Stock / Order / Gmail EDU):</div>
+                                <div className="text-emerald-400 mt-2"># 2. Đặt mua sản phẩm (Stock / Order):</div>
                                 <div>POST http://localhost:8080/api/v1/buy</div>
                                 <div className="text-zinc-400">Body: &#123; "productId": 1, "quantity": 1 &#125;</div>
                             </div>

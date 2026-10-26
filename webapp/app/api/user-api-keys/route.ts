@@ -12,7 +12,7 @@ async function ensureApiKeysTable() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
                 api_key VARCHAR(100) NOT NULL UNIQUE,
-                name VARCHAR(100) DEFAULT 'Gmail EDU API Key',
+                name VARCHAR(100) DEFAULT 'Standard API Key',
                 is_active TINYINT(1) DEFAULT 1,
                 last_used_at DATETIME NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -29,7 +29,7 @@ async function ensureApiKeysTable() {
             } catch (e) {}
         };
 
-        await safeAddColumn('name', "VARCHAR(100) DEFAULT 'Gmail EDU API Key'");
+        await safeAddColumn('name', "VARCHAR(100) DEFAULT 'Standard API Key'");
         await safeAddColumn('is_active', 'TINYINT(1) DEFAULT 1');
         await safeAddColumn('permissions', "VARCHAR(255) DEFAULT 'all'");
 
@@ -102,8 +102,8 @@ export async function POST(request: Request) {
         }
 
         const realUser = users[0];
-        const apiKey = `sk_edu_${crypto.randomBytes(16).toString('hex')}`;
-        const keyName = name && name.trim() ? name.trim() : 'Gmail EDU API Key';
+        const apiKey = `sk_live_${crypto.randomBytes(16).toString('hex')}`;
+        const keyName = name && name.trim() ? name.trim() : 'Standard API Key';
         const permsStr = Array.isArray(permissions) ? permissions.join(',') : (permissions && String(permissions).trim() ? String(permissions).trim() : 'all');
 
         // Check if user already has an API Key

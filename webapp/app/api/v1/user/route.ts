@@ -73,7 +73,7 @@ export async function GET(request: Request) {
                 o.id,
                 o.invoice_code,
                 o.product_id,
-                COALESCE(p.name, o.note, 'Gmail EDU') as product_name,
+                COALESCE(p.name, o.note, 'Dịch vụ') as product_name,
                 o.price,
                 o.status,
                 o.email as delivery_data,
@@ -87,35 +87,6 @@ export async function GET(request: Request) {
             ORDER BY o.id DESC
             LIMIT ?
         `, [keyInfo.user_id, historyLimit]);
-
-        // Lấy thông tin giá Gmail EDU (giá mặc định & giá riêng nếu có)
-        let defaultEduPrice = 10000;
-        try {
-            const [sRows] = await pool.query<RowDataPacket[]>("SELECT value FROM settings WHERE `key` = 'gmail_edu_price' LIMIT 1");
-            if (sRows && sRows.length > 0 && sRows[0].value) {
-                defaultEduPrice = Number(sRows[0].value) || 10000;
-            }
-        } catch (e) {}
-
-        let effectiveEduPrice = defaultEduPrice;
-        let hasCustomEduPrice = false;
-        let customEduPriceRow: any = null;
-        try {
-            const [cpRows] = await pool.query<RowDataPacket[]>(`
-                SELECT id, custom_price, scope, is_active FROM custom_pricing 
-                WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
-                  AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
-                ORDER BY id DESC LIMIT 1
-            `, [keyInfo.user_id, keyInfo.user_id]);
-
-            if (cpRows && cpRows.length > 0) {
-                customEduPriceRow = cpRows[0];
-                if (Boolean(customEduPriceRow.is_active)) {
-                    effectiveEduPrice = Number(customEduPriceRow.custom_price);
-                    hasCustomEduPrice = true;
-                }
-            }
-        } catch (e) {}
 
         return NextResponse.json({
             success: true,
@@ -131,14 +102,6 @@ export async function GET(request: Request) {
                     permissions: keyInfo.permissions || 'all',
                     is_active: Boolean(keyInfo.is_active),
                     last_used_at: keyInfo.last_used_at || null
-                },
-                edu_pricing: {
-                    default_price: defaultEduPrice,
-                    effective_price: effectiveEduPrice,
-                    has_custom_price: hasCustomEduPrice,
-                    custom_price: customEduPriceRow ? Number(customEduPriceRow.custom_price) : null,
-                    scope: customEduPriceRow ? customEduPriceRow.scope : 'ALL_ORDERS',
-                    is_active: customEduPriceRow ? Boolean(customEduPriceRow.is_active) : false
                 },
                 api_purchase_stats: {
                     total_orders: Number(stats.total_api_orders) || 0,

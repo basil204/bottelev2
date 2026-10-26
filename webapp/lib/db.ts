@@ -133,7 +133,7 @@ async function initAccountStorageTables() {
 
     // Auto-seed default account types if empty
     await pool.query(
-      "INSERT IGNORE INTO account_types (name) VALUES ('CapCut Pro'), ('Gmail EDU'), ('Canva Pro')"
+      "INSERT IGNORE INTO account_types (name) VALUES ('CapCut Pro'), ('Canva Pro')"
     );
 
     await pool.query(`
@@ -588,55 +588,14 @@ async function initAccountStorageTables() {
       console.error('[DB] Error initializing Canva tables:', e?.message || e);
     }
 
-    // Gmail EDU accounts table
+    // Cleanup Gmail EDU tables & settings if existing
     try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS gmail_accounts (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          email VARCHAR(255) NOT NULL UNIQUE,
-          password VARCHAR(255) NOT NULL,
-          type VARCHAR(50) DEFAULT 'edu',
-          domain VARCHAR(255) DEFAULT 'nttp.edu.pl',
-          status VARCHAR(50) DEFAULT 'available',
-          sold_to_user_id INT DEFAULT NULL,
-          sold_price DECIMAL(15, 2) DEFAULT NULL,
-          order_id VARCHAR(50) DEFAULT NULL,
-          delete_at TIMESTAMP NULL DEFAULT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX idx_gmail_status (status),
-          INDEX idx_gmail_domain (domain),
-          INDEX idx_gmail_sold_user (sold_to_user_id),
-          INDEX idx_gmail_delete_at (delete_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-
-      for (const colSql of [
-        'ALTER TABLE gmail_accounts ADD COLUMN first_login_at TIMESTAMP NULL DEFAULT NULL',
-        'ALTER TABLE gmail_accounts ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL',
-        'ALTER TABLE gmail_accounts ADD COLUMN is_logged_in TINYINT(1) DEFAULT 0',
-        'ALTER TABLE gmail_accounts ADD INDEX idx_gmail_is_logged_in (is_logged_in)',
-        'ALTER TABLE users ADD COLUMN edu_limit INT DEFAULT NULL'
-      ]) {
-        try {
-          await pool.query(colSql);
-        } catch {}
-      }
-
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_enabled', 'true')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('buy_gmail_edu', 'true')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_price', '10000')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_domain', 'nttp.edu.pl')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_delete_hours', '1')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_password_type', 'random')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_custom_password', '')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_user_limit', '0')");
-      await pool.query("INSERT IGNORE INTO settings (`key`, `value`) VALUES ('gmail_edu_max_order_qty', '20')");
-
-      console.log('[DB] Gmail accounts table and settings initialized');
-    } catch (e: any) {
-      console.error('[DB] Error initializing gmail_accounts table:', e?.message || e);
-    }
+      await pool.query('DROP TABLE IF EXISTS gmail_accounts');
+      await pool.query('ALTER TABLE users DROP COLUMN edu_limit');
+    } catch {}
+    try {
+      await pool.query("DELETE FROM settings WHERE `key` LIKE 'gmail_edu_%' OR `key` = 'buy_gmail_edu' OR `key` = 'gmail_checker_api_keys'");
+    } catch {}
 
     // API Workflows table (Luồng mua hàng qua API bên thứ ba tự cấu hình)
     try {

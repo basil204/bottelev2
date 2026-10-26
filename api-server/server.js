@@ -8,8 +8,6 @@ import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import pool, { query, execute } from './db.js';
 import { sendCanvaInviteApi, inviteMemberApi, batchInvite, getTeamInfo, getInviteHistory, getCanvaSession, saveCanvaSession, ROLE_NAME_MAP } from './canva_service.js';
-import { createEduAccount, updateAccountPassword, generateRandomPassword, generateRandomUsername, DEFAULT_EDU_DOMAIN } from '../includes/services/googleAdminService.js';
-import { startEduAccountExpirationService, setExpirationDbQuery } from '../includes/services/eduAccountExpirationService.js';
 
 const app = express();
 const PORT = process.env.PORT || 1568;
@@ -81,12 +79,6 @@ async function initDatabase() {
     await safeAddColumn('orders', 'api_key_id', 'INT NULL');
     await safeAddColumn('orders', 'source', "VARCHAR(50) DEFAULT 'bot'");
 
-    // Bổ sung các cột theo dõi đăng nhập và thời gian xóa cho bảng gmail_accounts
-    await safeAddColumn('gmail_accounts', 'is_logged_in', 'TINYINT(1) DEFAULT 0');
-    await safeAddColumn('gmail_accounts', 'first_login_at', 'DATETIME NULL');
-    await safeAddColumn('gmail_accounts', 'last_login_at', 'DATETIME NULL');
-    await safeAddColumn('gmail_accounts', 'delete_at', 'DATETIME NULL');
-    await safeAddColumn('gmail_accounts', 'order_id', 'VARCHAR(100) NULL');
 
     // 5. Khởi tạo Bảng custom_pricing
     await pool.query(`
@@ -361,7 +353,7 @@ app.get('/api/v1/user', authenticateApiKey, async (req, res) => {
         o.id,
         o.invoice_code,
         o.product_id,
-        COALESCE(p.name, o.note, 'Gmail EDU') as product_name,
+        COALESCE(p.name, o.note, 'Dịch vụ') as product_name,
         o.price,
         o.status,
         o.email as delivery_data,
@@ -376,35 +368,6 @@ app.get('/api/v1/user', authenticateApiKey, async (req, res) => {
       LIMIT ?
     `, [req.user.user_id, historyLimit]);
 
-    // Lấy thông tin giá Gmail EDU (giá mặc định & giá riêng nếu có)
-    let defaultEduPrice = 10000;
-    try {
-      const sRows = await query("SELECT value FROM settings WHERE `key` = 'gmail_edu_price' LIMIT 1");
-      if (sRows && sRows.length > 0 && sRows[0].value) {
-        defaultEduPrice = Number(sRows[0].value) || 10000;
-      }
-    } catch (e) {}
-
-    let effectiveEduPrice = defaultEduPrice;
-    let hasCustomEduPrice = false;
-    let customEduPriceRow = null;
-    try {
-      const cpRows = await query(`
-        SELECT id, custom_price, scope, is_active FROM custom_pricing 
-        WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
-          AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
-        ORDER BY id DESC LIMIT 1
-      `, [req.user.user_id, req.user.user_id]);
-
-      if (cpRows && cpRows.length > 0) {
-        customEduPriceRow = cpRows[0];
-        if (Boolean(customEduPriceRow.is_active)) {
-          effectiveEduPrice = Number(customEduPriceRow.custom_price);
-          hasCustomEduPrice = true;
-        }
-      }
-    } catch (e) {}
-
     res.json({
       success: true,
       data: {
@@ -418,14 +381,6 @@ app.get('/api/v1/user', authenticateApiKey, async (req, res) => {
           key_name: req.user.key_name,
           permissions: req.user.permissions || 'all',
           is_active: Boolean(req.user.is_active)
-        },
-        edu_pricing: {
-          default_price: defaultEduPrice,
-          effective_price: effectiveEduPrice,
-          has_custom_price: hasCustomEduPrice,
-          custom_price: customEduPriceRow ? Number(customEduPriceRow.custom_price) : null,
-          scope: customEduPriceRow ? customEduPriceRow.scope : 'ALL_ORDERS',
-          is_active: customEduPriceRow ? Boolean(customEduPriceRow.is_active) : false
         },
         api_purchase_stats: {
           total_orders: Number(stats.total_api_orders) || 0,
@@ -451,143 +406,6 @@ app.get('/api/v1/user', authenticateApiKey, async (req, res) => {
   }
 });
 
-// B2. GET /api/v1/user/edu-price - Lấy thông tin giá Gmail EDU của người dùng
-app.get('/api/v1/user/edu-price', authenticateApiKey, async (req, res) => {
-  try {
-    const targetUserIdInput = req.query.user_id || req.query.userId || req.query.telegram_id || req.query.telegramId || req.user.user_id;
-
-    const uRows = await query('SELECT id, telegram_id, username, name FROM users WHERE id = ? OR telegram_id = ? LIMIT 1', [targetUserIdInput, targetUserIdInput]);
-    if (!uRows || uRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Không tìm thấy người dùng.' });
-    }
-    const targetUser = uRows[0];
-
-    // Lấy giá mặc định
-    let defaultEduPrice = 10000;
-    try {
-      const sRows = await query("SELECT value FROM settings WHERE `key` = 'gmail_edu_price' LIMIT 1");
-      if (sRows && sRows.length > 0 && sRows[0].value) {
-        defaultEduPrice = Number(sRows[0].value) || 10000;
-      }
-    } catch (e) {}
-
-    let effectiveEduPrice = defaultEduPrice;
-    let hasCustomEduPrice = false;
-    let customEduPriceRow = null;
-    try {
-      const cpRows = await query(`
-        SELECT id, custom_price, scope, is_active, updated_at FROM custom_pricing 
-        WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
-          AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
-        ORDER BY id DESC LIMIT 1
-      `, [targetUser.id, targetUser.id]);
-
-      if (cpRows && cpRows.length > 0) {
-        customEduPriceRow = cpRows[0];
-        if (Boolean(customEduPriceRow.is_active)) {
-          effectiveEduPrice = Number(customEduPriceRow.custom_price);
-          hasCustomEduPrice = true;
-        }
-      }
-    } catch (e) {}
-
-    res.json({
-      success: true,
-      data: {
-        user_id: targetUser.id,
-        telegram_id: targetUser.telegram_id,
-        username: targetUser.username,
-        default_price: defaultEduPrice,
-        effective_price: effectiveEduPrice,
-        has_custom_price: hasCustomEduPrice,
-        custom_price: customEduPriceRow ? Number(customEduPriceRow.custom_price) : null,
-        scope: customEduPriceRow ? customEduPriceRow.scope : 'ALL_ORDERS',
-        is_active: customEduPriceRow ? Boolean(customEduPriceRow.is_active) : false,
-        pricing_id: customEduPriceRow ? customEduPriceRow.id : null
-      }
-    });
-  } catch (err) {
-    console.error('[GET_USER_EDU_PRICE_ERR]', err);
-    res.status(500).json({ success: false, error: 'Lỗi lấy thông tin giá Email EDU của người dùng' });
-  }
-});
-
-// B3. POST /api/v1/user/edu-price - Cài đặt hoặc xóa giá riêng Gmail EDU cho người dùng
-app.post('/api/v1/user/edu-price', authenticateApiKey, async (req, res) => {
-  try {
-    const targetUserIdInput = req.body.user_id || req.body.userId || req.body.telegram_id || req.body.telegramId || req.user.user_id;
-    const price = req.body.price !== undefined ? req.body.price : req.body.custom_price;
-    const scope = req.body.scope || 'ALL_ORDERS';
-    const isActive = req.body.is_active !== undefined ? (req.body.is_active ? 1 : 0) : 1;
-    const action = req.body.action; // 'set', 'delete', 'toggle'
-
-    const uRows = await query('SELECT id, telegram_id, username, name FROM users WHERE id = ? OR telegram_id = ? LIMIT 1', [targetUserIdInput, targetUserIdInput]);
-    if (!uRows || uRows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Không tìm thấy người dùng trong hệ thống.' });
-    }
-    const targetUser = uRows[0];
-
-    // Chỉ cho phép admin hoặc tài khoản có permissions = 'all' chỉnh giá cho người dùng khác
-    if (targetUser.id !== req.user.user_id && req.user.permissions !== 'all') {
-      return res.status(403).json({ success: false, error: 'Bạn không có quyền thiết lập giá cho người dùng khác.' });
-    }
-
-    if (action === 'delete') {
-      await query(`
-        DELETE FROM custom_pricing 
-        WHERE user_id = ? AND (product_id = -1 OR plan_id = 'gmail_edu' OR scope = 'GMAIL_EDU')
-      `, [targetUser.id]);
-      return res.json({
-        success: true,
-        message: 'Đã xóa giá riêng Email EDU thành công, tài khoản sẽ áp dụng giá mặc định hệ thống.'
-      });
-    }
-
-    if (price === undefined || price === null || isNaN(Number(price)) || Number(price) < 0) {
-      return res.status(400).json({ success: false, error: 'Giá Email EDU không hợp lệ. Vui lòng nhập số tiền >= 0 VNĐ.' });
-    }
-
-    const numPrice = Number(price);
-    const existing = await query(`
-      SELECT id FROM custom_pricing 
-      WHERE user_id = ? AND (product_id = -1 OR plan_id = 'gmail_edu' OR scope = 'GMAIL_EDU')
-      ORDER BY id DESC LIMIT 1
-    `, [targetUser.id]);
-
-    let id;
-    if (existing && existing.length > 0) {
-      id = existing[0].id;
-      await query(`
-        UPDATE custom_pricing 
-        SET custom_price = ?, scope = ?, is_active = ?, plan_id = 'gmail_edu', updated_at = NOW()
-        WHERE id = ?
-      `, [numPrice, scope, isActive, id]);
-    } else {
-      const insRes = await query(`
-        INSERT INTO custom_pricing (user_id, product_id, plan_id, custom_price, scope, is_active)
-        VALUES (?, -1, 'gmail_edu', ?, ?, ?)
-      `, [targetUser.id, numPrice, scope, isActive]);
-      id = insRes.insertId;
-    }
-
-    return res.json({
-      success: true,
-      message: `Đã thiết lập giá Email EDU ${numPrice.toLocaleString('vi-VN')} đ cho người dùng thành công!`,
-      data: {
-        id,
-        user_id: targetUser.id,
-        username: targetUser.username,
-        custom_price: numPrice,
-        scope,
-        is_active: Boolean(isActive)
-      }
-    });
-  } catch (err) {
-    console.error('[SET_USER_EDU_PRICE_ERR]', err);
-    return res.status(500).json({ success: false, error: 'Lỗi thiết lập giá Email EDU cho người dùng' });
-  }
-});
-
 // B2. Lịch sử chi tiết sử dụng API Key mua hàng (hỗ trợ phân trang)
 app.get('/api/v1/user/purchase-history', authenticateApiKey, async (req, res) => {
   try {
@@ -609,7 +427,7 @@ app.get('/api/v1/user/purchase-history', authenticateApiKey, async (req, res) =>
         o.id,
         o.invoice_code,
         o.product_id,
-        COALESCE(p.name, o.note, 'Gmail EDU') as product_name,
+        COALESCE(p.name, o.note, 'Dịch vụ') as product_name,
         o.price,
         o.status,
         o.email as delivery_data,
@@ -669,7 +487,7 @@ app.post('/api/v1/user/api-key', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Tài khoản người dùng đã bị khóa.' });
     }
 
-    const newApiKey = `sk_edu_${crypto.randomBytes(16).toString('hex')}`;
+    const newApiKey = `sk_live_${crypto.randomBytes(16).toString('hex')}`;
 
     const existing = await query('SELECT id FROM user_api_keys WHERE user_id = ? LIMIT 1', [user.id]);
     if (existing && existing.length > 0) {
@@ -968,343 +786,6 @@ app.get('/api/v1/orders', authenticateApiKey, async (req, res) => {
   }
 });
 
-// G. API Order Gmail EDU Endpoint
-app.post('/api/v1/order-edu', buyLimiter, authenticateApiKey, requireScope('order_edu'), async (req, res) => {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // 1. Lock User Row
-    const [userRows] = await connection.query(
-      'SELECT id, balance, is_banned FROM users WHERE id = ? FOR UPDATE',
-      [req.user.user_id]
-    );
-
-    if (!userRows || userRows.length === 0) {
-      await connection.rollback();
-      return res.status(404).json({ success: false, error: 'Người dùng không tồn tại.' });
-    }
-
-    const user = userRows[0];
-    if (user.is_banned) {
-      await connection.rollback();
-      return res.status(403).json({ success: false, error: 'Tài khoản người dùng đã bị khóa.' });
-    }
-
-    // 2. Fetch Settings
-    const [settingsRows] = await connection.query(
-      "SELECT `key`, `value` FROM settings WHERE `key` IN ('gmail_edu_price', 'gmail_edu_domain', 'gmail_edu_enabled', 'buy_gmail_edu')"
-    );
-
-    const settingsMap = {};
-    settingsRows.forEach(r => { settingsMap[r.key] = r.value; });
-
-    const isEnabled = settingsMap.gmail_edu_enabled !== 'false' && settingsMap.buy_gmail_edu !== 'false';
-    if (!isEnabled) {
-      await connection.rollback();
-      return res.status(400).json({ success: false, error: 'Tính năng mua Gmail EDU hiện đang bị tạm khóa bởi Admin.' });
-    }
-
-    let pricePerUnit = Number(settingsMap.gmail_edu_price) || 10000;
-    try {
-      const [cpRows] = await connection.query(
-        `SELECT custom_price, scope FROM custom_pricing 
-         WHERE (user_id = ? OR user_id = (SELECT id FROM users WHERE telegram_id = ? LIMIT 1))
-           AND (product_id = -1 OR plan_id = 'gmail_edu' OR plan_id = 'gmail' OR scope = 'GMAIL_EDU')
-           AND is_active = 1
-         ORDER BY id DESC LIMIT 1`,
-        [req.user.user_id, req.user.user_id]
-      );
-      if (cpRows && cpRows.length > 0) {
-        pricePerUnit = Number(cpRows[0].custom_price);
-      }
-    } catch (cpErr) {
-      if (cpErr.code !== 'ER_NO_SUCH_TABLE') {
-        console.error('[GMAIL_EDU_API_CUSTOM_PRICE_ERR]', cpErr.message);
-      }
-    }
-
-    const defaultDomain = req.body.domain && String(req.body.domain).trim() 
-      ? String(req.body.domain).trim() 
-      : (settingsMap.gmail_edu_domain || DEFAULT_EDU_DOMAIN || 'nttp.edu.pl');
-
-    const rawQuantity = req.body.quantity;
-    const quantity = Math.min(Math.max(1, parseInt(rawQuantity, 10) || 1), 50);
-    const domain = defaultDomain;
-    const type = req.body.type === 'non' ? 'non' : 'edu';
-
-    // Hỗ trợ đặt mật khẩu cho email EDU qua body hoặc query (password, pass, custom_password)
-    const reqPassword = req.body.password || req.body.pass || req.body.custom_password || req.query?.password || req.query?.pass;
-    let customPassword = null;
-    if (reqPassword) {
-      const cleanReqPass = String(reqPassword).trim();
-      if (cleanReqPass.length < 8) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          error: 'Mật khẩu tùy chỉnh cho Gmail EDU phải có tối thiểu 8 ký tự theo tiêu chuẩn bảo mật Google Workspace.'
-        });
-      }
-      customPassword = cleanReqPass;
-    }
-
-    // Hỗ trợ mảng passwords cho nhiều tài khoản
-    const passwordsList = Array.isArray(req.body.passwords) ? req.body.passwords : [];
-    if (passwordsList.length > 0) {
-      for (const p of passwordsList) {
-        if (p && String(p).trim().length < 8) {
-          await connection.rollback();
-          return res.status(400).json({
-            success: false,
-            error: `Mật khẩu '${p}' trong danh sách passwords không hợp lệ. Phải có tối thiểu 8 ký tự.`
-          });
-        }
-      }
-    }
-
-    const totalCost = pricePerUnit * quantity;
-    const currentBalance = Number(user.balance) || 0;
-
-    if (currentBalance < totalCost) {
-      await connection.rollback();
-      return res.status(400).json({
-        success: false,
-        error: `Số dư không đủ. Cần: ${totalCost.toLocaleString('vi-VN')} VNĐ, Số dư hiện có: ${currentBalance.toLocaleString('vi-VN')} VNĐ.`
-      });
-    }
-
-    // 3. Create Accounts via Google Workspace Admin API
-    const createdAccounts = [];
-    const failedAccounts = [];
-
-    for (let i = 0; i < quantity; i++) {
-      const username = generateRandomUsername(req.body.prefix || req.body.username);
-      // Quy luật: Nếu người dùng set pass thì tạo đúng mật khẩu đó, nếu không set pass thì random ngẫu nhiên
-      const userProvidedPass = (passwordsList[i] && String(passwordsList[i]).trim()) || customPassword;
-      const password = userProvidedPass || generateRandomPassword(12);
-
-      const result = await createEduAccount(username, domain, password);
-
-      if (!result.success) {
-        console.error(`[API_ORDER_EDU] Lỗi tạo tài khoản Google Workspace (${username}@${domain}):`, result.error);
-        failedAccounts.push({ username, domain, error: result.error });
-        continue;
-      }
-
-      const email = result.email;
-      const finalPass = result.password || password;
-
-      // Lưu vào bảng gmail_accounts: is_logged_in = 0, first_login_at = NULL, delete_at = NULL
-      // QUY LUẬT BẢO TOÀN: Khi khách mua qua API, nếu chưa đăng nhập thì KHÔNG ĐƯỢC XÓA!
-      // Chỉ khi người dùng đăng nhập lần đầu tiên trên Google thì hệ thống mới kích hoạt đếm ngược thời gian xóa!
-      await connection.query(`
-        INSERT INTO gmail_accounts (
-          email, password, type, domain, status, sold_to_user_id, sold_price, 
-          is_logged_in, first_login_at, delete_at, created_at
-        )
-        VALUES (?, ?, ?, ?, 'sold', ?, ?, 0, NULL, NULL, NOW())
-      `, [email, finalPass, type, domain, user.id, pricePerUnit]);
-
-      createdAccounts.push({
-        email,
-        password: finalPass,
-        type,
-        domain,
-        google_id: result.id,
-        auto_delete: 'after_first_login',
-        delete_rule: 'Tài khoản được bảo toàn cho đến khi đăng nhập lần đầu tiên. Hệ thống sẽ tự động đếm ngược và xóa sau khi phát hiện đăng nhập.'
-      });
-
-      if (i < quantity - 1) {
-        await new Promise(r => setTimeout(r, 500));
-      }
-    }
-
-    if (createdAccounts.length === 0) {
-      await connection.rollback();
-      return res.status(500).json({
-        success: false,
-        error: `Không thể tạo tài khoản trên Google Admin API: ${failedAccounts[0]?.error || 'Lỗi hệ thống Google'}`
-      });
-    }
-
-    const actualTotalCost = pricePerUnit * createdAccounts.length;
-
-    // 4. Deduct User Balance
-    await connection.query('UPDATE users SET balance = balance - ? WHERE id = ?', [actualTotalCost, user.id]);
-    await connection.query('INSERT INTO balance_logs (user_id, amount, reason) VALUES (?, ?, ?)', [
-      user.id, -actualTotalCost, `buy_gmail_edu_api_${createdAccounts.length}_items`
-    ]);
-
-    // 5. Create Order Record
-    const accountsFormatted = createdAccounts.map(a => `${a.email}|${a.password}`).join('\n');
-    const [orderRes] = await connection.query(
-      "INSERT INTO orders (user_id, price, email, note, status, api_key_id, source) VALUES (?, ?, ?, ?, 'completed', ?, ?)",
-      [user.id, actualTotalCost, accountsFormatted, `API Order Gmail EDU (${createdAccounts.length} tài khoản)`, req.user.key_id || null, 'api']
-    );
-
-    const invoiceCode = `HD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(orderRes.insertId).padStart(4, '0')}`;
-    await connection.query('UPDATE orders SET invoice_code = ? WHERE id = ?', [invoiceCode, orderRes.insertId]);
-
-    // Cập nhật order_id vào gmail_accounts
-    try {
-      await connection.query('UPDATE gmail_accounts SET order_id = ? WHERE sold_to_user_id = ? AND order_id IS NULL', [
-        invoiceCode, user.id
-      ]);
-    } catch (e) {}
-
-    await connection.commit();
-
-    return res.json({
-      success: true,
-      message: 'Đặt Gmail EDU qua API thành công!',
-      invoice_code: invoiceCode,
-      quantity: createdAccounts.length,
-      total_cost: actualTotalCost,
-      price_per_unit: pricePerUnit,
-      remaining_balance: currentBalance - actualTotalCost,
-      data: createdAccounts
-    });
-  } catch (err) {
-    await connection.rollback();
-    console.error('[ORDER_EDU_API_ERR]', err);
-    res.status(500).json({ success: false, error: 'Lỗi hệ thống khi xử lý đơn hàng Gmail EDU.' });
-  } finally {
-    connection.release();
-  }
-});
-
-// G2. API Đổi / Set Mật Khẩu Cho Tài Khoản Gmail EDU Đã Mua
-const handleEduSetPassword = async (req, res) => {
-  const connection = await pool.getConnection();
-  try {
-    const rawEmail = req.body.email || req.query.email;
-    const rawPassword = req.body.password || req.body.new_password || req.query.password;
-
-    if (!rawEmail || !rawPassword) {
-      return res.status(400).json({
-        success: false,
-        error: 'Vui lòng cung cấp email và password mới (tối thiểu 8 ký tự).'
-      });
-    }
-
-    const cleanEmail = String(rawEmail).trim().toLowerCase();
-    const cleanPassword = String(rawPassword).trim();
-
-    if (cleanPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        error: 'Mật khẩu mới phải có tối thiểu 8 ký tự theo tiêu chuẩn bảo mật Google Workspace.'
-      });
-    }
-
-    // 1. Kiểm tra tài khoản trong database
-    const [accountRows] = await connection.query(
-      'SELECT id, email, password, sold_to_user_id, status FROM gmail_accounts WHERE LOWER(TRIM(email)) = ? LIMIT 1',
-      [cleanEmail]
-    );
-
-    let isOwner = false;
-    let isSystemAdmin = false;
-
-    // Kiểm tra xem user có phải admin hệ thống không
-    const [adminRows] = await connection.query(
-      "SELECT `value` FROM settings WHERE `key` = 'admin_ids' LIMIT 1"
-    );
-    if (adminRows && adminRows.length > 0) {
-      const adminIds = adminRows[0].value ? adminRows[0].value.split(',').map(s => s.trim()) : [];
-      if (adminIds.includes(String(req.user.user_id)) || adminIds.includes(String(req.user.telegram_id))) {
-        isSystemAdmin = true;
-      }
-    }
-
-    if (accountRows && accountRows.length > 0) {
-      const acc = accountRows[0];
-      if (
-        acc.sold_to_user_id === req.user.user_id ||
-        (req.user.telegram_id && acc.sold_to_user_id === req.user.telegram_id) ||
-        isSystemAdmin
-      ) {
-        isOwner = true;
-      }
-    } else {
-      // Nếu không có trong gmail_accounts, kiểm tra trong orders của user này
-      const [orderRows] = await connection.query(
-        'SELECT id, email FROM orders WHERE user_id = ? AND email LIKE ? LIMIT 1',
-        [req.user.user_id, `%${cleanEmail}%`]
-      );
-      if ((orderRows && orderRows.length > 0) || isSystemAdmin) {
-        isOwner = true;
-      }
-    }
-
-    if (!isOwner) {
-      return res.status(403).json({
-        success: false,
-        error: 'Bạn không có quyền thay đổi mật khẩu của tài khoản email này hoặc tài khoản không tồn tại trong hệ thống.'
-      });
-    }
-
-    // 2. Gọi Google Workspace Admin API đổi mật khẩu
-    const updateRes = await updateAccountPassword(cleanEmail, cleanPassword);
-    if (!updateRes.success) {
-      return res.status(500).json({
-        success: false,
-        error: `Không thể đổi mật khẩu trên Google Workspace: ${updateRes.error || 'Lỗi hệ thống'}`
-      });
-    }
-
-    // 3. Cập nhật mật khẩu mới trong database
-    if (accountRows && accountRows.length > 0) {
-      await connection.query(
-        'UPDATE gmail_accounts SET password = ? WHERE id = ?',
-        [cleanPassword, accountRows[0].id]
-      );
-    }
-
-    // Cập nhật thông tin trong đơn hàng cũ nếu có
-    try {
-      const [userOrders] = await connection.query(
-        'SELECT id, email FROM orders WHERE user_id = ? AND email LIKE ?',
-        [req.user.user_id, `%${cleanEmail}%`]
-      );
-      for (const ord of userOrders) {
-        if (ord.email && ord.email.includes(cleanEmail)) {
-          const lines = ord.email.split('\n');
-          const updatedLines = lines.map(line => {
-            const parts = line.split('|');
-            if (parts[0] && parts[0].trim().toLowerCase() === cleanEmail) {
-              parts[1] = cleanPassword;
-              return parts.join('|');
-            }
-            return line;
-          });
-          await connection.query('UPDATE orders SET email = ? WHERE id = ?', [updatedLines.join('\n'), ord.id]);
-        }
-      }
-    } catch (ordErr) {
-      console.error('[UPDATE_ORDER_PASS_ERR]', ordErr.message);
-    }
-
-    return res.json({
-      success: true,
-      message: 'Đặt lại mật khẩu cho tài khoản Gmail EDU thành công!',
-      data: {
-        email: cleanEmail,
-        password: cleanPassword,
-        updated_at: new Date().toISOString()
-      }
-    });
-  } catch (err) {
-    console.error('[EDU_SET_PASSWORD_ERR]', err);
-    return res.status(500).json({ success: false, error: 'Lỗi hệ thống khi đặt lại mật khẩu email EDU' });
-  } finally {
-    connection.release();
-  }
-};
-
-app.post('/api/v1/edu/set-password', buyLimiter, authenticateApiKey, requireScope('order_edu'), handleEduSetPassword);
-app.post('/api/v1/order-edu/set-password', buyLimiter, authenticateApiKey, requireScope('order_edu'), handleEduSetPassword);
 
 // ============================================================================
 // H. CANVA PRO / BRAND AUTOMATION ENDPOINTS
@@ -1502,7 +983,7 @@ const swaggerSpec = {
         type: 'apiKey',
         in: 'header',
         name: 'X-API-Key',
-        description: 'Nhập User API Key của bạn (Ví dụ: sk_edu_YOUR_KEY)'
+        description: 'Nhập User API Key của bạn (Ví dụ: sk_live_YOUR_KEY)'
       },
       BearerAuth: {
         type: 'http',
@@ -1561,52 +1042,6 @@ const swaggerSpec = {
         ],
         responses: {
           200: { description: 'Danh sách lịch sử mua hàng qua API Key kèm phân trang' }
-        }
-      }
-    },
-    '/api/v1/user/edu-price': {
-      get: {
-        summary: 'Xem giá Email EDU áp dụng cho tài khoản (giá gốc & giá riêng nếu có)',
-        tags: ['User', 'Gmail EDU'],
-        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'user_id',
-            in: 'query',
-            schema: { type: 'integer' },
-            description: 'ID người dùng cần tra cứu (mặc định lấy theo API Key)'
-          }
-        ],
-        responses: {
-          200: { description: 'Trả về thông tin chi tiết giá Email EDU' }
-        }
-      },
-      post: {
-        summary: 'Cài đặt / Thay đổi hoặc Xóa giá riêng Email EDU cho người dùng',
-        tags: ['User', 'Gmail EDU'],
-        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['price'],
-                properties: {
-                  user_id: { type: 'integer', example: 1, description: 'ID người dùng hệ thống' },
-                  price: { type: 'number', example: 8000, description: 'Đơn giá tùy chỉnh cho Email EDU (VNĐ)' },
-                  scope: { type: 'string', enum: ['ALL_ORDERS', 'CLIENT_API'], example: 'ALL_ORDERS', description: 'Phạm vi áp dụng giá' },
-                  is_active: { type: 'boolean', example: true, description: 'Kích hoạt giá riêng' },
-                  action: { type: 'string', enum: ['set', 'delete'], example: 'set', description: 'set để lưu giá, delete để xóa về giá gốc' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          200: { description: 'Thiết lập giá Email EDU thành công' },
-          400: { description: 'Thông tin giá không hợp lệ' },
-          403: { description: 'Không có quyền thực hiện thao tác' }
         }
       }
     },
@@ -1676,68 +1111,6 @@ const swaggerSpec = {
         responses: {
           200: { description: 'Giao dịch mua hàng thành công' },
           400: { description: 'Số dư không đủ hoặc tham số sai' }
-        }
-      }
-    },
-    '/api/v1/order-edu': {
-      post: {
-        summary: 'Đặt & Tạo tài khoản Gmail EDU tự động qua API Key (Hỗ trợ set pass)',
-        tags: ['Gmail EDU'],
-        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  quantity: { type: 'integer', example: 1, description: 'Số lượng tài khoản (tối đa 50)' },
-                  domain: { type: 'string', example: 'suafpoly.app', description: 'Tên miền EDU (tùy chọn)' },
-                  prefix: { type: 'string', example: 'student', description: 'Tiền tố username (tùy chọn)' },
-                  password: { type: 'string', example: 'Student@2026Secure', description: 'Mật khẩu tùy chỉnh (tối thiểu 8 ký tự, nếu để trống hệ thống sẽ tự sinh ngẫu nhiên an toàn)' },
-                  passwords: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    example: ['Pass1@2026', 'Pass2@2026'],
-                    description: 'Mảng mật khẩu riêng cho từng tài khoản khi mua số lượng nhiều'
-                  },
-                  type: { type: 'string', example: 'edu', description: 'Loại edu hoặc non' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          200: { description: 'Đặt Gmail EDU thành công kèm thông tin tài khoản & mật khẩu' },
-          400: { description: 'Số dư không đủ, mật khẩu < 8 ký tự hoặc tính năng bị tạm khóa' }
-        }
-      }
-    },
-    '/api/v1/edu/set-password': {
-      post: {
-        summary: 'Đổi / Set mật khẩu mới cho tài khoản Gmail EDU đã mua',
-        tags: ['Gmail EDU'],
-        security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['email', 'password'],
-                properties: {
-                  email: { type: 'string', example: 'student123@domain.edu.pl', description: 'Địa chỉ email Gmail EDU cần đổi mật khẩu' },
-                  password: { type: 'string', example: 'NewPass@2026Safe', description: 'Mật khẩu mới (tối thiểu 8 ký tự)' }
-                }
-              }
-            }
-          }
-        },
-        responses: {
-          200: { description: 'Cập nhật mật khẩu Google Workspace thành công' },
-          400: { description: 'Thiếu email hoặc mật khẩu < 8 ký tự' },
-          403: { description: 'Không có quyền quản lý tài khoản email này' },
-          500: { description: 'Lỗi Google Admin API' }
         }
       }
     },
@@ -1950,12 +1323,4 @@ app.listen(PORT, () => {
     console.log(`🔑 Swagger Auth: User: ${process.env.SWAGGER_USER || 'admin'} | Pass: ${process.env.SWAGGER_PASS ? '******' : 'admin123'}`);
   }
   console.log(`================================================================`);
-
-  // Tự động kiểm tra phát hiện đăng nhập Google Workspace & xóa email EDU khi hết hạn live
-  try {
-    setExpirationDbQuery(query);
-    startEduAccountExpirationService(60000);
-  } catch (expErr) {
-    console.error('[API_SERVER] Không thể khởi động EduExpirationService:', expErr.message);
-  }
 });

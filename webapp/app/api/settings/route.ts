@@ -61,7 +61,6 @@ export async function GET() {
             admin_fullname2: '',
             admin_username2: '',
             admin_password2: '',
-            gmail_checker_api_keys: [],
             deposit_rank_promotions: [],
         };
 
@@ -71,7 +70,7 @@ export async function GET() {
                 settings[row.key] = row.value !== 'false' && row.value !== false && row.value !== '0';
             } else if (['min_deposit', 'exchange_rate', 'binance_min_deposit'].includes(row.key)) {
                 settings[row.key] = Number(row.value) || settings[row.key];
-            } else if (['admin_ids', 'gmail_checker_api_keys', 'deposit_rank_promotions'].includes(row.key)) {
+            } else if (['admin_ids', 'deposit_rank_promotions'].includes(row.key)) {
                 // Parse JSON array settings
                 try {
                     const parsed = JSON.parse(row.value);
@@ -160,7 +159,6 @@ export async function POST(request: Request) {
             admin_fullname2,
             admin_username2,
             admin_password2,
-            gmail_checker_api_keys,
             deposit_rank_promotions
         } = body;
 
@@ -222,7 +220,6 @@ export async function POST(request: Request) {
             if (admin_fullname2 !== undefined) await upsertSetting('admin_fullname2', admin_fullname2);
             if (admin_username2 !== undefined) await upsertSetting('admin_username2', admin_username2);
             if (admin_password2 !== undefined) await upsertSetting('admin_password2', admin_password2);
-            if (gmail_checker_api_keys !== undefined) await upsertSetting('gmail_checker_api_keys', JSON.stringify(gmail_checker_api_keys));
             if (deposit_rank_promotions !== undefined) await upsertSetting('deposit_rank_promotions', JSON.stringify(deposit_rank_promotions));
 
             await connection.commit();

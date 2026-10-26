@@ -40,7 +40,7 @@ export default function UserApiKeysPage() {
     // Modal state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
-    const [keyName, setKeyName] = useState('Gmail EDU API Key');
+    const [keyName, setKeyName] = useState('Standard API Key');
     const [selectedPermissions, setSelectedPermissions] = useState<string[]>(['all']);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [creating, setCreating] = useState(false);
@@ -176,7 +176,7 @@ export default function UserApiKeysPage() {
                         <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-zinc-900 flex items-center gap-2">
                             QUẢN LÝ USER API KEYS
                         </h1>
-                        <p className="text-xs text-zinc-500 font-medium">Tạo và cấp quyền API Key cho người dùng mua Gmail EDU tự động qua API.</p>
+                        <p className="text-xs text-zinc-500 font-medium">Tạo và cấp quyền API Key cho người dùng mua sản phẩm tự động qua API.</p>
                     </div>
                 </div>
 
@@ -233,12 +233,12 @@ export default function UserApiKeysPage() {
             <div className="rounded-2xl border border-orange-200 bg-orange-50/50 p-4 space-y-2 text-xs">
                 <div className="flex items-center gap-2 font-black text-orange-900 uppercase">
                     <Code className="h-4 w-4 text-orange-600" />
-                    <span>HƯỚNG DẪN GỬI REQUEST ORDER GMAIL EDU BẰNG API KEY</span>
+                    <span>HƯỚNG DẪN GỬI REQUEST MUA SẢN PHẨM BẰNG API KEY</span>
                 </div>
                 <div className="font-mono text-[11px] bg-zinc-950 text-zinc-100 p-3 rounded-xl overflow-x-auto border border-zinc-800">
-                    <div>POST https://yourdomain.com/api/v1/order-edu</div>
-                    <div className="text-zinc-400 mt-1">Header: X-API-Key: sk_edu_YOUR_USER_API_KEY</div>
-                    <div className="text-zinc-400">Body: &#123; "quantity": 1, "domain": "suafpoly.app", "prefix": "student" &#125;</div>
+                    <div>POST https://yourdomain.com/api/v1/buy</div>
+                    <div className="text-zinc-400 mt-1">Header: X-API-Key: sk_live_YOUR_USER_API_KEY</div>
+                    <div className="text-zinc-400">Body: &#123; "product_id": 1, "quantity": 1 &#125;</div>
                 </div>
             </div>
 
@@ -400,7 +400,7 @@ export default function UserApiKeysPage() {
                                     type="text"
                                     value={keyName}
                                     onChange={(e) => setKeyName(e.target.value)}
-                                    placeholder="VD: Gmail EDU Client Key"
+                                    placeholder="VD: Client API Key"
                                     className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-semibold text-zinc-900 outline-none focus:border-orange-500 transition"
                                 />
                             </div>
@@ -412,9 +412,7 @@ export default function UserApiKeysPage() {
                                 <div className="space-y-2 rounded-xl border border-zinc-200 p-3 bg-zinc-50/50 text-xs">
                                     {[
                                         { id: 'all', label: '✨ Tất cả các quyền (Full Access)' },
-                                        { id: 'order_edu', label: '📧 Đặt & Tạo Gmail EDU (POST /api/v1/order-edu)' },
                                         { id: 'buy_products', label: '🛒 Mua Sản Phẩm Kho (POST /api/v1/buy)' },
-                                        { id: 'check_gmail', label: '🔎 Check Live/Die Gmail (POST /api/v1/check-gmail)' },
                                         { id: 'wallet_info', label: '💰 Xem Số Dư & Ví (GET /api/v1/user/info)' }
                                     ].map((perm) => (
                                         <label key={perm.id} className="flex items-center gap-2 cursor-pointer text-zinc-800 font-semibold select-none">
